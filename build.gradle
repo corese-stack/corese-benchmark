@@ -40,7 +40,7 @@ sourceSets {
 task runGroovyScript(type: JavaExec) {
     doFirst {
         mainClass = 'org.codehaus.groovy.tools.GroovyStarter'
-        classpath = files(sourceSets.main.runtimeClasspath)
+        classpath = project.sourceSets.main.runtimeClasspath
         args = ['src/main/groovy/load-query-rdf4j.groovy']
     }
 }
