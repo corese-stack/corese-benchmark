@@ -5,7 +5,9 @@
  * Learn more about Gradle by exploring our Samples at https://docs.gradle.org/8.13/samples
  */
 plugins {
+    id 'java'
     id 'groovy'
+    id 'application'
 }
 
 repositories {
@@ -38,9 +40,8 @@ sourceSets {
 }
 
 task runGroovyScript(type: JavaExec) {
-    doFirst {
-        mainClass = 'org.codehaus.groovy.tools.GroovyStarter'
-        classpath = project.sourceSets.main.runtimeClasspath
-        args = ['src/main/groovy/load-query-rdf4j.groovy']
-    }
+    group = 'application'
+    description = 'Run the Groovy script'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'load-query-rdf4j'
 }

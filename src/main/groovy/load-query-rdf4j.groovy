@@ -1,8 +1,3 @@
-//@GrabResolver(name='central', root='./tmp')
-//@Grab(group='org.eclipse.rdf4j', module='rdf4j-repository', version='4.3.2')
-//@Grab(group='org.eclipse.rdf4j', module='rdf4j-sail-memory', version='4.3.2')
-//@Grab(group='org.eclipse.rdf4j', module='rdf4j-rio', version='4.3.2')
-
 import org.eclipse.rdf4j.repository.Repository
 import org.eclipse.rdf4j.repository.sail.SailRepository
 import org.eclipse.rdf4j.sail.memory.MemoryStore
@@ -27,11 +22,11 @@ try {
     // Step 4: Query the repository (optional)
     String query = """
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-        SELECT ?s ?p ?o
+        SELECT (count(?s) as ?n)# ?p ?o
         WHERE {
             ?s ?p ?o .
         }
-        LIMIT 100
+        #LIMIT 10
     """
 
     def tupleQuery = connection.prepareTupleQuery(query)
