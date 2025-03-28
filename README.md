@@ -44,4 +44,15 @@
         * trig
 
 
+## HOW TO run it
 
+* 1st build the execution environement
+
+```bash
+./gradlew  clean build
+```
+* then run it 
+
+```bash
+./gradlew  runGroovyScript
+```

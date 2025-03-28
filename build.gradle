@@ -48,4 +48,10 @@ task runGroovyScript(type: JavaExec) {
     description = 'Run the Groovy script'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'load-query-corese'
+
+    // Add memory settings
+    jvmArgs = [
+        '-Xmx8g',  // Maximum heap size (adjust value as needed)
+        '-Xms2g'   // Initial heap size
+    ]
 }
