@@ -1,20 +1,16 @@
 import java.io.File
 import java.text.SimpleDateFormat
-import fr.inria.corese.core.Graph
-import fr.inria.corese.core.load.Load
-import fr.inria.corese.core.api.Loader
 
 class RDFBenchmark {
 
     final String triplestoreName
-    final Graph graph
-    final Load loader
+    final RDFLoader loader
     final MetricsWriter metricsWriter
 
     RDFBenchmark(String triplestoreName) {
         this.triplestoreName = triplestoreName
-        this.graph = Graph.create()
-        this.loader = Load.create(graph)
+        this.loader = RDFLoaderFactory.createLoader(triplestoreName)
+        this.loader.init()
         this.metricsWriter = new MetricsWriter(triplestoreName)
     }
 
@@ -34,7 +30,7 @@ class RDFBenchmark {
 
     private void processFile(File file, long startTime) {
         println "\nProcessing file: ${file.name}"
-        loader.parse(file.absolutePath, Loader.format.NT_FORMAT)
+        loader.loadFile(file.absolutePath)
 
         def metrics = calculateMetrics(startTime)
         metricsWriter.writeMetrics(file.name, metrics)
@@ -45,7 +41,7 @@ class RDFBenchmark {
         def currentTime = System.currentTimeMillis()
         return [
             loadingTime: (currentTime - startTime) / 1000,
-            graphSize: graph.size(),
+            graphSize: loader.getGraphSize(),
             memoryUsed: (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1000 * 1000),
             threadsCount: Thread.activeCount()
         ]
@@ -74,34 +70,34 @@ class RDFBenchmark {
 
 class MetricsWriter {
     final File csvFile
+    final String triplestoreName
 
     MetricsWriter(String triplestoreName) {
+        this.triplestoreName = triplestoreName
         def outDir = new File("out")
         if (!outDir.exists()) {
             outDir.mkdir()
         }
 
-        def timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date())
-        this.csvFile = new File(outDir, "${triplestoreName}_loading-metrics-${timestamp}.csv")
+        //def timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date())
+        //this.csvFile = new File(outDir, "${this.triplestoreName}_loading-metrics-${timestamp}.csv")
+        this.csvFile = new File(outDir, "${this.triplestoreName}_loading-metrics.csv")
         
         // Write CSV header
         csvFile.write('triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb\n')
     }
 
     void writeMetrics(String fileName, Map metrics) {
-        csvFile.append("""
-            ${triplestoreName},${fileName},
-            ${String.format('%.2f', metrics.loadingTime)},
-            ${metrics.graphSize},
-            ${String.format('%.2f', metrics.memoryUsed)}\n
-        """.stripIndent())
+        csvFile.append("""${this.triplestoreName},${fileName},${String.format('%.2f', metrics.loadingTime)},${metrics.graphSize},${String.format('%.2f', metrics.memoryUsed)}""".stripIndent())
     }
 }
 
 // Main execution
 try {
-    def benchmark = new RDFBenchmark("corese4.6.3")
-    benchmark.processDirectory('/Users/freddylimpens/src/tmp/bowlogna_benchmark/sample')
+    def benchmark = new RDFBenchmark("corese.4.6.3")
+    //def benchmark = new RDFBenchmark("rdf4j.5.1.2")
+    //benchmark.processDirectory('/Users/freddylimpens/src/tmp/bowlogna_benchmark/sample')
+    benchmark.processDirectory('/Users/freddylimpens/src/tmp/bowlogna_benchmark/BowlognaOutput')
 } catch (Exception e) {
     println "Error occurred: ${e.message}"
     throw e

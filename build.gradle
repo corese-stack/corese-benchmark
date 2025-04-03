@@ -47,7 +47,7 @@ task runGroovyScript(type: JavaExec) {
     group = 'application'
     description = 'Run the Groovy script'
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'load-query-corese'
+    mainClass = 'benchmark'
 
     // Add memory settings
     jvmArgs = [
