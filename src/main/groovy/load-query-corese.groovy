@@ -1,71 +1,112 @@
 import java.io.File
 import java.text.SimpleDateFormat
-
 import fr.inria.corese.core.Graph
 import fr.inria.corese.core.load.Load
 import fr.inria.corese.core.api.Loader
 
+class RDFBenchmark {
 
-// Step 1: Create a graph object
-Graph graph = Graph.create()
-def triplestoreName = "corese4.6.3" // Replace with your triplestore name
+    final String triplestoreName
+    final Graph graph
+    final Load loader
+    final MetricsWriter metricsWriter
 
-try {
-    // Create output directory and CSV file
-    def outDir = new File("out")
-    if (!outDir.exists()) {
-        outDir.mkdir()
+    RDFBenchmark(String triplestoreName) {
+        this.triplestoreName = triplestoreName
+        this.graph = Graph.create()
+        this.loader = Load.create(graph)
+        this.metricsWriter = new MetricsWriter(triplestoreName)
     }
 
-    // Create CSV file with timestamp
-    def timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date())
-    def csvFile = new File(outDir, "${triplestoreName}_loading-metrics-${timestamp}.csv")
+    void processDirectory(String folderPath) {
+        def directory = new File(folderPath)
+        println "Loading RDF files from ${folderPath}..."
+        def totalStartTime = System.currentTimeMillis()
 
-    // Write CSV header
-    csvFile.write('triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb\n')
-
-    // Step 2: Load RDF files from directory
-    Load loader = Load.create(graph)
-    //def folderPath = '/Users/freddylimpens/src/tmp/bowlogna_benchmark/BowlognaOutput'
-    def folderPath = '/Users/freddylimpens/src/tmp/bowlogna_benchmark/sample'
-    def File directory = new File(folderPath)
-
-    println "Loading RDF files from ${folderPath}..."
-    def totalStartTime = System.currentTimeMillis()
-
-    directory.eachFile { file ->
-        if (file.name.endsWith('.nt')) {  // Filter for .nt files
-            println "\nProcessing file: ${file.name}"
-            loader.parse(file.absolutePath, Loader.format.NT_FORMAT)
-            def currentLoadingTime = System.currentTimeMillis() - totalStartTime
-            def memoryUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
-            def currentGraphSize = graph.size()
-
-            // Write metrics to CSV
-            csvFile.append(
-                "${triplestoreName},${file.name}," +
-                "${String.format('%.2f', currentLoadingTime / 1000)}," +
-                "${currentGraphSize}," +
-                "${String.format('%.2f', memoryUsed/(1000 * 1000))}\n"
-            )
-
-            println "RDF file loaded successfully in ${currentLoadingTime / 1000} seconds!"
-            println "Graph size : ${currentGraphSize } triples"
-            println "Nb of threads used : ${Thread.activeCount()}"
-            println "Memory used : ${(memoryUsed / (1000 * 1000)).round() } MB"
+        directory.eachFile { file ->
+            if (file.name.endsWith('.nt')) {
+                processFile(file, totalStartTime)
+            }
         }
+
+        printFinalStats(folderPath, totalStartTime)
     }
 
-    def totalEndTime = System.currentTimeMillis()
-    def memoryUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
-    println "---\n Finished loading RDF files from ${folderPath} in ${(totalEndTime - totalStartTime)/1000} seconds"
-    println "Total graph size : ${graph.size()} triples"
-    println "Nb of threads used : ${Thread.activeCount()}"
-    println "Memory used : ${(memoryUsed / (1000*1000)).round() } MB"
-    println "Metrics written to ${csvFile.absolutePath}"
-    println "-------------------------------------"
+    private void processFile(File file, long startTime) {
+        println "\nProcessing file: ${file.name}"
+        loader.parse(file.absolutePath, Loader.format.NT_FORMAT)
 
+        def metrics = calculateMetrics(startTime)
+        metricsWriter.writeMetrics(file.name, metrics)
+        printFileStats(metrics)
+    }
+
+    private Map calculateMetrics(long startTime) {
+        def currentTime = System.currentTimeMillis()
+        return [
+            loadingTime: (currentTime - startTime) / 1000,
+            graphSize: graph.size(),
+            memoryUsed: (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1000 * 1000),
+            threadsCount: Thread.activeCount()
+        ]
+    }
+
+    private void printFileStats(Map metrics) {
+        println "RDF file loaded successfully in ${String.format('%.2f', metrics.loadingTime)} seconds!"
+        println "Graph size: ${metrics.graphSize} triples"
+        println "Threads used: ${metrics.threadsCount}"
+        println "Memory used: ${String.format('%.2f', metrics.memoryUsed)} MB"
+    }
+
+    private void printFinalStats(String folderPath, long startTime) {
+        def metrics = calculateMetrics(startTime)
+        println """
+            ---
+            Finished loading RDF files from ${folderPath} in ${String.format('%.2f', metrics.loadingTime)} seconds
+            Total graph size: ${metrics.graphSize} triples
+            Threads used: ${metrics.threadsCount}
+            Memory used: ${String.format('%.2f', metrics.memoryUsed)} MB
+            Metrics written to ${metricsWriter.csvFile.absolutePath}
+            -------------------------------------
+        """.stripIndent()
+    }
+}
+
+class MetricsWriter {
+    final File csvFile
+
+    MetricsWriter(String triplestoreName) {
+        def outDir = new File("out")
+        if (!outDir.exists()) {
+            outDir.mkdir()
+        }
+
+        def timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date())
+        this.csvFile = new File(outDir, "${triplestoreName}_loading-metrics-${timestamp}.csv")
+        
+        // Write CSV header
+        csvFile.write('triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb\n')
+    }
+
+    void writeMetrics(String fileName, Map metrics) {
+        csvFile.append("""
+            ${triplestoreName},${fileName},
+            ${String.format('%.2f', metrics.loadingTime)},
+            ${metrics.graphSize},
+            ${String.format('%.2f', metrics.memoryUsed)}\n
+        """.stripIndent())
+    }
+}
+
+// Main execution
+try {
+    def benchmark = new RDFBenchmark("corese4.6.3")
+    benchmark.processDirectory('/Users/freddylimpens/src/tmp/bowlogna_benchmark/sample')
+} catch (Exception e) {
+    println "Error occurred: ${e.message}"
+    throw e
 } finally {
-    // Step 5: Close the connection
     println "Goodbye!"
+    System.exit(0) 
+
 }
