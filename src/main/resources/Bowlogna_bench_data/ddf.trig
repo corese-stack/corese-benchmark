@@ -1,0 +1,1442 @@
+@prefix : <http://data.dictionnairedesfrancophones.org/ontology/ddf#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix ddf: <http://data.dictionnairedesfrancophones.org/ontology/ddf#> .
+@prefix mnx: <http://ns.mnemotix.com/ontologies/2019/8/generic-model/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sioc: <http://rdfs.org/sioc/ns#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix lemon: <http://lemon-model.net/lemon#> .
+@prefix lexicog: <http://www.w3.org/ns/lemon/lexicog#> .
+@prefix lexinfo: <http://www.lexinfo.net/ontology/2.0/lexinfo#> .
+@prefix ontolex: <http://www.w3.org/ns/lemon/ontolex#> .
+@prefix geonames: <http://www.geonames.org/ontology#> .
+@base <http://data.dictionnairedesfrancophones.org/ontology/ddf> .
+
+
+<http://data.dictionnairedesfrancophones.org/ontology/ddf/NG> {
+<http://data.dictionnairedesfrancophones.org/ontology/ddf> rdf:type owl:Ontology ;
+                                                            owl:imports <http://lemon-model.net/lemon> ,
+                                                                        sioc: ,
+                                                                        <http://www.geonames.org/ontology> ,
+                                                                        <http://www.lexinfo.net/ontology/2.0/lexinfo> ,
+                                                                        <http://www.w3.org/2004/02/skos/core> ,
+                                                                        <http://www.w3.org/ns/prov-o-20130430> ,
+                                                                        <http://www.w3.org/ns/lemon/ontolex> ;
+                                                            <http://creativecommons.org/ns#license> "https://creativecommons.org/licenses/by/4.0" ;
+                                                            <http://purl.org/dc/elements/1.1/title> "Ontology of Dictionnaire des francophones (DDF) project"@en ,
+                                                                                                    "ontologie du Dictionnaire des francophones (DDF)"@fr ;
+                                                            dct:creator "Noé Gasparini, Jean Delahousse, Freddy Limpens." ;
+                                                            dct:modified "2023-02-23T00:00:00.000Z"^^xsd:dateTime ;
+                                                            rdfs:comment """23/02/2023 Version 0.9.2.4
+# Ajout de MultiWordInflection et extension du rdfs:domain des prop ddf:hasNumber et ddf:hasGender
+27/01/2023 Version 0.9.2.3
+# Ajout de isCSVUpdatable 
+29/11/2021 Version 0.9.2.2
+# Ajout de descriptifs en français
+8/12/2020 Version 0.9.2.1
+#Renommé clase ddf:ReportingRating => ReportingRating,
+27/11/2020 Version 0.9.2.0,
+# Sous-classes de ReportingRating, et propriété ddf:reportingMessage pour spécifier les signalements avec éventuellement un message si aucune catégorie de signalement ne convient,
+21/09/2020 Version 0.9.1.2,
+# Licence et auteurs,
+20/03/2020 Version 0.9.1.1,
+# correction namespace PROV,
+06/03/2020 Version 0.9.1,
+# Ajout de propriétés inverses pour les relations semantiques,
+04/05/2020 Version 0.9,
+# Ajout de la méta-propriété ddf:hasGrammaticalProperty pour permettre des requêtes simple entre LexicalEntry et n'importe quel concept de vocabulaire contrôlé,
+28/01/2020 Version 0.8,
+# Ajout des sous-propriétés de schema:itemReviewed,                                                          
+23/01/2020 Version 0.7,
+# Ajout de :ReportingRating et :ReviewedRating pour les mécanismes de signalement et relecture
+# Ajout de :hasSource pour permettre de spécifier une source extérieure au niveau d'une définition (ontolex:LexicalSense)
+11/10/2019 Version 0.6,
+# Modification du 'range' des propriétés aboutForm|Etymology|Sense de `sioc:Item` vers `ddf:OnlineContribution`
+# Ajout des instances sous-classes de mnx:UserGroup (pour les accès) distinguant le groupe des contributeurs, opérateurs, admin, et admin-sys
+# Ajout de la classe ddf:OnlineContribution héritant de mnx:OnlineContribution (elle-même héritant de sioc:Item)
+# Ajout de la classe ddf:Person héritant de mnx:Person, elle-même héritant de foaf:Person
+# Ajout des sous-classe de <https://schema.org/AggregateRating>  pour distinguer votes des contributeurs de ceux des opérateurs/administrateurs
+# Ajout des propriétés issues de schema.org pour relier un AggregateRating au compte du votant et à l'objet sur lequel porte le vote
+10/7/2019 Version 0.5,
+# Ajout de ddf:lexicalEntryHasSemanticRelationWith et ddf:semanticRelationOfLexicalEntry. Utilisation de Lexicog version définitive à partir du .rdf plutôt que d'un xml.
+29/5/2019 Version 0.4,
+# Suppression de ddf:Etymology et de aboutLexicalEntry. Ajout de AggregateRating de schema.org.
+19/4/2019 Version 0.3,
+# Création de propriétés inverses manquantes. Documentation de toutes les classes et propriétés créées. Ajout de la classe InvariablePOS. Renommage de InflectedPOS en InflectablePOS. Renommage de inflectedForGender en inflectionHasGenrer et inflectedForNumber en inflectionHasNumber.
+17/4/2019 Version 0.2,
+#3 Suppression de plusieurs classes pour les remplacer par des classes équivalente Lexinfo. Création de sous-classes à Word. Ajout de Sociolect, TextualGenre, Glossary, GrammaticalConstraint. Corrections de propriété. Début de documentation.
+9/4/2019 Version 0.11, 
+#2 import de l'ontologie geonames - La classe Place est déclarée équivalente à la classe geonames:GeonamesFeatures
+#1 diverses modifications mineures pour arriver à la version beta
+8/4/2019 Version 0.10"""@fr ;
+                                                            rdfs:label "Ontologie du Dictionnaire des francophones"@fr ,
+                                                                       "Ontology of Dictionnaire des francophones project"@en ;
+                                                            owl:versionInfo "0.9.2.4"^^xsd:dateTime .
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+###  http://www.w3.org/2000/01/rdf-schema#description
+rdfs:description rdf:type owl:AnnotationProperty .
+
+
+#################################################################
+#    Object Properties
+#################################################################
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#aboutEntity
+ddf:aboutEntity rdf:type owl:ObjectProperty ;
+                rdfs:subPropertyOf sioc:about ;
+                owl:inverseOf ddf:hasItemAboutEntity ;
+                rdfs:domain ddf:OnlineContribution ;
+                rdfs:range ontolex:LexicalSense ;
+                rdfs:comment "Discussion about any contributed entity"@en ,
+                             "Discussion liée aux éléments de contribution"@fr ;
+                rdfs:label "Note sur une entité"@fr ,
+                           "aboutEntity"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#aboutEtymology
+ddf:aboutEtymology rdf:type owl:ObjectProperty ;
+                   rdfs:subPropertyOf sioc:about ;
+                   owl:inverseOf ddf:hasItemAboutEtymology ;
+                   rdfs:domain ddf:OnlineContribution ;
+                   rdfs:range ontolex:LexicalEntry ;
+                   rdfs:comment "Discussion about an Etymology"@en ,
+                                "Discussion liée à l'histoire du mot"@fr ;
+                   rdfs:label "aboutEtymology"@en ,
+                              "note sur l'étymologie"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#aboutForm
+ddf:aboutForm rdf:type owl:ObjectProperty ;
+              rdfs:subPropertyOf sioc:about ;
+              owl:inverseOf ddf:hasItemAboutForm ;
+              rdfs:domain ddf:OnlineContribution ;
+              rdfs:range ontolex:Form ;
+              rdfs:comment "Discussion about a Form"@en ,
+                           "Discussion liée à la forme"@fr ;
+              rdfs:label "Note sur la forme"@fr ,
+                         "aboutForm"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#aboutSense
+ddf:aboutSense rdf:type owl:ObjectProperty ;
+               rdfs:subPropertyOf sioc:about ;
+               owl:inverseOf ddf:hasItemAboutSense ;
+               rdfs:domain ddf:OnlineContribution ;
+               rdfs:range ontolex:LexicalSense ;
+               rdfs:comment "Discussion about a LexicalSense and usages"@en ,
+                            "Discussion liée au sens et aux usages"@fr ;
+               rdfs:label "Note sur le sens"@fr ,
+                          "aboutSense"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#audioHasLocalisation
+ddf:audioHasLocalisation rdf:type owl:ObjectProperty ;
+                         rdfs:subPropertyOf owl:topObjectProperty ;
+                         rdfs:domain ddf:AudioRecording ;
+                         rdfs:range ddf:Place .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#entryHasGlossary
+ddf:entryHasGlossary rdf:type owl:ObjectProperty ;
+                     rdfs:domain lexicog:Entry ;
+                     rdfs:range ddf:Glossary ;
+                     rdfs:comment "One of the meanings is included in a Glossary."@en ,
+                                  "Un des sens de cette entrée appartient à un glossaire ."@fr ;
+                     rdfs:label "entryHasGlossary"@en ,
+                                "entrée dans un glossaire"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#entryHasSemanticRelationWith
+ddf:entryHasSemanticRelationWith rdf:type owl:ObjectProperty ;
+                                 rdfs:subPropertyOf ddf:entryHasGlossary ;
+                                 owl:inverseOf ddf:semanticRelationOfEntry ;
+                                 rdfs:domain lexicog:Entry ;
+                                 rdfs:range ddf:SemanticRelation ;
+                                 rdfs:comment "Indicate that an Entry has a semantic relation with another Entry or with a Sense"@en ,
+                                              "Indique qu'une entrée entretient une relation sémantique avec une autre Entrée, une Entrée lexicale ou un Sens"@fr ;
+                                 rdfs:label "entry has semantic relation with"@en ,
+                                            "relation sémantique depuis une entrée"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#etymology
+ddf:etymology rdf:type owl:ObjectProperty ;
+              owl:inverseOf ddf:isEtymologyOf ;
+              rdfs:domain ontolex:LexicalEntry ;
+              rdfs:comment "Indication de l'étymologie."@fr ,
+                           "Indication of the etymology."@en ;
+              rdfs:label "etymology"@en ,
+                         "étymologie"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#formHasLocalisation
+ddf:formHasLocalisation rdf:type owl:ObjectProperty ;
+                        rdfs:domain ontolex:Form ;
+                        rdfs:range ddf:Place ;
+                        rdfs:comment "Indicate a geographical restriction for the Form."@en ,
+                                     "Lieu où est utilisée une forme (écrite ou sonore) du mot."@fr ;
+                        rdfs:label "form has localisation"@en ,
+                                   "restriction géographique pour la forme"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#formHasRecording
+ddf:formHasRecording rdf:type owl:ObjectProperty ;
+                     rdfs:subPropertyOf owl:topObjectProperty ;
+                     rdfs:domain ontolex:Form ;
+                     rdfs:range ddf:AudioRecording .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasConnotation
+ddf:hasConnotation rdf:type owl:ObjectProperty ;
+                   rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                      ontolex:usage ;
+                   rdfs:domain ontolex:LexicalSense ;
+                   rdfs:range ddf:Connotation ;
+                   rdfs:comment "Indicate that a Sense has a connotation."@en ,
+                                "Indication de la connotation du sens."@fr ;
+                   rdfs:label "a une connotation"@fr ,
+                              "has connotation"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasDomain
+ddf:hasDomain rdf:type owl:ObjectProperty ;
+              rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                 ontolex:usage ;
+              rdfs:domain ontolex:LexicalSense ;
+              rdfs:range ddf:Domain ;
+              rdfs:comment "Indicate that a Sense is part of a semantic domain."@en ,
+                           "Indication d'un domaine sémantique pour un sens."@fr ;
+              rdfs:label "a un domaine"@fr ,
+                         "has domain"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasFormType
+ddf:hasFormType rdf:type owl:ObjectProperty ;
+                rdfs:domain ontolex:Form ;
+                rdfs:range ddf:FormType ;
+                rdfs:comment "Indicate the nature of the Form."@en ,
+                             "Indique la nature de la forme."@fr ;
+                rdfs:label "has form type"@en ,
+                           "type de forme"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasFrequency
+ddf:hasFrequency rdf:type owl:ObjectProperty ;
+                 rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                    ontolex:usage ;
+                 rdfs:domain ontolex:LexicalSense ;
+                 rdfs:range lexinfo:Frequency ;
+                 rdfs:comment "Indicate that a Sense has a frequency specification."@en ,
+                              "Indication de fréquence d'usage d'un sens."@fr ;
+                 rdfs:label "a une fréquence"@fr ,
+                            "has frequency"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasGender
+ddf:hasGender rdf:type owl:ObjectProperty ;
+              rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+              rdfs:domain ddf:InflectablePOS ,
+                          ddf:MultiWordInflection ,
+                          ontolex:MultiWordExpression ;
+              rdfs:range lexinfo:Gender ;
+              rdfs:comment "Genre grammatical d'un mot variable."@fr ,
+                           "Indication of an inflectable nature caused by a gender specification."@en ;
+              rdfs:label "genre du mot"@fr ,
+                         "has gender"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasGlossary
+ddf:hasGlossary rdf:type owl:ObjectProperty ;
+                rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                   ontolex:usage ;
+                rdfs:domain ontolex:LexicalSense ;
+                rdfs:range ddf:Glossary ;
+                rdfs:comment "Indicate that a Sense is part of a glossary."@en ,
+                             "Indique l'appartenance d'un sens à un glossaire."@fr ;
+                rdfs:label "est dans un glossaire"@fr ,
+                           "has glossary"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasGrammaticalConstraint
+ddf:hasGrammaticalConstraint rdf:type owl:ObjectProperty ;
+                             rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                                lemon:condition ;
+                             rdfs:domain ontolex:LexicalSense ;
+                             rdfs:range ddf:GrammaticalConstraint ;
+                             rdfs:comment "Indicate that a Sense has a grammatical constraint to be used in."@en ,
+                                          "Indique les contraintes syntaxiques d'usage pour un sens."@fr ;
+                             rdfs:label "a une contrainte grammaticale"@fr ,
+                                        "has grammatical constraint"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasGrammaticalProperty
+ddf:hasGrammaticalProperty rdf:type owl:ObjectProperty ;
+                           owl:inverseOf ddf:isGrammaticalPropertyOf ;
+                           rdfs:domain ontolex:LexicalEntry ;
+                           rdfs:range skos:Concept ;
+                           rdfs:comment "meta property linking a lexical entry with any vocabulary concept"@en ,
+                                        "méta propriété reliant une entrée lexicale avec n'importe quel concept de vocabulaire contrôlé"@fr ;
+                           rdfs:label "a pour propriété grammaticale"@fr ,
+                                      "has grammatical property"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasInflection
+ddf:hasInflection rdf:type owl:ObjectProperty ;
+                  rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+                  owl:inverseOf ddf:isInflectionOf ;
+                  rdfs:domain ddf:InflectablePOS ;
+                  rdfs:range ddf:Inflection ;
+                  owl:propertyDisjointWith ddf:hasVerbalInflection ;
+                  rdfs:comment "Indication of the inflected form of a Word."@en ,
+                               "Indique les formes fléchies d'un mot."@fr ;
+                  rdfs:label "a une flexion"@fr ,
+                             "has inflection"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasItemAboutEntity
+ddf:hasItemAboutEntity rdf:type owl:ObjectProperty ;
+                       rdfs:domain ontolex:LexicalSense ;
+                       rdfs:range ddf:OnlineContribution ;
+                       rdfs:comment "Indicate a discussion about the contributed entity"@en ,
+                                    "Indique une discussion à propos d'une contribution."@fr ;
+                       rdfs:label "a une note sur l'entité"@fr ,
+                                  "has discussion about Entity"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasItemAboutEtymology
+ddf:hasItemAboutEtymology rdf:type owl:ObjectProperty ;
+                          rdfs:domain ontolex:LexicalEntry ;
+                          rdfs:range ddf:OnlineContribution ;
+                          rdfs:comment "Indicate a discussion about the etymology of a LexicalEntry."@en ,
+                                       "Indique une discussion à propos de l'histoire d'une entrée lexicale."@fr ;
+                          rdfs:label "a une note sur l'étymologie"@fr ,
+                                     "has item about etymology"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasItemAboutForm
+ddf:hasItemAboutForm rdf:type owl:ObjectProperty ;
+                     rdfs:domain ontolex:Form ;
+                     rdfs:range ddf:OnlineContribution ;
+                     rdfs:comment "Indicate a discussion about the Form of a LexicalEntry."@en ,
+                                  "Indique une discussion à propos de la forme d'une entrée lexicale."@fr ;
+                     rdfs:label "a une note sur la forme"@fr ,
+                                "has item about form"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasItemAboutSense
+ddf:hasItemAboutSense rdf:type owl:ObjectProperty ;
+                      rdfs:domain ontolex:LexicalSense ;
+                      rdfs:range ddf:OnlineCabouSontribution ;
+                      rdfs:comment "Indicate a discussion about the sense and usages."@en ,
+                                   "Indique une discussion à propos du sens et des usages."@fr ;
+                      rdfs:label "a une note sur le sens"@fr ,
+                                 "has item about Sense"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasLexicographicResource
+ddf:hasLexicographicResource rdf:type owl:ObjectProperty ;
+                             owl:inverseOf lexicog:entry ;
+                             rdfs:domain lexicog:Entry ;
+                             rdfs:range lexicog:LexicographicResource ;
+                             rdfs:comment "Document d'origine de ce contenu"@fr ,
+                                          "Indicate the source document"@en ;
+                             rdfs:label "a pour origine"@fr ,
+                                        "has lexicographic resource"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasLocalisation
+ddf:hasLocalisation rdf:type owl:ObjectProperty ;
+                    rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                       ontolex:usage ;
+                    rdfs:domain ontolex:LexicalSense ;
+                    rdfs:range ddf:Place ;
+                    rdfs:comment "Indicate that a Sens has a localisation restriction."@en ,
+                                 "Spécification d'une zone géographique pour un sens."@fr ;
+                    rdfs:label "a une restriction géographique"@fr ,
+                               "has localisation"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasMood
+ddf:hasMood rdf:type owl:ObjectProperty ;
+            rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+            rdfs:domain ddf:VerbalInflection ;
+            rdfs:range lexinfo:Mood ;
+            rdfs:comment "Forme fléchie d'un verbe selon le mode."@fr ,
+                         "Indication of an inflected nature caused by a mood caracterisation."@en ;
+            rdfs:label "flexion en mode"@fr ,
+                       "has mood"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasNumber
+ddf:hasNumber rdf:type owl:ObjectProperty ;
+              rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+              rdfs:domain ddf:InflectablePOS ,
+                          ddf:MultiWordInflection ,
+                          ontolex:MultiWordExpression ;
+              rdfs:range lexinfo:Number ;
+              rdfs:comment "Indication of the number value of an inflectable term."@en ,
+                           "Indique le nombre du mot."@fr ;
+              rdfs:label "a un nombre"@fr ,
+                         "has number"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasPartOfSpeech
+ddf:hasPartOfSpeech rdf:type owl:ObjectProperty ;
+                    rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+                    rdfs:domain ontolex:Word ;
+                    rdfs:range lexinfo:PartOfSpeech ;
+                    rdfs:comment "Indicate the type for a Word."@en ,
+                                 "Indique la classe d'un mot."@fr ;
+                    rdfs:label "a une classe de mot"@fr ,
+                               "has part of speech"@en .
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#equivalentPOSType
+ddf:equivalentPOSType rdf:type owl:ObjectProperty ;
+                    rdfs:domain skos:Concept ;
+                    rdfs:comment "Classe de mot équivalente pour un type de locution. Utile pour le voc MultiWordType"@fr ;
+                    rdfs:label "classe de mot équivalente"@fr .
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasPerson
+ddf:hasPerson rdf:type owl:ObjectProperty ;
+              rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+              rdfs:domain ddf:VerbalInflection ;
+              rdfs:range lexinfo:Person ;
+              rdfs:comment "Forme fléchie d'un verbe selon la personne."@fr ,
+                           "Indication of an inflected nature caused by a person caracterisation."@en ;
+              rdfs:label "flexion en personne"@fr ,
+                         "has person"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasRegister
+ddf:hasRegister rdf:type owl:ObjectProperty ;
+                rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                   ontolex:usage ;
+                rdfs:domain ontolex:LexicalSense ;
+                rdfs:range lexinfo:Register ;
+                rdfs:comment "Indicate that a Sense has a register."@en ,
+                             "Indication du registre d'usage lié à un sens."@fr ;
+                rdfs:label "a un registre"@fr ,
+                           "has register"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasReportingRating
+ddf:hasReportingRating rdf:type owl:ObjectProperty ;
+                       owl:inverseOf ddf:reportedItem ;
+                       rdfs:domain owl:Thing ;
+                       rdfs:range ddf:ReportingRating ;
+                       rdfs:label "Has reporting rating"@en ,
+                                  "Vote de signalement"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasSemanticProperty
+ddf:hasSemanticProperty rdf:type owl:ObjectProperty ;
+                        owl:inverseOf ddf:isSemanticPropertyOf ;
+                        rdfs:domain ontolex:LexicalSense ;
+                        rdfs:range skos:Concept ;
+                        rdfs:comment "meta property linking a lexical sense with any vocabulary concept"@en ,
+                                     "méta propriété reliant un sens avec n'importe quel concept de vocabulaire contrôlé"@fr ;
+                        rdfs:label "a pour propriété sémantique"@fr ,
+                                   "has semantic property"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasSociolect
+ddf:hasSociolect rdf:type owl:ObjectProperty ;
+                 rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                    ontolex:usage ;
+                 rdfs:domain ontolex:LexicalSense ;
+                 rdfs:range ddf:Sociolect ;
+                 rdfs:comment "Indicate that a Sense is typical of a sociolect."@en ,
+                              "Indication de l'appartenance d'un sens à un sociolecte."@fr ;
+                 rdfs:label "est dans un sociolecte"@fr ,
+                            "has sociolect"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasSuppressionRating
+ddf:hasSuppressionRating rdf:type owl:ObjectProperty ;
+                         owl:inverseOf ddf:suppressedItem ;
+                         rdfs:domain owl:Thing ;
+                         rdfs:range ddf:SuppressionRating ;
+                         rdfs:label "Vote de suppression"@fr ,
+                                    "has Suppression Rating"@en ,
+                                    "has suppression rating"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasTemporality
+ddf:hasTemporality rdf:type owl:ObjectProperty ;
+                   rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                      ontolex:usage ;
+                   rdfs:domain ontolex:LexicalSense ;
+                   rdfs:range lexinfo:TemporalQualifier ;
+                   rdfs:comment "Indicate that a Sense has a temporality."@en ,
+                                "Indication de la modernité de l'usage d'un sens."@fr ;
+                   rdfs:label "a une temporalité"@fr ,
+                              "has temporality"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasTense
+ddf:hasTense rdf:type owl:ObjectProperty ;
+             rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+             rdfs:domain ddf:VerbalInflection ;
+             rdfs:range lexinfo:Tense ;
+             rdfs:comment "Forme fléchie d'un verbe selon le temps."@fr ,
+                          "Indication of an inflected nature caused by a tense caracterisation."@en ;
+             rdfs:label "flexion en temps"@fr ,
+                        "has tense"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasTextualGenre
+ddf:hasTextualGenre rdf:type owl:ObjectProperty ;
+                    rdfs:subPropertyOf ddf:hasSemanticProperty ,
+                                       lemon:context ;
+                    rdfs:domain ontolex:LexicalSense ;
+                    rdfs:range ddf:TextualGenre ;
+                    rdfs:comment "Indicate that a Sense is typical of a textual genre."@en ,
+                                 "Indication de l'appartenance d'un sens à un genre de texte."@fr ;
+                    rdfs:label "a un genre textuel"@fr ,
+                               "has textual genre"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasTransitivity
+ddf:hasTransitivity rdf:type owl:ObjectProperty ;
+                    rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+                    rdfs:domain ddf:Verb ;
+                    rdfs:range lexinfo:VerbFrame ;
+                    rdfs:comment "Indicate the valency of a verb, the quantity of argument it can have."@en ,
+                                 "Indique la valence d'un verbe, le nombre d'arguments qu'il peut régir."@fr ;
+                    rdfs:label "has transitivity"@en ,
+                               "transitivité du verbe"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasValidationRating
+ddf:hasValidationRating rdf:type owl:ObjectProperty ;
+                        owl:inverseOf ddf:validatedItem ;
+                        rdfs:domain owl:Thing ;
+                        rdfs:range ddf:ValidationRating ;
+                        rdfs:label "Vote de validation"@fr ,
+                                   "has validation rating"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasVerbalInflection
+ddf:hasVerbalInflection rdf:type owl:ObjectProperty ;
+                        owl:inverseOf ddf:isVerbalInflectionOf ;
+                        rdfs:domain ddf:Verb ;
+                        rdfs:range ddf:VerbalInflection ;
+                        rdfs:comment "Connecte avec les formes fléchies d'un verbe."@fr ,
+                                     "Indicate the inflection of a Verb."@en ;
+                        rdfs:label "a une déclinaison"@fr ,
+                                   "has verbal inflection"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#inflectionHasGender
+ddf:inflectionHasGender rdf:type owl:ObjectProperty ;
+                        rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+                        rdfs:domain ddf:Inflection ;
+                        rdfs:range lexinfo:Gender ;
+                        rdfs:comment "Indication of the gender value of an inflected term."@en ,
+                                     "Indique le genre d'une flexion."@fr ;
+                        rdfs:label "genre d'une flexion"@fr ,
+                                   "inflection has gender"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#inflectionHasNumber
+ddf:inflectionHasNumber rdf:type owl:ObjectProperty ;
+                        rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+                        rdfs:domain ddf:Inflection ;
+                        rdfs:range lexinfo:Number ;
+                        rdfs:comment "Indication of the number value of an inflected term."@en ,
+                                     "Indique le nombre d'une flexion."@fr ;
+                        rdfs:label "flexion a un nombre"@fr ,
+                                   "inflection has number"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isCanonicalFormOf
+ddf:isCanonicalFormOf rdf:type owl:ObjectProperty ;
+                      owl:inverseOf ontolex:canonicalForm ;
+                      rdfs:domain ontolex:Form ;
+                      rdfs:range ontolex:LexicalEntry ;
+                      rdfs:label "est la forme canonique de"@fr ,
+                                 "is canonical form of"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isDescribedBy
+ddf:isDescribedBy rdf:type owl:ObjectProperty ;
+                  owl:inverseOf lexicog:describes ;
+                  rdfs:domain ontolex:LexicalEntry ;
+                  rdfs:range lexicog:Entry ;
+                  rdfs:label "est décrit par"@fr ,
+                             "is described by"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isEtymologyOf
+ddf:isEtymologyOf rdf:type owl:ObjectProperty ;
+                  rdfs:range ontolex:LexicalEntry ;
+                  rdfs:comment "Est l'étymologie d'une entrée lexicale."@fr ,
+                               "Indicate the etymology of a LexicalEntry."@en ;
+                  rdfs:label "est l'étymologie de"@fr ,
+                             "is etymology of"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isGrammaticalPropertyOf
+ddf:isGrammaticalPropertyOf rdf:type owl:ObjectProperty ;
+                            rdfs:domain skos:Concept ;
+                            rdfs:range ontolex:LexicalEntry ;
+                            rdfs:label "est la propriété grammaticale de"@fr ,
+                                       "is grammatical property of"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isInflectionOf
+ddf:isInflectionOf rdf:type owl:ObjectProperty ;
+                   rdfs:domain ddf:Inflection ;
+                   rdfs:range ddf:InflectablePOS ;
+                   owl:propertyDisjointWith ddf:isVerbalInflectionOf ;
+                   rdfs:comment "Indication of the lemma for an inflection."@en ,
+                                "Indique le lemme correspondant à une flexion."@fr ;
+                   rdfs:label "est la flexion de"@fr ,
+                              "is inflection of"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isSemanticPropertyOf
+ddf:isSemanticPropertyOf rdf:type owl:ObjectProperty ;
+                         rdfs:domain skos:Concept ;
+                         rdfs:range ontolex:LexicalSense ;
+                         rdfs:label "est la propriété sémantique de"@fr ,
+                                    "is semantic property of"@en ,
+                                    "isSemanticPropertyOf"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isVerbalInflectionOf
+ddf:isVerbalInflectionOf rdf:type owl:ObjectProperty ;
+                         rdfs:domain ddf:VerbalInflection ;
+                         rdfs:range ddf:Verb ;
+                         rdfs:comment "Indication of the lemma for a verbal inflection."@en ,
+                                      "Indique le lemme correspondant à une déclinaison de verbe."@fr ;
+                         rdfs:label "est la déclinaison de"@fr ,
+                                    "is a verbal inflection of"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#lexicalEntryHasSemanticRelationWith
+ddf:lexicalEntryHasSemanticRelationWith rdf:type owl:ObjectProperty ;
+                                        owl:inverseOf ddf:semanticRelationOfLexicalEntry ;
+                                        rdfs:domain ontolex:LexicalEntry ;
+                                        rdfs:range ddf:SemanticRelation ;
+                                        owl:propertyDisjointWith ddf:lexicalSenseHasSemanticRelationWith ;
+                                        rdfs:comment "Indicate that a LexicalEntry has a semantic relation with another Sens, Entry or LexicalEntry."@en ,
+                                                     "Indique qu'une entrée lexicale entretien une relation avec un autre mot ou un autre sens."@fr ;
+                                        rdfs:label "LexicalEntry has semantic relation with"@en ,
+                                                   "relation depuis une entrée lexicale"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#lexicalSenseHasSemanticRelationWith
+ddf:lexicalSenseHasSemanticRelationWith rdf:type owl:ObjectProperty ;
+                                        owl:inverseOf ddf:semanticRelationOfLexicalSense ;
+                                        rdfs:domain ontolex:LexicalSense ;
+                                        rdfs:range ddf:SemanticRelation ;
+                                        rdfs:comment "Indicate that a Sense has a semantic relation with another Sense or with another Entry."@en ,
+                                                     "Indique qu'un sens entretient une relation sémantique avec un autre Sens, Entrée lexicale ou Entrée."@fr ;
+                                        rdfs:label "lexical sense has semantic relation with"@en ,
+                                                   "relation sémantique depuis le sens"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#multiWordExpressionHasGender
+ddf:multiWordExpressionHasGender rdf:type owl:ObjectProperty ;
+                                 rdfs:subPropertyOf ddf:hasGender ;
+                                 rdfs:domain ddf:MultiWordInflection ;
+                                 rdfs:range lexinfo:Gender .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#multiWordExpressionHasInflection
+ddf:multiWordExpressionHasInflection rdf:type owl:ObjectProperty ;
+                                     rdfs:subPropertyOf ddf:hasInflection ;
+                                     rdfs:domain ontolex:MultiWordExpression ;
+                                     rdfs:range ddf:MultiWordInflection .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#multiWordExpressionHasNumber
+ddf:multiWordExpressionHasNumber rdf:type owl:ObjectProperty ;
+                                 rdfs:subPropertyOf ddf:hasNumber ;
+                                 rdfs:domain ddf:MultiWordInflection ;
+                                 rdfs:range lexinfo:Number .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#multiWordType
+ddf:multiWordType rdf:type owl:ObjectProperty ;
+                  rdfs:subPropertyOf ddf:hasGrammaticalProperty ;
+                  rdfs:domain ontolex:MultiWordExpression ;
+                  rdfs:range ddf:MultiWordType ;
+                  rdfs:comment "Indicate the type of a multiword expression."@en ,
+                               "Indique le type de locution ou phrase."@fr ;
+                  rdfs:label "multiword type"@en ,
+                             "type de locution"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#preferredDomain
+ddf:preferredDomain rdf:type owl:ObjectProperty ;
+                    rdfs:domain ddf:Person ;
+                    rdfs:range ddf:Domain ;
+                    rdfs:comment "Domaine d'intérêt favoris" ;
+                    rdfs:label "Domaine préféré"@fr ,
+                               "preferred Domain"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#rater
+ddf:rater rdf:type owl:ObjectProperty ;
+          rdfs:domain <https://schema.org/AggregateRating> ;
+          rdfs:range mnx:UserAccount .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#reportedItem
+ddf:reportedItem rdf:type owl:ObjectProperty ;
+                 rdfs:subPropertyOf <https://schema.org/itemReviewed> ;
+                 rdfs:domain ddf:ReportingRating ;
+                 rdfs:range owl:Thing ;
+                 rdfs:label "Elément signalé"@fr ,
+                            "reported item"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#semanticRelationOfEntry
+ddf:semanticRelationOfEntry rdf:type owl:ObjectProperty ;
+                            rdfs:domain ddf:SemanticRelation ;
+                            rdfs:range lexicog:Entry ;
+                            owl:propertyDisjointWith ddf:semanticRelationOfLexicalEntry ,
+                                                     ddf:semanticRelationOfLexicalSense ;
+                            rdfs:comment "Indicate a relation aiming at an Entry"@en ,
+                                         "Indique que la relation cible une entrée sans distinction de sens"@fr ;
+                            rdfs:label "relation sémantique vers une entrée"@fr ,
+                                       "semantic relation of Entry"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#semanticRelationOfLexicalEntry
+ddf:semanticRelationOfLexicalEntry rdf:type owl:ObjectProperty ;
+                                   rdfs:domain ddf:SemanticRelation ;
+                                   rdfs:range ontolex:LexicalEntry ;
+                                   rdfs:comment "Indicate a relation aiming at a LexicalEntry"@en ,
+                                                "Indique que la relation cible une entrée lexicale sans distinction de sens."@fr ;
+                                   rdfs:label "relation vers une entrée lexicale"@fr ,
+                                              "semantic relation of LexicalEntry"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#semanticRelationOfLexicalSense
+ddf:semanticRelationOfLexicalSense rdf:type owl:ObjectProperty ;
+                                   rdfs:domain ddf:SemanticRelation ;
+                                   rdfs:range ontolex:LexicalSense ;
+                                   rdfs:comment "Indicate a relation aiming at a LexicalSense."@en ,
+                                                "Indique que la relation cible un sens spécifique."@fr ;
+                                   rdfs:label "relation sémantique vers une définition"@fr ,
+                                              "semantic relation of LexicalSense"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#semanticRelationType
+ddf:semanticRelationType rdf:type owl:ObjectProperty ;
+                         rdfs:domain ddf:SemanticRelation ;
+                         rdfs:range ddf:SenseRelation ;
+                         rdfs:comment "Indicate the nature of the semantic relation."@en ,
+                                      "Indique la nature de la relation."@fr ;
+                         rdfs:label "semantic relation type"@en ,
+                                    "type de relation sémantique"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#suppressedItem
+ddf:suppressedItem rdf:type owl:ObjectProperty ;
+                   rdfs:subPropertyOf <https://schema.org/itemReviewed> ;
+                   rdfs:domain ddf:SuppressionRating ;
+                   rdfs:range owl:Thing ;
+                   rdfs:label "Elément supprimé"@fr ,
+                              "suppressed item"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#toBeSuppressedItem
+ddf:toBeSuppressedItem rdf:type owl:ObjectProperty ;
+                       rdfs:subPropertyOf <https://schema.org/itemReviewed> ;
+                       rdfs:domain ddf:ToBeSuppressedRating ;
+                       rdfs:range owl:Thing ;
+                       rdfs:label "Elément à supprimer"@fr ,
+                                  "to be suppressed item"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#usageExampleHasLocalisation
+ddf:usageExampleHasLocalisation rdf:type owl:ObjectProperty ;
+                                rdfs:domain lexicog:UsageExample ;
+                                rdfs:range ddf:Place ;
+                                rdfs:comment "Indicate a geographic restriction for an example."@en ,
+                                             "Indique qu'un exemple provient d'une région spécifique."@fr ;
+                                rdfs:label "spécification géographique de l'exemple"@fr ,
+                                           "usage example has localisation"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#userHasLocalisation
+ddf:userHasLocalisation rdf:type owl:ObjectProperty ;
+                        rdfs:subPropertyOf owl:topObjectProperty ;
+                        rdfs:domain mnx:UserAccount ;
+                        rdfs:range ddf:Place .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#validatedItem
+ddf:validatedItem rdf:type owl:ObjectProperty ;
+                  rdfs:subPropertyOf <https://schema.org/itemReviewed> ;
+                  rdfs:domain ddf:ValidationRating ;
+                  rdfs:range owl:Thing ;
+                  rdfs:label "Elément validé"@fr ,
+                             "validated item"@en .
+
+
+###  http://lemon-model.net/lemon#condition
+lemon:condition rdf:type owl:ObjectProperty .
+
+
+###  http://rdfs.org/sioc/ns#about
+sioc:about rdf:type owl:ObjectProperty .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#termElement
+lexinfo:termElement rdfs:comment "N'importe quelle portion d'un terme."@fr ;
+                    rdfs:label "est une partie"@fr .
+
+
+###  http://www.w3.org/ns/lemon/lexicog#describes
+lexicog:describes rdf:type owl:ObjectProperty .
+
+
+###  http://www.w3.org/ns/lemon/lexicog#entry
+lexicog:entry rdf:type owl:ObjectProperty .
+
+
+###  http://www.w3.org/ns/lemon/ontolex#canonicalForm
+
+###  https://schema.org/aggregateRating
+<https://schema.org/aggregateRating> rdf:type owl:ObjectProperty ;
+                                     rdfs:domain owl:Thing ;
+                                     rdfs:range <https://schema.org/AggregateRating> ;
+                                     rdfs:comment "relie n'importe quelle ressource à un vote agrégé"@fr ;
+                                     rdfs:label "aggregate Rating"@en ,
+                                                "élément de vote agrégé"@fr .
+
+
+###  https://schema.org/itemReviewed
+<https://schema.org/itemReviewed> rdf:type owl:ObjectProperty ;
+                                  rdfs:domain <https://schema.org/AggregateRating> ;
+                                  rdfs:range owl:Thing ;
+                                  rdfs:label "item reviewed"@en ,
+                                             "élément revu"@fr .
+
+
+#################################################################
+#    Data properties
+#################################################################
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#audioFile
+ddf:audioFile rdf:type owl:DatatypeProperty ;
+              rdfs:subPropertyOf owl:topDataProperty ;
+              rdfs:domain ddf:AudioRecording .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasScientificName
+ddf:hasScientificName rdf:type owl:DatatypeProperty ;
+                      rdfs:domain ontolex:LexicalSense ;
+                      rdfs:range rdfs:Literal ;
+                      rdfs:comment "Indicate that a Sense has a scientic name equivalent to."@en ,
+                                   "Indique le nom scientifique correspondant."@fr ;
+                      rdfs:label "a un nom scientifique"@fr ,
+                                 "has scientific name"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#hasSource
+ddf:hasSource rdf:type owl:DatatypeProperty ;
+              rdfs:domain ontolex:LexicalSense ;
+              rdfs:range rdfs:Literal ;
+              rdfs:comment "Indicate that this definition comes from an external source whose link is given as value."@en ,
+                           "Indique que cette définition est tirée d'une source extérieure dont le lien est donné par cette propriété"@fr ;
+              rdfs:label "a pour source"@fr ,
+                         "has source"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#isCSVUpdatable
+ddf:isCSVUpdatable rdf:type owl:DatatypeProperty ;
+                   rdfs:domain mnx:Entity ;
+                   rdfs:range xsd:boolean .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#linguisticProfile
+ddf:linguisticProfile rdf:type owl:DatatypeProperty ;
+                      rdfs:domain ddf:Person ;
+                      rdfs:range xsd:integer ;
+                      rdfs:label "linguistic Profile"@en ,
+                                 "profil sociolinguistique"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#otherInformation
+ddf:otherInformation rdf:type owl:DatatypeProperty ;
+                     rdfs:domain ddf:Person ;
+                     rdfs:range xsd:string ;
+                     rdfs:label "autres informations"@fr ,
+                                "other Information"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#otherSpokenLanguages
+ddf:otherSpokenLanguages rdf:type owl:DatatypeProperty ;
+                         rdfs:domain ddf:Person ;
+                         rdfs:range xsd:string ;
+                         rdfs:label "autres langues parlées"@fr ,
+                                    "other SpokenLanguages"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#processed
+ddf:processed rdf:type owl:DatatypeProperty ;
+              rdfs:domain mnx:Entity ;
+              rdfs:range xsd:boolean ;
+              rdfs:comment "Contribution relue et traitée par un usager qualifié, par exemple membre du groupe Administrateurs ou Opérateurs"@fr ,
+                           "Contribution reviewed by a qualified user, e.g a member of Operator or Administrator group"@en ;
+              rdfs:label "processed"@en ,
+                         "traitée"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#reportingMessage
+ddf:reportingMessage rdf:type owl:DatatypeProperty ;
+                     rdfs:domain ddf:ReportingRating ;
+                     rdfs:range xsd:string ;
+                     rdfs:label "message signalé"@fr ,
+                                "reporting Message"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#yearOfBirth
+ddf:yearOfBirth rdf:type owl:DatatypeProperty ;
+                rdfs:domain ddf:Person ;
+                rdfs:range xsd:integer ;
+                rdfs:label "année de naissance"@fr ,
+                           "year of birth"@en .
+
+
+###  http://purl.org/dc/terms/bibliographicCitation
+dct:bibliographicCitation rdf:type owl:DatatypeProperty ;
+                          rdfs:domain lexicog:UsageExample ;
+                          rdfs:range rdfs:Literal ;
+                          dct:description "A bibliographic reference for the resource"@en ;
+                          rdfs:comment "Recommended practice is to include sufficient bibliographic detail to identify the resource as unambiguously as possible."@en ;
+                          rdfs:label "bibliographic Citation"@en ,
+                                     "référence bibliographique"@fr .
+
+
+###  http://www.w3.org/1999/02/22-rdf-syntax-ns#value
+rdf:value rdf:type owl:DatatypeProperty .
+
+
+###  https://schema.org/ratingCount
+<https://schema.org/ratingCount> rdf:type owl:DatatypeProperty ;
+                                 rdfs:domain <https://schema.org/AggregateRating> ;
+                                 rdfs:range xsd:integer ;
+                                 rdfs:label "décompte de vote"@fr ,
+                                            "rating count"@en .
+
+
+#################################################################
+#    Classes
+#################################################################
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#AdvertisementReporting
+ddf:AdvertisementReporting rdf:type owl:Class ;
+                           rdfs:subClassOf ddf:ReportingRating ;
+                           rdfs:description "Publipostage, message inutile ou publicitaire"@fr ;
+                           rdfs:label "AdvertisementReporting"@en ,
+                                      "Signalement de publipostage"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#AudioRecording
+ddf:AudioRecording rdf:type owl:Class ;
+                   rdfs:subClassOf ddf:OnlineContribution .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Connotation
+ddf:Connotation rdf:type owl:Class ;
+                rdfs:subClassOf lemon:SenseContext ,
+                                skos:Concept ;
+                rdfs:comment "Impact of a word upon the world, a meaning that is suggested or implied."@en ,
+                             "Influence de l'usage du mot sur le monde. Effet de sens qui vient s'ajouter à un sens selon le contexte, qui est sous-entendu."@fr ;
+                rdfs:label "Connotation"@en ,
+                           "Connotation"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#ContributorBullyingReporting
+ddf:ContributorBullyingReporting rdf:type owl:Class ;
+                                 rdfs:subClassOf ddf:ReportingRating ;
+                                 rdfs:description "Harcèlement contre une personne participant au Dictionnaire des francophones"@fr ;
+                                 rdfs:label "ContributorBullyingReporting"@en ,
+                                            "Signalement de harcèlement"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#CopyrightInfringementReporting
+ddf:CopyrightInfringementReporting rdf:type owl:Class ;
+                                   rdfs:subClassOf ddf:ReportingRating ;
+                                   rdfs:description "Problème de respect du droit d'auteur ou de plagiat"@fr ;
+                                   rdfs:label "CopyrightInfringementReporting"@en ,
+                                              "Signalement d'infraction au droit d'auteur"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#DiscriminationInducementReporting
+ddf:DiscriminationInducementReporting rdf:type owl:Class ;
+                                      rdfs:subClassOf ddf:ReportingRating ;
+                                      rdfs:description "Incitation à la haine ou à la discrimination de personne en raison de leurs origines, de leur sexe, de leur genre, de leur orientation sexuelle ou de leur handicap"@fr ;
+                                      rdfs:label "DiscriminationInducementReporting"@en ,
+                                                 "Signalement de discrimination"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Domain
+ddf:Domain rdf:type owl:Class ;
+           rdfs:subClassOf lemon:SenseContext ,
+                           skos:Concept ;
+           rdfs:comment "Champs techniques ou spécialisés du vocabulaire."@fr ,
+                        "Technical or specialized field of the vocabulary."@en ;
+           rdfs:label "Domain"@en ,
+                      "Domaine"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#FormType
+ddf:FormType rdf:type owl:Class ;
+             rdfs:subClassOf skos:Concept ;
+             rdfs:comment "Aural or written form."@en ,
+                          "Forme graphique ou sonore."@fr ;
+             rdfs:label "Form Type"@en ,
+                        "Type de forme"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Glossary
+ddf:Glossary rdf:type owl:Class ;
+             rdfs:subClassOf lemon:SenseContext ,
+                             skos:Concept .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#GrammaticalConstraint
+ddf:GrammaticalConstraint rdf:type owl:Class ;
+                          rdfs:subClassOf lemon:SenseCondition ,
+                                          skos:Concept ;
+                          rdfs:comment "Contrainte sur la manière d'utiliser le mot dans une phrase."@fr ,
+                                       "Specific constraint on the use of a word in a sentence."@en ;
+                          rdfs:label "Contrainte grammaticale"@fr ,
+                                     "Grammatical constraint"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#InflectablePOS
+ddf:InflectablePOS rdf:type owl:Class ;
+                   rdfs:subClassOf ontolex:Word ;
+                   rdfs:comment "Classe indiquant que l'entrée lexicale est d'une classe de mot variable."@fr ,
+                                "For lexical entry identified as a variable part of speech."@en ;
+                   rdfs:label "Inflectable POS"@en ,
+                              "mot variable"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Inflection
+ddf:Inflection rdf:type owl:Class ;
+               rdfs:subClassOf [ rdf:type owl:Restriction ;
+                                 owl:onProperty rdf:value ;
+                                 owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                                 owl:onDataRange xsd:string
+                               ] ;
+               rdfs:comment "Classe pour les formes fléchies."@fr ,
+                            "Indication for an inflexion of inflectable POS."@en ;
+               rdfs:label "Flexion"@fr ,
+                          "Inflection"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#InvariablePOS
+ddf:InvariablePOS rdf:type owl:Class ;
+                  rdfs:subClassOf ontolex:Word ;
+                  rdfs:comment "Classe indiquant que l'entrée lexicale est d'une classe de mot invariable."@fr ,
+                               "For lexical entry identified as an invariable part of speech."@en ;
+                  rdfs:label "Invariable POS"@en ,
+                             "mot invariable"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#LayoutReporting
+ddf:LayoutReporting rdf:type owl:Class ;
+                    rdfs:subClassOf ddf:ReportingRating ;
+                    rdfs:description "Problème de mise en forme ou de présentation de l'information pouvant être dû à l'importation des données"@fr ;
+                    rdfs:label "LayoutReporting"@en ,
+                               "Signalement de présentation de l'information"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#MeaninglessContentReporting
+ddf:MeaninglessContentReporting rdf:type owl:Class ;
+                                rdfs:subClassOf ddf:ReportingRating ;
+                                rdfs:description "Test de débutant, essai, contenu dénué de sens en l'état"@fr ;
+                                rdfs:label "MeaninglessContentReporting"@en ,
+                                           "Signalement de contenu insensé"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#MultiWordInflection
+ddf:MultiWordInflection rdf:type owl:Class ;
+                        rdfs:subClassOf ontolex:MultiWordExpression .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#MultiWordType
+ddf:MultiWordType rdf:type owl:Class ;
+                  rdfs:subClassOf skos:Concept ;
+                  rdfs:comment "Entrée constituée de plusieurs mots. Selon le comportement où la fonction de la locution, celle-ci sera définie comme nominale, adverbiale ou interrogative par exemple."@fr ,
+                               "Type of multiword expressions, based on the grammatical nature of the head."@en ;
+                  rdfs:label "Multiword type"@en ,
+                             "Type d'expression en plusieurs mots"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#OnlineCabouSontribution
+ddf:OnlineCabouSontribution rdf:type owl:Class .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#OnlineContribution
+ddf:OnlineContribution rdf:type owl:Class ;
+                       rdfs:subClassOf mnx:OnlineContribution ;
+                       rdfs:comment "Classe pivot pour connecter la base des contributions à la classe idoine de l'ontologie Mnémotix" ;
+                       rdfs:label "Online contribution"@en ,
+                                  "contribution en ligne"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Person
+ddf:Person rdf:type owl:Class ;
+           rdfs:subClassOf mnx:Person ;
+           rdfs:comment "Classe pivot pour connecter la base des personnes à la classe idoine de l'ontologie Mnémotix. "@fr ;
+           rdfs:label "Person"@en ,
+                      "Personne"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Place
+ddf:Place rdf:type owl:Class ;
+          owl:equivalentClass geonames:GeonamesFeature ;
+          rdfs:comment "Geographical place where a word, a meaning or an example is used."@en ,
+                       "Lieu géographique de la francophonie dans lequel une entrée, une définition ou un exemple sont utilisés."@fr ;
+          rdfs:label "Lieu"@fr ,
+                     "Place"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#PrivacyInfringementReporting
+ddf:PrivacyInfringementReporting rdf:type owl:Class ;
+                                 rdfs:subClassOf ddf:ReportingRating ;
+                                 rdfs:description "Divulgation d'informations personnelles ou propriétés d'un autre utilisateur, personne ou organisation."@fr ;
+                                 rdfs:label "PrivacyInfringementReporting"@en ,
+                                            "Signalement de divulgation d'informations privées"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#ReportingRating
+ddf:ReportingRating rdf:type owl:Class ;
+                    rdfs:subClassOf <https://schema.org/AggregateRating> ;
+                    rdfs:description "Signalement effectué par un usager connecté"@fr ;
+                    rdfs:label "ReportingRating"@en ,
+                               "Signalement"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#SemanticRelation
+ddf:SemanticRelation rdf:type owl:Class ;
+                     rdfs:comment "Classe décrivant des liens entre des définitions ou entre des entrées."@fr ,
+                                  "Indication of a relation between entries or lexical senses."@en ;
+                     rdfs:label "Relation sémantique"@fr ,
+                                "Semantic relation"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#SenseRelation
+ddf:SenseRelation rdf:type owl:Class ;
+                  rdfs:subClassOf skos:Concept ;
+                  rdfs:comment "Relations qui peuvent lier des mots ou des sens entre eux."@fr ,
+                               "Relations to tied words or senses."@en ;
+                  rdfs:label "Relation sémantique"@fr ,
+                             "Sense relation"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#SlanderReporting
+ddf:SlanderReporting rdf:type owl:Class ;
+                     rdfs:subClassOf ddf:ReportingRating ;
+                     rdfs:description "Injure, dénigrement, diffamation, moquerie"@fr ;
+                     rdfs:label "Signalement de diffamation"@fr ,
+                                "SlanderReporting"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Sociolect
+ddf:Sociolect rdf:type owl:Class ;
+              rdfs:subClassOf lemon:SenseContext ,
+                              skos:Concept .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#SuppressionRating
+ddf:SuppressionRating rdf:type owl:Class ;
+                      rdfs:subClassOf <https://schema.org/AggregateRating> ;
+                      rdfs:comment "Permet d'agréger des votes de suppression émis par les opérateurs ou administrateurs (cf instances)"@fr ;
+                      rdfs:label "Suppression Rating"@en ,
+                                 "Vote agrégé de suppression"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#TextualGenre
+ddf:TextualGenre rdf:type owl:Class ;
+                 rdfs:subClassOf lemon:SenseContext ,
+                                 skos:Concept ;
+                 rdfs:comment "Type de textes dans lesquels apparaissent ce terme."@fr ,
+                              "Type of literature in which a term appears."@en ;
+                 rdfs:label "Genre textuel"@fr ,
+                            "Textual genre"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#ToBeSuppressedRating
+ddf:ToBeSuppressedRating rdf:type owl:Class ;
+                         rdfs:subClassOf <https://schema.org/AggregateRating> ;
+                         rdfs:comment "Permet d'agréger des votes de suppression émis par les opérateurs ou administrateurs (cf instances)"@fr ;
+                         rdfs:description "Agrégation automatique calculée par outils d'analyses et qui fait remonter les noeuds à supprimer en fonction du nombre de vote de validation et de suppression"@fr ;
+                         rdfs:label "A supprimer"@fr ,
+                                    "ToBeSuppressedRating"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#UncategorizedReporting
+ddf:UncategorizedReporting rdf:type owl:Class ;
+                           rdfs:subClassOf ddf:ReportingRating ;
+                           rdfs:description "Autre raison (à préciser)"@fr ;
+                           rdfs:label "Signalement non catégorisé"@fr ,
+                                      "UncategorizedReporting"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#ValidationRating
+ddf:ValidationRating rdf:type owl:Class ;
+                     rdfs:subClassOf <https://schema.org/AggregateRating> ;
+                     rdfs:comment "Permet d'agréger des votes de validation émis par tous les usagers connectés (cf instances de mnx:UserGroup)"@fr ;
+                     rdfs:label "ValidationRating"@en ,
+                                "Vote agrégé de validation"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Verb
+ddf:Verb rdf:type owl:Class ;
+         rdfs:subClassOf ontolex:Word ;
+         rdfs:comment "For part of speech identified as a verb."@en ,
+                      "Pour les mots qui sont des verbes."@fr ;
+         rdfs:label "Verb"@en ,
+                    "Verbe"@fr .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#VerbalInflection
+ddf:VerbalInflection rdf:type owl:Class ;
+                     rdfs:comment "Classe pour les formes fléchies des verbes."@fr ,
+                                  "Indication for an inflexion of a verb."@en ;
+                     rdfs:label "Forme conjuguée d'un verbe"@fr ,
+                                "Verbal inflection"@en .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#ViolenceThreatReporting
+ddf:ViolenceThreatReporting rdf:type owl:Class ;
+                            rdfs:subClassOf ddf:ReportingRating ;
+                            rdfs:description "Menaces, apologie d'actes criminels ou incitations à la violence, incitation à commettre des actes criminels, incluant par exemple pédophilie, vol, meurtre, escroquerie ou trafic illicite."@fr ;
+                            rdfs:label "Signalement de menaces"@fr ,
+                                       "ViolenceThreatReporting"@en .
+
+
+###  http://lemon-model.net/lemon#SenseCondition
+lemon:SenseCondition rdf:type owl:Class .
+
+
+###  http://lemon-model.net/lemon#SenseContext
+lemon:SenseContext rdfs:comment "Indique le contexte dans lequel un terme est utilisé. Il ne s'agit pas du contexte syntactique mais des usages dans des documents, moments et registres d'usage."@fr .
+
+
+###  http://ns.mnemotix.com/ontologies/2019/8/generic-model/Entity
+mnx:Entity rdf:type owl:Class .
+
+
+###  http://ns.mnemotix.com/ontologies/2019/8/generic-model/OnlineContribution
+mnx:OnlineContribution rdf:type owl:Class .
+
+
+###  http://ns.mnemotix.com/ontologies/2019/8/generic-model/Person
+mnx:Person rdf:type owl:Class .
+
+
+###  http://ns.mnemotix.com/ontologies/2019/8/generic-model/UserAccount
+mnx:UserAccount rdf:type owl:Class .
+
+
+###  http://rdfs.org/sioc/ns#Item
+sioc:Item rdf:type owl:Class .
+
+
+###  http://www.geonames.org/ontology#GeonamesFeature
+geonames:GeonamesFeature rdf:type owl:Class .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#AdjectivePOS
+lexinfo:AdjectivePOS rdfs:subClassOf lexinfo:PartOfSpeech .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Frequency
+lexinfo:Frequency rdfs:subClassOf skos:Concept ;
+                  rdfs:comment "Indication de la rareté d'un sens."@fr ,
+                               "The property of occurring often or rather infrequently."@en ;
+                  rdfs:label "Frequency"@en ,
+                             "Fréquence"@fr .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Gender
+lexinfo:Gender rdfs:subClassOf skos:Concept ;
+               rdfs:comment "Catégories qui associent aux noms une classe motivée ou arbitraire et entraine une modification formelle des autres classes de mots."@fr ,
+                            "Division of nouns and pronoums into arbitrary or motivated classes which spread morphological modifications through agreement marking."@en ;
+               rdfs:label "Gender"@en ,
+                          "Genre grammatical"@fr .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Infix
+lexinfo:Infix owl:equivalentClass [ rdf:type owl:Restriction ;
+                                    owl:onProperty lexinfo:termElement ;
+                                    owl:hasValue lexinfo:infix
+                                  ] .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Mood
+lexinfo:Mood rdfs:subClassOf skos:Concept ;
+             rdfs:comment "A verb form that depends on how its containing clause relates to the speaker’s or writer’s wish, intent, or assertion about reality."@en ,
+                          "Manière dont le verbe exprime le fait selon l'intention du locuteur. Par exemple, le fait puisse être réel (indicatif) ou hypothétique (conditionnel)."@fr ;
+             rdfs:label "Mode"@fr ,
+                        "Mood"@en .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#NounPOS
+lexinfo:NounPOS rdfs:subClassOf lexinfo:PartOfSpeech .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Number
+lexinfo:Number rdfs:subClassOf skos:Concept ;
+               rdfs:comment "Indication de la pluralité ou de la singularité du mot."@fr ,
+                            "Indication of the plurality of the word."@en ;
+               rdfs:label "Nombre"@fr ,
+                          "Number"@en .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#PartOfSpeech
+lexinfo:PartOfSpeech rdfs:subClassOf skos:Concept ;
+                     rdfs:comment "Nature grammaticale d'un mot."@fr ,
+                                  "Nature of a word."@en ;
+                     rdfs:label "Classe de mot"@fr ,
+                                "Part of speech"@en .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Person
+lexinfo:Person rdfs:subClassOf skos:Concept ;
+               rdfs:comment "Person"@en ,
+                            "Roles of participant in a conversation."@en ,
+                            "Rôle des interlocuteurs."@fr ;
+               rdfs:label "Personne"@fr .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#PronounPOS
+lexinfo:PronounPOS rdfs:subClassOf lexinfo:PartOfSpeech .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Register
+lexinfo:Register rdfs:subClassOf skos:Concept ;
+                 rdfs:comment "A style of language used in a particular context."@en ,
+                              "Manière de s’exprimer, en fonction de l’interlocuteur. Si l’interlocuteur est une personne proche, le registre sera plutôt familier alors que si l’interlocuteur est un supérieur hiérarchique, il sera plutôt formel, voire soutenu."@fr ;
+                 rdfs:label "Register"@en ,
+                            "Registre"@fr .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#TemporalQualifier
+lexinfo:TemporalQualifier rdfs:subClassOf skos:Concept ;
+                          rdfs:comment "Modernity of the use."@en ,
+                                       "Usage d'un sens dans le temps."@fr ;
+                          rdfs:label "Temporal qualifier"@en ,
+                                     "indication de temporalité"@fr .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#Tense
+lexinfo:Tense rdfs:subClassOf skos:Concept ;
+              rdfs:comment "Locate a process in time."@en ,
+                           "Situe le fait ou l'action dans le temps."@fr ;
+              rdfs:label "Temps"@fr ,
+                         "Tense"@en .
+
+
+###  http://www.lexinfo.net/ontology/2.0/lexinfo#VerbFrame
+lexinfo:VerbFrame rdfs:subClassOf skos:Concept ;
+                  rdfs:comment "Argumental structure framed by the verb."@en ,
+                               "Arrangement grammatical autour du verbe."@fr ;
+                  rdfs:label "Valence verbale"@fr ,
+                             "Verb frame"@en .
+
+
+###  http://www.w3.org/2004/02/skos/core#Concept
+skos:Concept rdfs:label "Concept"@fr .
+
+
+###  http://www.w3.org/ns/lemon/lexicog#Entry
+lexicog:Entry rdf:type owl:Class ;
+              rdfs:subClassOf [ rdf:type owl:Restriction ;
+                                owl:onProperty rdf:value ;
+                                owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+                                owl:onDataRange xsd:string
+                              ] ;
+              rdfs:comment "Une entrée de dictionnaire est un élément structurel qui représente un article lexicographique ou un enregistrement provenant d'une source lexicographique. Cette propriété permet d'accueillir la description d'entrées lexicales ou bien de définitions selon la micro-structure lexicographique des sources."@fr ;
+              rdfs:label "entrée de dictionnaire"@fr .
+
+
+###  http://www.w3.org/ns/lemon/lexicog#LexicographicResource
+lexicog:LexicographicResource rdf:type owl:Class .
+
+
+###  http://www.w3.org/ns/lemon/lexicog#UsageExample
+lexicog:UsageExample rdf:type owl:Class ;
+                     rdfs:label "exemple d'usage"@fr .
+
+
+###  http://www.w3.org/ns/lemon/ontolex#Affix
+ontolex:Affix rdfs:subClassOf [ rdf:type owl:Restriction ;
+                                owl:onProperty lexinfo:termElement ;
+                                owl:someValuesFrom ontolex:Affix
+                              ] ;
+              rdfs:comment "Un affixe est une entrée lexicale qui représente un morphème (suffixe, préfixe, infixe, circonfixe) qui s'attache à la racine d'un mot pour former un nouveau mot."@fr .
+
+
+###  http://www.w3.org/ns/lemon/ontolex#Form
+ontolex:Form rdfs:comment "Une forme représente une réalisation d'une entrée lexicale."@fr .
+
+
+###  http://www.w3.org/ns/lemon/ontolex#Word
+ontolex:Word rdfs:comment "Un mot est une entrée lexicale en un seul élément, isolé par des espaces."@fr .
+
+
+###  https://schema.org/AggregateRating
+<https://schema.org/AggregateRating> rdf:type owl:Class .
+
+
+#################################################################
+#    Individuals
+#################################################################
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Glossary
+ddf:Glossary rdf:type owl:NamedIndividual .
+
+
+###  http://data.dictionnairedesfrancophones.org/ontology/ddf#Sociolect
+ddf:Sociolect rdf:type owl:NamedIndividual .
+
+
+#################################################################
+#    Annotations
+#################################################################
+
+ddf:Glossary rdfs:comment "List of word for a specific notion."@en ;
+             rdfs:label "Glossary"@en ,
+                        "Glossaire"@fr ;
+             skos:altLabel "Lexique thématique"@fr ;
+             rdfs:comment "Liste de termes en rapport avec une notion."@fr .
+
+
+ddf:Sociolect skos:altLabel "Argot"@fr ;
+              rdfs:label "Sociolect"@en ;
+              rdfs:comment "Usages du langage propres à un groupe social ou à un corps de métier."@fr ;
+              rdfs:label "Sociolecte"@fr ;
+              rdfs:comment "The variant of language used by a social group such as a socioeconomic class, an ethnic group, an age group, etc."@en ;
+              skos:altLabel "Argot"@en .
+
+
+lexinfo:TermElement rdfs:comment "Un élément qui ne peut fonctionner seul et qui s’attache à un mot pour modifier son sens et sa fonction. En fonction de l’endroit où il s’attache, cet élément sera préfixe ou suffixe."@fr ;
+                    rdfs:label "Type d'affixe"@fr ,
+                               "Term element"@en ;
+                    rdfs:comment "Type of a part of an affix."@en .
+
+
+###  Generated by the OWL API (version 4.5.9.2019-02-01T07:24:44Z) https://github.com/owlcs/owlapi
+}

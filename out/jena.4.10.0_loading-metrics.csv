@@ -1,0 +1,11 @@
+triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
+jena.4.10.0,Department4.nt,3.72,1233162,562.28
+jena.4.10.0,Department0.nt,7.27,2465753,461.97
+jena.4.10.0,Department1.nt,10.64,3706660,888.55
+jena.4.10.0,Department5.nt,14.18,4958334,1428.38
+jena.4.10.0,Department2.nt,17.88,6210468,1330.23
+jena.4.10.0,Department6.nt,22.18,7467447,2315.80
+jena.4.10.0,Department7.nt,26.72,8713079,2780.79
+jena.4.10.0,Department3.nt,31.63,9966182,1947.86
+jena.4.10.0,Department8.nt,36.61,11215258,1967.36
+jena.4.10.0,Department9.nt,41.19,12479099,2278.53
