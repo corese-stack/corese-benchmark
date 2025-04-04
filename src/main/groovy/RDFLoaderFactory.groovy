@@ -5,6 +5,8 @@ class RDFLoaderFactory {
                 return new CoreseRDFLoader()
             case ~/rdf4j.+/:
                 return new RDF4JLoader()
+            case ~/jena.+/:
+                return new JenaRDFLoader()
             default:
                 throw new IllegalArgumentException("Unsupported triplestore: ${triplestoreName}")
         }
