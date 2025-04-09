@@ -51,8 +51,8 @@
 ```bash
 ./gradlew  clean build
 ```
-* then run it 
+* then run it without forgetting to give the path to the input directory
 
 ```bash
-./gradlew  runGroovyScript
+./gradlew runGroovyScript --args="/path/to/directory"
 ```

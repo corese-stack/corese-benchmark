@@ -1,17 +1,22 @@
-import java.io.File
-
 // Main execution
 try {
-    //def benchmark = new RDFBenchmark("corese.4.6.3")
-    def benchmark = new RDFBenchmark("rdf4j.5.1.2")
-    //def benchmark = new RDFBenchmark("jena.4.10.0")
-    //benchmark.processDirectory('/Users/freddylimpens/src/tmp/bowlogna_benchmark/sample')
-    benchmark.processDirectory('/Users/freddylimpens/src/tmp/bowlogna_benchmark/BowlognaOutput')
+    if (args.length == 0) {
+        println "Error: No directory provided. Please provide the directory to process as an argument."
+        System.exit(1)
+    }
+
+    String processDirectory = args[0]
+    println "Processing directory: ${processDirectory}"
+
+    for (String triplestoreName in ["corese.4.6.3", "rdf4j.5.1.2", "jena.4.10.0"]) {
+        println "Starting benchmark for ${triplestoreName}..."
+        def benchmark = new RDFBenchmark(triplestoreName)
+        benchmark.processDirectory(processDirectory)
+        Thread.sleep(1000)
+    }
 } catch (Exception e) {
     println "Error occurred: ${e.message}"
-    throw e
+    throw e  
 } finally {
     println "Goodbye!"
-    System.exit(0) 
-
-}
+    System.exit(0) }

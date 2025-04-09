@@ -16,7 +16,7 @@ class RDFBenchmark {
         println "Loading RDF files from ${folderPath}..."
         def totalStartTime = System.currentTimeMillis()
 
-        directory.eachFile { file ->
+        directory.eachFileRecurse { file ->
             if (file.name.endsWith('.nt')) {
                 processFile(file, totalStartTime)
             }
