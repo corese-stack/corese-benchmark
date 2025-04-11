@@ -9,11 +9,14 @@ try {
     println "Processing directory: ${processDirectory}"
 
     for (String triplestoreName in [
-       // "corese.4.6.3", 
         "rdf4j.5.1.2", 
-        "jena.4.10.0"
+        "jena.4.10.0",
+        "corese.4.6.3" 
         ]) {
         println "Starting benchmark for ${triplestoreName}..."
+        // Call garbage collector to free memory
+        System.gc()
+        println "Garbage collector invoked."
         def benchmark = new RDFBenchmark(triplestoreName)
         benchmark.processDirectory(processDirectory)
         Thread.sleep(1000)

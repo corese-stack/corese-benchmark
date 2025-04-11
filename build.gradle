@@ -54,7 +54,7 @@ task runGroovyScript(type: JavaExec) {
 
     // Add memory settings
     jvmArgs = [
-        '-Xmx8g',  // Maximum heap size (adjust value as needed)
-        '-Xms2g'   // Initial heap size
+        '-Xmx12g',  // Maximum heap size (adjust value as needed)
+        '-Xms4g'   // Initial heap size
     ]
 }

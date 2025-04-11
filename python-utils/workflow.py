@@ -17,7 +17,13 @@ archive_urls = [
     "https://downloads.dbpedia.org/3.5.1/en/category_labels_en.nt.bz2",
     "https://downloads.dbpedia.org/3.5.1/en/disambiguations_en.nt.bz2",
     "https://downloads.dbpedia.org/3.5.1/en/geo_coordinates_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/homepages_en.nt.bz2"
+    #"https://downloads.dbpedia.org/3.5.1/en/images_en.nt.bz2",
+    "https://downloads.dbpedia.org/3.5.1/en/homepages_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/instance_types_en.nt.bz2",
+    "https://downloads.dbpedia.org/3.5.1/en/persondata_en.nt.bz2",
+    "https://downloads.dbpedia.org/3.5.1/en/redirects_en.nt.bz2",
+    "https://downloads.dbpedia.org/3.5.1/en/skos_categories_en.nt.bz2",
+    "https://downloads.dbpedia.org/3.5.1/en/specific_mappingbased_properties_en.nt.bz2"
 ]
 archive_paths = []
 
@@ -78,7 +84,7 @@ subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir], cwd=os.
 print("Benchmark execution completed.")
 
 # Step 5: Run the Python script to generate the plots
-python_script = os.path.join(os.path.dirname(current_dir), "plot-compare.py")
+python_script = os.path.join(current_dir, "plot-compare.py")
 if not os.path.exists(python_script):
     raise FileNotFoundError(f"Python script not found at {python_script}")
 print("Running Python script to generate plots...")
