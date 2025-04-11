@@ -1,11 +1,2 @@
 triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
-rdf4j.5.1.2,Department4.nt,3.57,1233164,3030.35
-rdf4j.5.1.2,Department0.nt,6.92,2465755,1109.16
-rdf4j.5.1.2,Department1.nt,10.55,3706662,1489.85
-rdf4j.5.1.2,Department5.nt,14.58,4958336,1710.78
-rdf4j.5.1.2,Department2.nt,19.46,6210470,1896.32
-rdf4j.5.1.2,Department6.nt,24.27,7467449,4053.76
-rdf4j.5.1.2,Department7.nt,29.51,8713081,2109.70
-rdf4j.5.1.2,Department3.nt,35.41,9966184,2459.93
-rdf4j.5.1.2,Department8.nt,41.90,11215260,3934.23
-rdf4j.5.1.2,Department9.nt,48.51,12479101,3363.79
+rdf4j.5.1.2,disambiguations_en.nt,2.06,765124,855.61

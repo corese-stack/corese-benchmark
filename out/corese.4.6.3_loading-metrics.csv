@@ -1,5 +1,5 @@
 triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
-corese.4.6.3,Department4.nt,30.63,1233164,1604.29
-corese.4.6.3,Department0.nt,61.33,2466676,1628.77
-corese.4.6.3,Department1.nt,93.40,3708504,782.09
-corese.4.6.3,Department5.nt,124.90,4961099,1577.03
+corese.4.6.3,disambiguations_en.nt,12.75,768924,738.50
+corese.4.6.3,homepages_en.nt,18.78,1163821,974.24
+corese.4.6.3,geo_coordinates_en.nt,45.39,2626713,1474.20
+corese.4.6.3,category_labels_en.nt,56.22,3191821,1832.03

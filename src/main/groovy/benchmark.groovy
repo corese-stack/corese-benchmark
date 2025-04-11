@@ -8,7 +8,11 @@ try {
     String processDirectory = args[0]
     println "Processing directory: ${processDirectory}"
 
-    for (String triplestoreName in ["corese.4.6.3", "rdf4j.5.1.2", "jena.4.10.0"]) {
+    for (String triplestoreName in [
+       // "corese.4.6.3", 
+        "rdf4j.5.1.2", 
+        "jena.4.10.0"
+        ]) {
         println "Starting benchmark for ${triplestoreName}..."
         def benchmark = new RDFBenchmark(triplestoreName)
         benchmark.processDirectory(processDirectory)
