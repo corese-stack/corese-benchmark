@@ -9,9 +9,7 @@ Objectives => workflow automation :
 2. launch groovy benchmark
 3. read CSV output files and plot the results (datavis)
 
-## How to run
-
-### Install dependencies
+## How to install dependencies
 
 NB :  dependencies described in [environment.yml](./environment.yml)
 
@@ -34,3 +32,24 @@ conda activate benchmark_env
 conda env update -f environment.yml
 ```
 
+## How to run
+### Run the workflow.py automation script 
+
+* 1st install dependencies defined in [python-utils/environment.yml](./python-utils/environment.yml) using conda => see [python-utils](./python-utils/README.md)
+* activate python environment 
+```bash
+conda activate benchmark_env
+```
+* launch the script
+```bash
+(benchmark_env)cd python-utils
+(benchmark_env)python workflow.py
+```
+
+### Run the plot-compare.py alone
+
+Assuming the python environment `benchmark_env` has been actived:
+```bash
+(benchmark_env)cd python-utils
+(benchmark_env)python plot-compare.py
+```

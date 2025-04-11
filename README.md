@@ -8,7 +8,7 @@ Its principles are
 * Focusing on performance measurements, such as loading time, memory used, query time, number of threads/CPU, etc.
 * Using native core java libraries instead of server versions of the triplestore. The code is written in Groovy, which is one of java's scripting language available.  
 * Producing reusable CSV exports of the performance measurements that can be used in other contexts. 
-* Built upon existing RDF or SPARQL benchmarks such as
+* Building upon existing RDF or SPARQL benchmarks such as
     * Bowlogna SPARQL Benchmark
     * BSBM Berlin SPARQL Benchmark
     * DBPedia datasets
@@ -18,9 +18,9 @@ Its principles are
 
 There are 2 main parts of the code:
 * The groovy/java code 
-  * versionned in `src` folder
-  * do the input data processing using the 3 triplestores : loading, and querying (WIP)
-  * saves the CSV containing the measurements in the `out` folder 
+  * is versionned in `src` folder
+  * processes the input data using the 3 triplestores : loading, and querying (WIP)
+  * saves the CSV containing the measurements in the `out` folder. Examples of previous run are already given.
 * datavisualization and workflow automation code
   * written in Python
   * versionned in `python-utils` folder
@@ -137,7 +137,7 @@ Assuming the python environment `benchmark_env` has been actived:
     * turtle
     * trig 
 
-## Datasets used
+
 
 
 
