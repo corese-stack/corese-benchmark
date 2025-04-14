@@ -1,0 +1,11 @@
+triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
+corese.4.6.2,redirects_en.nt,70.04,4082533,1748.08
+corese.4.6.2,disambiguations_en.nt,83.14,4851457,1827.16
+corese.4.6.2,homepages_en.nt,89.17,5246354,3089.64
+corese.4.6.2,geo_coordinates_en.nt,117.64,6709246,1943.79
+corese.4.6.2,instance_types_en.nt,209.74,12204836,3259.81
+corese.4.6.2,category_labels_en.nt,221.19,12769944,2425.76
+corese.4.6.2,skos_categories_en.nt,263.88,15017875,2919.12
+corese.4.6.2,images_en.nt,363.11,19221480,4731.00
+corese.4.6.2,specific_mappingbased_properties_en.nt,367.94,19405563,3500.84
+corese.4.6.2,persondata_en.nt,374.16,19762559,4717.19

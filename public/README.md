@@ -28,5 +28,9 @@ The plots below show the loading time and memory used after each one of the 10 f
 
 ![img](loading_time_memory_comparison_dbpedia20250411.png)
 
+### Variant comparing Latest and previous version of Corese
 
+#### DBpedia dataset
+
+![img](./loading_time_memory_comparison_corese_versions.png)
 
