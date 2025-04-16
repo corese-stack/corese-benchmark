@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plotly Graph with Content</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* background-color: #f4f4f4; */
+        }
+        .container {
+            width: 80%;
+            max-width: 1200px;
+            margin-top: 20px;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+        }
+        .description {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Plotly Graph with Additional Content</h1>
+        <iframe src="{{ plotly_graph_url }}" title="Plotly Graph"></iframe>
+        <div class="description">
+            <h2>Description</h2>
+            <p>This graph shows the data visualization generated using Plotly. You can customize this section to include any additional information or content related to the graph.</p>
+        </div>
+    </div>
+</body>
+</html>

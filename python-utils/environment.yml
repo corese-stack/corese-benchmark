@@ -11,3 +11,5 @@ dependencies:
   - requests
   - zipfile2
   - matplotlib
+  - jinja2
+  - plotly
