@@ -2,6 +2,7 @@
 import pandas as pd
 import os   
 import plotly.graph_objects as go
+from jinja2 import Environment, FileSystemLoader
 
 #############
 # A/ data preparation
@@ -86,3 +87,24 @@ output_path = os.path.join(output_dir, 'loading_time_memory_comparison.html')
 
 print(f"saving to {output_path}")
 fig.write_html(output_path)
+
+#############
+# C/ export to HTML
+#############
+
+# Set up the Jinja2 environment
+env = Environment(loader=FileSystemLoader(output_dir))
+template = env.get_template('template.html')
+
+# Render the template with the Plotly graph URLs
+rendered_html = template.render(
+    plotly_graph_url=output_path,
+    # plotly_graph1_url='path/to/plotly_graph1.html',
+    # plotly_graph2_url='path/to/plotly_graph2.html',
+    # plotly_graph3_url='path/to/plotly_graph3.html'
+)
+
+# Save the rendered HTML to a file or serve it directly
+output_html_path = os.path.join(output_dir, 'output.html')
+with open(output_html_path, 'w') as file:
+    file.write(rendered_html)

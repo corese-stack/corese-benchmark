@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plotly Graph with Content</title>
+    <title>Benchmark dashboard</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -31,12 +31,24 @@
 </head>
 <body>
     <div class="container">
-        <h1>Plotly Graph with Additional Content</h1>
-        <iframe src="{{ plotly_graph_url }}" title="Plotly Graph"></iframe>
-        <div class="description">
-            <h2>Description</h2>
-            <p>This graph shows the data visualization generated using Plotly. You can customize this section to include any additional information or content related to the graph.</p>
-        </div>
+        <h1>Loading time and memory comparison</h1>
+        <p><strong>Triple stores compared</strong></p>
+            <ul>
+            <li>Corese</li>
+            <li>RDF4J</li>
+            <li>Jena</li>
+            </ul>
+            <p><strong>Metrics measured</strong></p>
+            <p>measured after  each file has loaded sucessfuly</p>
+            <ul>
+            <li>loading time</li>
+            <li>memory used</li>
+            </ul>
+            <div class="description">
+                <h2>Description</h2>
+                <p>The plots below show the loading time and memory used after each file from the dataset has been succesfuly loaded. The dataset is made of a sample of 10 files from DBPedia dump</p>
+            </div>
+            <iframe src="{{ plotly_graph_url }}" title="Plotly Graph"></iframe>
     </div>
 </body>
 </html>
