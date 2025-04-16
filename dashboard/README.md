@@ -21,7 +21,7 @@ The plots below show the loading time and memory used after each one of the 10 f
 
 #### Bowlogna dataset
 
-![img](loading_time_memory_comparison_bowlogna20250410.png)
+<img src="loading_time_memory_comparison_bowlogna20250410.png" alt="Loading Time and Memory Comparison - Bowlogna Dataset" style="width: 100%;">
 
 
 #### DBPedia dataset
