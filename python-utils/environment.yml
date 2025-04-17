@@ -13,3 +13,5 @@ dependencies:
   - matplotlib
   - jinja2
   - plotly
+  - kaleido-core
+  - python-kaleido

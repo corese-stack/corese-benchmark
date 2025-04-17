@@ -16,13 +16,17 @@ measured after  each file has loaded sucessfuly
 
 ### Results 
 
-The plots below show the loading time and memory used after each one of the 10 files of the dataset has been succesfuly loaded
+* If you just run the [`python-utils/plot-compare.py`](./../python-utils/plot-compare.py) script yourself, this is the resulting plot
+* Or if you just browse this repository, this is the commited results of the commiter's latest run.
+
+The plots below show the loading time and memory used after each file of the dataset has been succesfuly loaded.
 
 
-#### Bowlogna dataset
+<img src="loading_time_memory_comparison.png" alt="Loading Time and Memory Comparison - Bowlogna Dataset" style="width: 100%;"> 
 
-<img src="loading_time_memory_comparison_bowlogna20250410.png" alt="Loading Time and Memory Comparison - Bowlogna Dataset" style="width: 100%;">
+### Archived results
 
+Results reported below are from previous run, using 2 specific datasets, run on the 2025.04.11
 
 #### DBPedia dataset
 
