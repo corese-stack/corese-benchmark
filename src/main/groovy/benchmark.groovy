@@ -9,8 +9,8 @@ try {
     println "Processing directory: ${processDirectory}"
 
     for (String triplestoreName in [
-        //"rdf4j.5.1.2", 
-        //"jena.4.10.0",
+        "rdf4j.5.1.2", 
+        "jena.4.10.0",
         "corese.4.6.3" 
         ]) {
         println "Starting benchmark for ${triplestoreName}..."

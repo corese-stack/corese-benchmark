@@ -1,0 +1,11 @@
+triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
+jena.4.10.0,redirects_en.nt,42.17,4082462,1963.85
+jena.4.10.0,disambiguations_en.nt,52.21,4847586,1839.57
+jena.4.10.0,homepages_en.nt,55.67,5242483,2175.16
+jena.4.10.0,geo_coordinates_en.nt,63.08,6705375,2821.56
+jena.4.10.0,instance_types_en.nt,83.64,12200959,3862.69
+jena.4.10.0,category_labels_en.nt,89.22,12766067,3701.53
+jena.4.10.0,skos_categories_en.nt,102.82,15009529,4462.24
+jena.4.10.0,images_en.nt,139.97,18894027,5662.62
+jena.4.10.0,specific_mappingbased_properties_en.nt,142.61,19076557,5728.71
+jena.4.10.0,persondata_en.nt,145.75,19433471,5706.83
