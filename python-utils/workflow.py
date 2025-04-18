@@ -15,15 +15,15 @@ print(f"Created input directory at: {input_dir}")
 # Step 2: Download the archive files to the "input" directory
 archive_urls = [
     "https://downloads.dbpedia.org/3.5.1/en/category_labels_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/disambiguations_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/geo_coordinates_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/disambiguations_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/geo_coordinates_en.nt.bz2",
     #"https://downloads.dbpedia.org/3.5.1/en/images_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/homepages_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/homepages_en.nt.bz2",
     #"https://downloads.dbpedia.org/3.5.1/en/instance_types_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/persondata_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/redirects_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/skos_categories_en.nt.bz2",
-    "https://downloads.dbpedia.org/3.5.1/en/specific_mappingbased_properties_en.nt.bz2"
+    #"https://downloads.dbpedia.org/3.5.1/en/persondata_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/redirects_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/skos_categories_en.nt.bz2",
+    #"https://downloads.dbpedia.org/3.5.1/en/specific_mappingbased_properties_en.nt.bz2"
 ]
 archive_paths = []
 
