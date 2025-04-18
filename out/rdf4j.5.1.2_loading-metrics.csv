@@ -1,4 +1,5 @@
 triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
+<<<<<<< HEAD
 rdf4j.5.1.2,redirects_en.nt,16.51,4082462,5997.46
 rdf4j.5.1.2,disambiguations_en.nt,29.57,4847586,6773.40
 rdf4j.5.1.2,homepages_en.nt,34.04,4847586,6816.33
@@ -9,3 +10,15 @@ rdf4j.5.1.2,skos_categories_en.nt,120.78,14614632,11018.55
 rdf4j.5.1.2,images_en.nt,264.62,18499130,9870.65
 rdf4j.5.1.2,specific_mappingbased_properties_en.nt,298.95,18681660,7624.01
 rdf4j.5.1.2,persondata_en.nt,324.69,19038574,8010.34
+=======
+rdf4j.5.1.2,redirects_en.nt,14.59,4082462,5867.43
+rdf4j.5.1.2,disambiguations_en.nt,21.04,4847586,6806.07
+rdf4j.5.1.2,homepages_en.nt,22.83,4847586,6855.37
+rdf4j.5.1.2,geo_coordinates_en.nt,32.67,6310478,6277.93
+rdf4j.5.1.2,instance_types_en.nt,62.50,11806062,9090.02
+rdf4j.5.1.2,category_labels_en.nt,69.40,12371170,9529.47
+rdf4j.5.1.2,skos_categories_en.nt,83.90,14614632,11102.44
+rdf4j.5.1.2,images_en.nt,115.81,18499130,12271.27
+rdf4j.5.1.2,specific_mappingbased_properties_en.nt,129.50,18681660,9483.28
+rdf4j.5.1.2,persondata_en.nt,144.34,19038574,9330.63
+>>>>>>> minisite

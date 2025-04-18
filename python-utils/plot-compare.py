@@ -1,13 +1,15 @@
 # Import pandas for data handling
 import pandas as pd
 import os   
+import plotly.graph_objects as go
+import kaleido
+import re
+from jinja2 import Environment, FileSystemLoader
 
-# Import matplotlib for plotting
-import matplotlib.pyplot as plt
 
-# Enable inline plotting for Jupyter Notebook
-#%matplotlib inline
-
+#############
+# A/ data preparation
+#############
 # Load the CSV files into pandas DataFrames
 corese_data = pd.read_csv('../out/corese.4.6.3_loading-metrics.csv')
 rdf4j_data = pd.read_csv('../out/rdf4j.5.1.2_loading-metrics.csv')
@@ -19,48 +21,105 @@ combined_data = pd.concat([corese_data, rdf4j_data, jena_data], ignore_index=Tru
 # Convert graph_size to millions (10^6) for better readability in plots
 combined_data['graph_size_millions'] = combined_data['graph_size'] / 1e6
 
-# Display the first few rows of the combined dataset to verify
-#combined_data.head(n=20)
+#############
+# B/ plotting 
+#############
 
-# Create a figure with two y-axes and plot loading time and memory usage for both triplestores
-fig, ax1 = plt.subplots(figsize=(10, 6))
+# Define a color mapping with patterns
+color_mapping = {
+    r'corese.*': 'blue',
+    r'rdf4j.*': 'red',
+    r'jena.*': 'green'
+}
+
+# Function to get the color based on the triplestoreName using regex
+def get_color(triplestore_name):
+    for pattern, color in color_mapping.items():
+        if re.match(pattern, triplestore_name):
+            return color
+    return 'black'  # Default color if no match is found
+
+# Create a plotly figure
+fig = go.Figure()
 
 # Plot loading_time_seconds on the left y-axis
 for triplestoreName in combined_data['triplestoreName'].unique():
     subset = combined_data[combined_data['triplestoreName'] == triplestoreName]
-    ax1.plot(subset['graph_size_millions'], subset['loading_time_seconds'], label=f'{triplestoreName} - Loading Time')
+    color = get_color(triplestoreName)  # Get the color using regex matching
 
-ax1.set_xlabel('Graph Size (millions of triples)')
-ax1.set_ylabel('Loading Time (seconds)', color='blue')
-ax1.tick_params(axis='y', labelcolor='blue')
-ax1.legend(loc='upper left')
+    # Loading-time => continous line
+    fig.add_trace(go.Scatter(
+            x=subset['graph_size_millions'],
+            y=subset['loading_time_seconds'],
+            mode='lines',
+            name=f'{triplestoreName} - Loading time (s)',
+            line=dict(dash='solid', color=color),
+            yaxis='y1',
+            legendgroup=triplestoreName
+    ))
+    
+    # Memory used => dashed line
+    fig.add_trace(go.Scatter(
+            x=subset['graph_size_millions'],
+            y=subset['memory_used_mb'],
+            mode='lines',
+            name=f'{triplestoreName} - Memory used (MB)',
+            line=dict(dash='dash', color=color),
+            yaxis='y2',
+            legendgroup=triplestoreName
+    ))
 
-# Create a second y-axis for memory_used_mb
-ax2 = ax1.twinx()
-for triplestore in combined_data['triplestoreName'].unique():
-    subset = combined_data[combined_data['triplestoreName'] == triplestore]
-    ax2.plot(subset['graph_size_millions'], subset['memory_used_mb'], linestyle='--', label=f'{triplestore} - Memory Used')
+# Update layout for dual y-axes
+fig.update_layout(
+    title='3 Java Triplestores Performance Comparison - Loading Time and Memory Used by Graph Size',
+    xaxis=dict(title='Graph Size (Million triples)'),
+    yaxis=dict(
+        title='Loading Time (seconds)',
+        color='blue',
+        side='left',
+        showgrid=True
+    ),
+    yaxis2=dict(
+        title='Memory Used (MB)',
+        color='green',
+        overlaying='y',
+        side='right',
+        showgrid=False
+    ),
+    legend=dict(
+        orientation='h',
+        yanchor='bottom',
+        y=-1,
+        xanchor='center',
+        x=0.5,
+        tracegroupgap=10   # Add spacing between groups if needed
+        )
+    )
 
-ax2.set_ylabel('Memory Used (MB)', color='green')
-ax2.tick_params(axis='y', labelcolor='green')
 
-# Add a title and grid
-plt.title('Comparison of Loading Time and Memory Usage by Graph Size')
-ax1.grid(True)
+# Save the plot as HTML + PNG
+output_dir = os.path.join(os.path.dirname(__file__), '..', 'dashboard')
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, 'loading_time_memory_comparison')
 
-# Combine legends from both axes
-lines, labels = ax1.get_legend_handles_labels()
-lines2, labels2 = ax2.get_legend_handles_labels()
-ax1.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2)
+print(f"saving to {output_path}")
+fig.write_html(output_path+'.html')
+fig.write_image(output_path+'.png', 'png')
 
-# save the plot
-# - Define the relative path for the output file
-output_dir = os.path.join(os.path.dirname(__file__),'..', 'public')
-os.makedirs(output_dir, exist_ok=True)  # Create the directory if it doesn't exist
+#############
+# C/ Render the HTML template 
+#############
 
-# - Construct the output path relative to the current working directory
-output_path = os.path.join(output_dir, 'loading_time_memory_comparison.png')
+# Set up the Jinja2 environment
+env = Environment(loader=FileSystemLoader(output_dir))
+template = env.get_template('template.html')
 
-# - Save the plot
-print(f"Saving plot to {output_path}")
-plt.savefig(output_path, bbox_inches='tight', dpi=300)
+# Render the template with the Plotly graph URLs
+rendered_html = template.render(
+    plotly_graph_url=output_path,
+)
+
+# Save the rendered HTML to a file or serve it directly
+output_html_path = os.path.join(output_dir, 'output.html')
+with open(output_html_path, 'w') as file:
+    file.write(rendered_html)

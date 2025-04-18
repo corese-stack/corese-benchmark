@@ -14,6 +14,12 @@ Its principles are
     * DBPedia datasets
     * etc.
   
+## Links to dashboard
+
+* The minisite with dynamic versions of the plots is available at ...
+* You can also have a look at the image version of the plots in the [dashboard](./dashboard/README.md) folder. See below [HOW TO run it](#how-to-run-it) section to run locally the benchmark and generate a new version of the plots.
+
+
 ## Organisation of the repository
 
 There are 2 main parts of the code:
@@ -29,7 +35,7 @@ There are 2 main parts of the code:
     * launching the `benchmark.groovy` script
     * launching the `plot-compare.py` script which saves the plot files in `public` folder 
 
-* The latest results that we version in this repo are visible in the [public](./public/README.md) folder. If you run it by yourself, updated plots will be saved in this folder.
+* The latest results that we version in this repo are visible in the [dashboard](./dashboard/README.md) folder. If you run it by yourself, updated plots will be saved in this folder.
 
 ## HOW TO run it
 
@@ -45,7 +51,6 @@ conda activate benchmark_env
 (benchmark_env)cd python-utils
 (benchmark_env)python workflow.py
 ```
-
 
 ### Run the benchmark.groovy alone
 
