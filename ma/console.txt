@@ -1,0 +1,526 @@
+(benchmark_env) malamehi@7b9282c1f977:~/work/corese-benchmark/python-utils$ python workflow.py 
+Created input directory at: /home/malamehi/work/corese-benchmark/input
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/geo_coordinates_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/persondata_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/redirects_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/images_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/skos_categories_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/instance_types_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/disambiguations_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/category_labels_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/specific_mappingbased_properties_en.nt.bz2. Skipping download.
+Archive file already exists at /home/malamehi/work/corese-benchmark/input/homepages_en.nt.bz2. Skipping download.
+Extracting content to /home/malamehi/work/corese-benchmark/input/unzip...
+Extracting /home/malamehi/work/corese-benchmark/input/geo_coordinates_en.nt.bz2...
+Extracted geo_coordinates_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/persondata_en.nt.bz2...
+Extracted persondata_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/redirects_en.nt.bz2...
+Extracted redirects_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/images_en.nt.bz2...
+Extracted images_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/skos_categories_en.nt.bz2...
+Extracted skos_categories_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/instance_types_en.nt.bz2...
+Extracted instance_types_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/disambiguations_en.nt.bz2...
+Extracted disambiguations_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/category_labels_en.nt.bz2...
+Extracted category_labels_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/specific_mappingbased_properties_en.nt.bz2...
+Extracted specific_mappingbased_properties_en.nt.bz2.
+Extracting /home/malamehi/work/corese-benchmark/input/homepages_en.nt.bz2...
+Extracted homepages_en.nt.bz2.
+Extraction completed.
+Running Gradle build...
+Downloading https://services.gradle.org/distributions/gradle-8.13-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%.............100%
+
+Welcome to Gradle 8.13!
+
+Here are the highlights of this release:
+ - Daemon JVM auto-provisioning
+ - Enhancements for Scala plugin and JUnit testing
+ - Improvements for build authors and plugin developers
+
+For more details see https://docs.gradle.org/8.13/release-notes.html
+
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as no cached configuration is available for tasks: clean build
+
+BUILD SUCCESSFUL in 45s
+7 actionable tasks: 6 executed, 1 up-to-date
+Configuration cache entry stored.
+Executing the benchmark.groovy script...
+Calculating task graph as no cached configuration is available for tasks: runGroovyScript --args=/home/malamehi/work/corese-benchmark/input/unzip
+
+> Task :runGroovyScript
+Processing directory: /home/malamehi/work/corese-benchmark/input/unzip
+Starting benchmark for rdf4j.5.1.2...
+Garbage collector invoked.
+13:46:29.338 [main] DEBUG org.eclipse.rdf4j.sail.memory.MemoryStore -- Initializing MemoryStore...
+13:46:29.370 [main] DEBUG org.eclipse.rdf4j.sail.memory.MemoryStore -- MemoryStore initialized
+Loading RDF files from /home/malamehi/work/corese-benchmark/input/unzip...
+
+Processing file: persondata_en.nt
+13:46:29.515 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.n3.N3ParserFactory
+13:46:29.518 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.trig.TriGParserFactory
+13:46:29.518 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.trigstar.TriGStarParserFactory
+13:46:29.519 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.turtle.TurtleParserFactory
+13:46:29.519 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.turtlestar.TurtleStarParserFactory
+13:46:29.520 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.jsonld.JSONLDParserFactory
+13:46:29.521 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.nquads.NQuadsParserFactory
+13:46:29.522 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.rdfjson.RDFJSONParserFactory
+13:46:29.522 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.rdfxml.RDFXMLParserFactory
+13:46:29.523 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.trix.TriXParserFactory
+13:46:29.524 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.ntriples.NTriplesParserFactory
+13:46:29.525 [main] DEBUG org.eclipse.rdf4j.rio.RDFParserRegistry -- Registered service class org.eclipse.rdf4j.rio.binary.BinaryRDFParserFactory
+13:46:29.534 [main] DEBUG org.eclipse.rdf4j.rio.DatatypeHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.datatypes.XMLSchemaDatatypeHandler
+13:46:29.535 [main] DEBUG org.eclipse.rdf4j.rio.DatatypeHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.datatypes.RDFDatatypeHandler
+13:46:29.535 [main] DEBUG org.eclipse.rdf4j.rio.DatatypeHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.datatypes.DBPediaDatatypeHandler
+13:46:29.536 [main] DEBUG org.eclipse.rdf4j.rio.DatatypeHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.datatypes.VirtuosoGeometryDatatypeHandler
+13:46:29.536 [main] DEBUG org.eclipse.rdf4j.rio.DatatypeHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.datatypes.GeoSPARQLDatatypeHandler
+13:46:29.539 [main] DEBUG org.eclipse.rdf4j.rio.LanguageHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.languages.RFC3066LanguageHandler
+13:46:29.540 [main] DEBUG org.eclipse.rdf4j.rio.LanguageHandlerRegistry -- Registered service class org.eclipse.rdf4j.rio.languages.BCP47LanguageHandler
+1. parsing
+2. loading
+13:46:32.456 [main] ERROR org.eclipse.rdf4j.query.parser.QueryParserRegistry -- Failed to instantiate service
+java.lang.NoSuchFieldError: Class org.eclipse.rdf4j.query.QueryLanguage does not have member field 'org.eclipse.rdf4j.query.QueryLanguage SERQL'
+        at org.eclipse.rdf4j.query.parser.serql.SeRQLParserFactory.getQueryLanguage(SeRQLParserFactory.java:27)
+        at org.eclipse.rdf4j.query.parser.QueryParserRegistry.getKey(QueryParserRegistry.java:46)
+        at org.eclipse.rdf4j.query.parser.QueryParserRegistry.getKey(QueryParserRegistry.java:21)
+        at org.eclipse.rdf4j.common.lang.service.ServiceRegistry.add(ServiceRegistry.java:73)
+        at org.eclipse.rdf4j.common.lang.service.ServiceRegistry.<init>(ServiceRegistry.java:47)
+        at org.eclipse.rdf4j.query.parser.QueryParserRegistry.<init>(QueryParserRegistry.java:41)
+        at org.eclipse.rdf4j.query.parser.QueryParserRegistry$QueryParserRegistryHolder.<clinit>(QueryParserRegistry.java:28)
+        at org.eclipse.rdf4j.query.parser.QueryParserRegistry.getInstance(QueryParserRegistry.java:37)
+        at org.eclipse.rdf4j.query.parser.QueryParserUtil.createParser(QueryParserUtil.java:24)
+        at org.eclipse.rdf4j.query.parser.QueryParserUtil.parseQuery(QueryParserUtil.java:95)
+        at org.eclipse.rdf4j.query.parser.QueryParserUtil.parseTupleQuery(QueryParserUtil.java:111)
+        at org.eclipse.rdf4j.repository.sail.SailRepositoryConnection.prepareTupleQuery(SailRepositoryConnection.java:299)
+        at org.eclipse.rdf4j.repository.sail.SailRepositoryConnection.prepareTupleQuery(SailRepositoryConnection.java:62)
+        at org.eclipse.rdf4j.repository.base.AbstractRepositoryConnection.prepareTupleQuery(AbstractRepositoryConnection.java:147)
+        at org.eclipse.rdf4j.repository.RepositoryConnection.prepareTupleQuery(RepositoryConnection.java:215)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at RDF4JLoader.getGraphSize(RDF4JLoader.groovy:64)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at RDFBenchmark.calculateMetrics(RDFBenchmark.groovy:41)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at RDFBenchmark.processFile(RDFBenchmark.groovy:32)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+        at org.codehaus.groovy.reflection.CachedMethod.invoke(CachedMethod.java:343)
+        at groovy.lang.MetaMethod.doMethodInvoke(MetaMethod.java:328)
+        at org.codehaus.groovy.runtime.metaclass.ClosureMetaClass.invokeMethod(ClosureMetaClass.java:343)
+        at groovy.lang.MetaClassImpl.invokeMethod(MetaClassImpl.java:1007)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at RDFBenchmark$_processDirectory_closure1.doCall(RDFBenchmark.groovy:21)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+        at org.codehaus.groovy.reflection.CachedMethod.invoke(CachedMethod.java:343)
+        at groovy.lang.MetaMethod.doMethodInvoke(MetaMethod.java:328)
+        at org.codehaus.groovy.runtime.metaclass.ClosureMetaClass.invokeMethod(ClosureMetaClass.java:280)
+        at groovy.lang.MetaClassImpl.invokeMethod(MetaClassImpl.java:1007)
+        at groovy.lang.Closure.call(Closure.java:433)
+        at groovy.lang.Closure.call(Closure.java:422)
+        at org.codehaus.groovy.runtime.ResourceGroovyMethods.eachFileRecurse(ResourceGroovyMethods.java:1286)
+        at org.codehaus.groovy.runtime.ResourceGroovyMethods.eachFileRecurse(ResourceGroovyMethods.java:1561)
+        at org.codehaus.groovy.runtime.dgm$1080.doMethodInvoke(Unknown Source)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at RDFBenchmark.processDirectory(RDFBenchmark.groovy:19)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at benchmark.run(benchmark.groovy:21)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+        at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+        at org.codehaus.groovy.reflection.CachedMethod.invoke(CachedMethod.java:343)
+        at groovy.lang.MetaMethod.doMethodInvoke(MetaMethod.java:328)
+        at groovy.lang.MetaClassImpl.doInvokeMethod(MetaClassImpl.java:1333)
+        at groovy.lang.MetaClassImpl.invokeMethod(MetaClassImpl.java:1088)
+        at groovy.lang.MetaClassImpl.invokeMethod(MetaClassImpl.java:1007)
+        at org.codehaus.groovy.runtime.InvokerHelper.invokePogoMethod(InvokerHelper.java:645)
+        at org.codehaus.groovy.runtime.InvokerHelper.invokeMethod(InvokerHelper.java:628)
+        at org.codehaus.groovy.runtime.InvokerHelper.runScript(InvokerHelper.java:422)
+        at org.codehaus.groovy.vmplugin.v8.IndyInterface.fromCache(IndyInterface.java:321)
+        at benchmark.main(benchmark.groovy)
+13:46:32.464 [main] DEBUG org.eclipse.rdf4j.query.parser.QueryParserRegistry -- Registered service class org.eclipse.rdf4j.query.parser.sparql.SPARQLParserFactory
+13:46:32.534 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.sail.lucene.QueryTupleFunction
+13:46:32.534 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.sail.lucene.DistanceTupleFunction
+13:46:32.536 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.spif.ForEach
+13:46:32.537 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.spif.For
+13:46:32.537 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.spif.Split
+13:46:32.538 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.apf.StrSplit
+13:46:32.538 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.apf.ConcatTupleFunction
+13:46:32.539 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.list.Member
+13:46:32.539 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.list.Index
+13:46:32.540 [main] DEBUG org.eclipse.rdf4j.query.algebra.evaluation.function.TupleFunctionRegistry -- Registered service class org.eclipse.rdf4j.spin.function.list.Length
+RDF file loaded successfully in 2.97 seconds!
+Graph size: 356914 triples
+Threads used: 1
+Memory used: 344.08 MB
+
+Processing file: category_labels_en.nt
+1. parsing
+2. loading
+RDF file loaded successfully in 7.95 seconds!
+Graph size: 922022 triples
+Threads used: 1
+Memory used: 1158.51 MB
+
+Processing file: redirects_en.nt
+1. parsing
+2. loading
+RDF file loaded successfully in 49.45 seconds!
+Graph size: 5004484 triples
+Threads used: 1
+Memory used: 7139.58 MB
+
+Processing file: geo_coordinates_en.nt
+1. parsing
+2. loading
+13:47:31.231 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+13:47:31.233 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+RDF file loaded successfully in 67.25 seconds!
+Graph size: 6467376 triples
+Threads used: 1
+Memory used: 8326.57 MB
+
+Processing file: homepages_en.nt
+1. parsing
+Error parsing file: Invalid IPv4 address U+2E at index 12: http://02396.*A [line 5351]
+RDF file loaded successfully in 71.51 seconds!
+Graph size: 6467376 triples
+Threads used: 1
+Memory used: 8504.30 MB
+
+Processing file: specific_mappingbased_properties_en.nt
+1. parsing
+13:47:43.894 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+2. loading
+RDF file loaded successfully in 75.66 seconds!
+Graph size: 6649906 triples
+Threads used: 1
+Memory used: 8490.15 MB
+
+Processing file: instance_types_en.nt
+1. parsing
+2. loading
+13:48:17.630 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+13:48:17.631 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+13:48:17.631 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+RDF file loaded successfully in 112.38 seconds!
+Graph size: 12145490 triples
+Threads used: 1
+Memory used: 10489.12 MB
+
+Processing file: skos_categories_en.nt
+1. parsing
+2. loading
+RDF file loaded successfully in 132.69 seconds!
+Graph size: 14388952 triples
+Threads used: 1
+Memory used: 10744.98 MB
+
+Processing file: images_en.nt
+1. parsing
+2. loading
+13:49:25.859 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+13:49:25.859 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+RDF file loaded successfully in 190.18 seconds!
+Graph size: 18273450 triples
+Threads used: 1
+Memory used: 9402.61 MB
+
+Processing file: disambiguations_en.nt
+1. parsing
+2. loading
+RDF file loaded successfully in 201.52 seconds!
+Graph size: 19038574 triples
+Threads used: 1
+Memory used: 9945.98 MB
+
+---
+Finished loading RDF files from /home/malamehi/work/corese-benchmark/input/unzip in 208.19 seconds
+Total graph size: 19038574 triples
+Threads used: 1
+Memory used: 9945.81 MB
+Metrics written to /home/malamehi/work/corese-benchmark/out/rdf4j.5.1.2_loading-metrics.csv
+-------------------------------------
+
+Starting benchmark for jena.4.10.0...
+13:50:16.588 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+Garbage collector invoked.
+13:50:16.588 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+13:50:16.589 [Cleaner-0] WARN org.eclipse.rdf4j.sail.helpers.CleanerIteration -- Forced closing of unclosed iteration. Set the system property 'org.eclipse.rdf4j.repository.debug' to 'true' to get stack traces.
+13:50:16.743 [main] DEBUG org.apache.jena.riot.system.stream.JenaIOEnvironment -- Failed to find configuration: location-mapping.ttl;location-mapping.rdf;etc/location-mapping.rdf;etc/location-mapping.ttl
+Loading RDF files from /home/malamehi/work/corese-benchmark/input/unzip...
+
+Processing file: persondata_en.nt
+13:50:17.160 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/persondata_en.nt
+13:50:17.166 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/persondata_en.nt (LocatorFile)
+RDF file loaded successfully in 3.02 seconds!
+Graph size: 356914 triples
+Threads used: 2
+Memory used: 7551.25 MB
+
+Processing file: category_labels_en.nt
+13:50:19.949 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/category_labels_en.nt
+13:50:19.949 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/category_labels_en.nt (LocatorFile)
+RDF file loaded successfully in 9.97 seconds!
+Graph size: 922022 triples
+Threads used: 2
+Memory used: 761.40 MB
+
+Processing file: redirects_en.nt
+13:50:26.882 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/redirects_en.nt
+13:50:26.883 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/redirects_en.nt (LocatorFile)
+RDF file loaded successfully in 70.40 seconds!
+Graph size: 5004484 triples
+Threads used: 2
+Memory used: 2728.33 MB
+
+Processing file: geo_coordinates_en.nt
+13:51:27.320 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/geo_coordinates_en.nt
+13:51:27.322 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/geo_coordinates_en.nt (LocatorFile)
+RDF file loaded successfully in 83.33 seconds!
+Graph size: 6467376 triples
+Threads used: 2
+Memory used: 3079.10 MB
+
+Processing file: homepages_en.nt
+13:51:40.247 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/homepages_en.nt
+13:51:40.247 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/homepages_en.nt (LocatorFile)
+13:51:40.425 [main] WARN org.apache.jena.riot -- [line: 6475, col: 90] Bad IRI: <http:www.co.coos.or.us> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:40.504 [main] WARN org.apache.jena.riot -- [line: 9962, col: 90] Bad IRI: <http:///> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:40.572 [main] WARN org.apache.jena.riot -- [line: 14981, col: 94] Bad IRI: <http:www.rockledgeborough.org> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:40.683 [main] WARN org.apache.jena.riot -- [line: 21756, col: 91] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:40.693 [main] WARN org.apache.jena.riot -- [line: 22285, col: 80] Bad IRI: <http://??> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:40.748 [main] WARN org.apache.jena.riot -- [line: 27126, col: 78] Bad IRI: <http:www.amecameca.gob.mx> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:40.749 [main] WARN org.apache.jena.riot -- [line: 27136, col: 79] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:42.517 [main] WARN org.apache.jena.riot -- [line: 37910, col: 95] Bad IRI: <http:/www.fox.com/> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:42.800 [main] WARN org.apache.jena.riot -- [line: 57877, col: 84] Bad IRI: <http://asrltd.co.nz-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:42.812 [main] WARN org.apache.jena.riot -- [line: 58630, col: 77] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:42.845 [main] WARN org.apache.jena.riot -- [line: 60780, col: 73] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:42.875 [main] WARN org.apache.jena.riot -- [line: 62775, col: 89] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:42.915 [main] WARN org.apache.jena.riot -- [line: 66470, col: 82] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:42.916 [main] WARN org.apache.jena.riot -- [line: 66472, col: 82] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:42.967 [main] WARN org.apache.jena.riot -- [line: 70495, col: 80] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:42.981 [main] WARN org.apache.jena.riot -- [line: 71212, col: 83] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:43.636 [main] WARN org.apache.jena.riot -- [line: 88642, col: 78] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:43.750 [main] WARN org.apache.jena.riot -- [line: 96514, col: 78] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:43.788 [main] WARN org.apache.jena.riot -- [line: 100304, col: 112] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:43.788 [main] WARN org.apache.jena.riot -- [line: 100307, col: 105] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:43.789 [main] WARN org.apache.jena.riot -- [line: 100308, col: 86] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:43.841 [main] WARN org.apache.jena.riot -- [line: 104121, col: 95] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:43.846 [main] WARN org.apache.jena.riot -- [line: 104465, col: 88] Bad IRI: <http://www--> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:43.853 [main] WARN org.apache.jena.riot -- [line: 104951, col: 77] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:43.870 [main] WARN org.apache.jena.riot -- [line: 106230, col: 83] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:43.999 [main] WARN org.apache.jena.riot -- [line: 114326, col: 77] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.137 [main] WARN org.apache.jena.riot -- [line: 125309, col: 77] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.138 [main] WARN org.apache.jena.riot -- [line: 125315, col: 97] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.138 [main] WARN org.apache.jena.riot -- [line: 125320, col: 81] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.138 [main] WARN org.apache.jena.riot -- [line: 125321, col: 76] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.139 [main] WARN org.apache.jena.riot -- [line: 125323, col: 73] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.139 [main] WARN org.apache.jena.riot -- [line: 125324, col: 82] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.139 [main] WARN org.apache.jena.riot -- [line: 125325, col: 79] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.149 [main] WARN org.apache.jena.riot -- [line: 125891, col: 80] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.170 [main] WARN org.apache.jena.riot -- [line: 127692, col: 87] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.201 [main] WARN org.apache.jena.riot -- [line: 129692, col: 76] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.233 [main] WARN org.apache.jena.riot -- [line: 131691, col: 81] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.332 [main] WARN org.apache.jena.riot -- [line: 138887, col: 86] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.407 [main] WARN org.apache.jena.riot -- [line: 146327, col: 87] Bad IRI: <http://www.richotti.com--> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.552 [main] WARN org.apache.jena.riot -- [line: 157978, col: 101] Bad IRI: <http://--> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.765 [main] WARN org.apache.jena.riot -- [line: 167578, col: 114] Bad IRI: <http:///> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.864 [main] WARN org.apache.jena.riot -- [line: 175222, col: 90] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:44.886 [main] WARN org.apache.jena.riot -- [line: 177263, col: 80] Bad IRI: <http:http://www.loomaaed.ee/> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:44.954 [main] WARN org.apache.jena.riot -- [line: 182368, col: 111] Bad IRI: <http:/www.cbs.com/> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.049 [main] WARN org.apache.jena.riot -- [line: 189238, col: 87] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.088 [main] WARN org.apache.jena.riot -- [line: 192828, col: 82] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:45.133 [main] WARN org.apache.jena.riot -- [line: 195694, col: 111] Bad IRI: <http:///> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.134 [main] WARN org.apache.jena.riot -- [line: 195695, col: 97] Bad IRI: <http:///> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.134 [main] WARN org.apache.jena.riot -- [line: 195709, col: 82] Bad IRI: <http:///> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.159 [main] WARN org.apache.jena.riot -- [line: 197428, col: 98] Bad IRI: <http://washingtonville.ny.schoolwebpages.com/education/school/school.php?sectionid=2]> Code: 0/ILLEGAL_CHARACTER in QUERY: The character violates the grammar rules for URIs/IRIs.
+13:51:45.563 [main] WARN org.apache.jena.riot -- [line: 201949, col: 96] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.564 [main] WARN org.apache.jena.riot -- [line: 201996, col: 79] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:45.565 [main] WARN org.apache.jena.riot -- [line: 202016, col: 95] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.565 [main] WARN org.apache.jena.riot -- [line: 202037, col: 102] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.567 [main] WARN org.apache.jena.riot -- [line: 202134, col: 123] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.567 [main] WARN org.apache.jena.riot -- [line: 202140, col: 99] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.567 [main] WARN org.apache.jena.riot -- [line: 202141, col: 104] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.567 [main] WARN org.apache.jena.riot -- [line: 202147, col: 103] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.569 [main] WARN org.apache.jena.riot -- [line: 202256, col: 91] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.569 [main] WARN org.apache.jena.riot -- [line: 202261, col: 103] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.569 [main] WARN org.apache.jena.riot -- [line: 202266, col: 95] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.572 [main] WARN org.apache.jena.riot -- [line: 202464, col: 93] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.573 [main] WARN org.apache.jena.riot -- [line: 202548, col: 108] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.588 [main] WARN org.apache.jena.riot -- [line: 203946, col: 83] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:45.770 [main] WARN org.apache.jena.riot -- [line: 218298, col: 97] Bad IRI: <http://None:Banned> Code: 0/ILLEGAL_CHARACTER in PORT: The character violates the grammar rules for URIs/IRIs.
+13:51:45.856 [main] WARN org.apache.jena.riot -- [line: 225587, col: 103] Bad IRI: <http:http://www.rcdk.org/history/location.htm> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.869 [main] WARN org.apache.jena.riot -- [line: 226853, col: 103] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:45.870 [main] WARN org.apache.jena.riot -- [line: 226868, col: 102] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:45.870 [main] WARN org.apache.jena.riot -- [line: 226891, col: 102] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:45.879 [main] WARN org.apache.jena.riot -- [line: 227572, col: 78] Bad IRI: <http:www.Hashimlokasher.mp> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:45.983 [main] WARN org.apache.jena.riot -- [line: 237569, col: 115] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:46.025 [main] WARN org.apache.jena.riot -- [line: 241424, col: 79] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:46.185 [main] WARN org.apache.jena.riot -- [line: 256431, col: 78] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:46.303 [main] WARN org.apache.jena.riot -- [line: 267908, col: 79] Bad IRI: <http:www.myspace.com/juliamora> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:46.315 [main] WARN org.apache.jena.riot -- [line: 268982, col: 95] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:46.588 [main] WARN org.apache.jena.riot -- [line: 294390, col: 97] Bad IRI: <http:www.renalmd.org> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:46.628 [main] WARN org.apache.jena.riot -- [line: 298071, col: 87] Bad IRI: <http://???> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.037 [main] WARN org.apache.jena.riot -- [line: 320792, col: 98] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.037 [main] WARN org.apache.jena.riot -- [line: 320803, col: 102] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.038 [main] WARN org.apache.jena.riot -- [line: 320826, col: 99] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.038 [main] WARN org.apache.jena.riot -- [line: 320827, col: 95] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.451 [main] WARN org.apache.jena.riot -- [line: 335212, col: 74] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.494 [main] WARN org.apache.jena.riot -- [line: 339303, col: 114] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.625 [main] WARN org.apache.jena.riot -- [line: 351779, col: 77] Bad IRI: <http:--www.annozero.rai.it-> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.628 [main] WARN org.apache.jena.riot -- [line: 351978, col: 88] Bad IRI: <http:///> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.645 [main] WARN org.apache.jena.riot -- [line: 353531, col: 77] Bad IRI: <http://?> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.760 [main] WARN org.apache.jena.riot -- [line: 364524, col: 81] Bad IRI: <http://???> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.839 [main] WARN org.apache.jena.riot -- [line: 372112, col: 84] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.854 [main] WARN org.apache.jena.riot -- [line: 373458, col: 110] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.855 [main] WARN org.apache.jena.riot -- [line: 373562, col: 84] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.857 [main] WARN org.apache.jena.riot -- [line: 373673, col: 88] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.859 [main] WARN org.apache.jena.riot -- [line: 373895, col: 85] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.860 [main] WARN org.apache.jena.riot -- [line: 373902, col: 110] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.862 [main] WARN org.apache.jena.riot -- [line: 374122, col: 98] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:47.887 [main] WARN org.apache.jena.riot -- [line: 376365, col: 81] Bad IRI: <http:http://profiles.friendster.com/5342371> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:47.976 [main] WARN org.apache.jena.riot -- [line: 384732, col: 102] Bad IRI: <http://www.RuralE.Evolution.eu-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:48.005 [main] WARN org.apache.jena.riot -- [line: 387528, col: 88] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+13:51:48.054 [main] WARN org.apache.jena.riot -- [line: 392179, col: 82] Bad IRI: <http:///www.mashamapenzi.com> Code: 57/REQUIRED_COMPONENT_MISSING in HOST: A component that is required by the scheme is missing.
+13:51:48.056 [main] WARN org.apache.jena.riot -- [line: 392262, col: 79] Bad IRI: <http://-> Code: 33/DNS_LABEL_DASH_START_OR_END in HOST: A DNS name had a - at the beginning or end.
+RDF file loaded successfully in 91.18 seconds!
+Graph size: 6862273 triples
+Threads used: 2
+Memory used: 3458.14 MB
+
+Processing file: specific_mappingbased_properties_en.nt
+13:51:48.089 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/specific_mappingbased_properties_en.nt
+13:51:48.089 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/specific_mappingbased_properties_en.nt (LocatorFile)
+RDF file loaded successfully in 93.23 seconds!
+Graph size: 7044803 triples
+Threads used: 2
+Memory used: 3496.65 MB
+
+Processing file: instance_types_en.nt
+13:51:50.142 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/instance_types_en.nt
+13:51:50.142 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/instance_types_en.nt (LocatorFile)
+RDF file loaded successfully in 133.27 seconds!
+Graph size: 12540387 triples
+Threads used: 2
+Memory used: 4016.14 MB
+
+Processing file: skos_categories_en.nt
+13:52:30.182 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/skos_categories_en.nt
+13:52:30.183 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/skos_categories_en.nt (LocatorFile)
+RDF file loaded successfully in 153.02 seconds!
+Graph size: 14783849 triples
+Threads used: 2
+Memory used: 4805.74 MB
+
+Processing file: images_en.nt
+13:52:49.934 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/images_en.nt
+13:52:49.935 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/images_en.nt (LocatorFile)
+RDF file loaded successfully in 204.48 seconds!
+Graph size: 18668347 triples
+Threads used: 2
+Memory used: 5651.25 MB
+
+Processing file: disambiguations_en.nt
+13:53:41.396 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Not mapped: /home/malamehi/work/corese-benchmark/input/unzip/disambiguations_en.nt
+13:53:41.397 [main] DEBUG org.apache.jena.riot.system.stream.StreamManager -- Found: /home/malamehi/work/corese-benchmark/input/unzip/disambiguations_en.nt (LocatorFile)
+RDF file loaded successfully in 212.86 seconds!
+Graph size: 19433471 triples
+Threads used: 2
+Memory used: 6030.94 MB
+
+---
+Finished loading RDF files from /home/malamehi/work/corese-benchmark/input/unzip in 212.86 seconds
+Total graph size: 19433471 triples
+Threads used: 2
+Memory used: 6030.94 MB
+Metrics written to /home/malamehi/work/corese-benchmark/out/jena.4.10.0_loading-metrics.csv
+-------------------------------------
+
+Starting benchmark for corese.4.6.3...
+Garbage collector invoked.
+Loading RDF files from /home/malamehi/work/corese-benchmark/input/unzip...
+
+Processing file: persondata_en.nt
+RDF file loaded successfully in 17.01 seconds!
+Graph size: 356996 triples
+Threads used: 2
+Memory used: 1275.54 MB
+
+Processing file: category_labels_en.nt
+13:54:08.044 [main] DEBUG fr.inria.corese.core.util.Property -- SERVICE_SEND_PARAMETER = true
+13:54:08.046 [main] DEBUG fr.inria.corese.core.util.Property -- DATATYPE_ENTAILMENT = true
+RDF file loaded successfully in 44.60 seconds!
+Graph size: 922104 triples
+Threads used: 2
+Memory used: 607.63 MB
+
+Processing file: redirects_en.nt
+RDF file loaded successfully in 206.41 seconds!
+Graph size: 5004637 triples
+Threads used: 2
+Memory used: 2328.42 MB
+
+Processing file: geo_coordinates_en.nt
+RDF file loaded successfully in 275.67 seconds!
+Graph size: 6467529 triples
+Threads used: 2
+Memory used: 2358.44 MB
+
+Processing file: homepages_en.nt
+RDF file loaded successfully in 290.77 seconds!
+Graph size: 6862426 triples
+Threads used: 2
+Memory used: 2636.11 MB
+
+Processing file: specific_mappingbased_properties_en.nt
+RDF file loaded successfully in 300.29 seconds!
+Graph size: 7046509 triples
+Threads used: 2
+Memory used: 2258.56 MB
+
+Processing file: instance_types_en.nt
+RDF file loaded successfully in 511.35 seconds!
+Graph size: 12542099 triples
+Threads used: 2
+Memory used: 5446.76 MB
+
+Processing file: skos_categories_en.nt
+RDF file loaded successfully in 622.03 seconds!
+Graph size: 14790030 triples
+Threads used: 2
+Memory used: 3084.55 MB
+
+Processing file: images_en.nt
+RDF file loaded successfully in 845.17 seconds!
+Graph size: 18993635 triples
+Threads used: 2
+Memory used: 3508.13 MB
+
+Processing file: disambiguations_en.nt
+RDF file loaded successfully in 874.86 seconds!
+Graph size: 19762559 triples
+Threads used: 2
+Memory used: 3455.76 MB
+
+---
+Finished loading RDF files from /home/malamehi/work/corese-benchmark/input/unzip in 874.86 seconds
+Total graph size: 19762559 triples
+Threads used: 2
+Memory used: 3455.76 MB
+Metrics written to /home/malamehi/work/corese-benchmark/out/corese.4.6.3_loading-metrics.csv
+-------------------------------------
+
+Goodbye!
+
+BUILD SUCCESSFUL in 22m 1s
+3 actionable tasks: 1 executed, 2 up-to-date
+Configuration cache entry stored.
+Benchmark execution completed.
+Running Python script to generate plots...
+saving to /home/malamehi/work/corese-benchmark/python-utils/../dashboard/loading_time_memory_comparison
+(benchmark_env) malamehi@7b9282c1f977:~/work/corese-benchmark/python-utils$ 
