@@ -29,7 +29,7 @@ The plots below show the loading time and memory used after each file of the dat
 Results reported below are from previous run, using 2 specific datasets, run on the 2025.04.11
 
 #### DBPedia dataset
-
+The below graph is generated using 4CPU and 32GB RAM on SLICES jupyter hub.
 ![img](loading_time_memory_comparison_dbpedia20250411.png)
 
 ### Variant comparing Latest and previous version of Corese
