@@ -1,0 +1,11 @@
+triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
+rdf4j.5.1.2,redirects_en.nt,31.61,4082462,6061.65
+rdf4j.5.1.2,homepages_en.nt,34.40,4082462,6007.12
+rdf4j.5.1.2,images_en.nt,63.40,7966960,10417.79
+rdf4j.5.1.2,skos_categories_en.nt,79.80,10210422,12254.93
+rdf4j.5.1.2,persondata_en.nt,84.88,10567336,8866.71
+rdf4j.5.1.2,category_labels_en.nt,92.03,11132444,9268.34
+rdf4j.5.1.2,geo_coordinates_en.nt,103.01,12595336,9837.97
+rdf4j.5.1.2,specific_mappingbased_properties_en.nt,107.93,12777866,10359.41
+rdf4j.5.1.2,instance_types_en.nt,153.11,18273450,9591.66
+rdf4j.5.1.2,disambiguations_en.nt,162.46,19038574,10206.23
