@@ -41,11 +41,11 @@ jobs:
 
     # Debugging step: Check if the dashboard directory exists
     - name: Check dashboard directory
-      run: ls -la ./dashboard
+      run: ls -la ./public
 
     # Step 5: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dashboard  # Path to the folder containing the HTML files
+        publish_dir: ./public  # Path to the folder containing the HTML files

@@ -98,7 +98,7 @@ fig.update_layout(
 
 
 # Save the plot as HTML + PNG
-output_dir = os.path.join(os.path.dirname(__file__), '..', 'dashboard')
+output_dir = os.path.join(os.path.dirname(__file__), '..', 'public')
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, 'loading_time_memory_comparison')
 
@@ -111,12 +111,12 @@ fig.write_image(output_path+'.png', 'png')
 #############
 
 # Set up the Jinja2 environment
-env = Environment(loader=FileSystemLoader(output_dir))
+env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
 template = env.get_template('template.html')
 
 # Render the template with the Plotly graph URLs
 rendered_html = template.render(
-    plotly_graph_url=output_path,
+    plotly_graph_url=output_path+".html",
 )
 
 # Save the rendered HTML to a file or serve it directly

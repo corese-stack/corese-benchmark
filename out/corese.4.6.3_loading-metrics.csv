@@ -1,11 +1,6 @@
 triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
-corese.4.6.3,redirects_en.nt,74.49,4082533,2074.79
-corese.4.6.3,disambiguations_en.nt,88.95,4851457,1763.02
-corese.4.6.3,homepages_en.nt,95.60,5246354,1837.97
-corese.4.6.3,geo_coordinates_en.nt,126.91,6709246,2336.98
-corese.4.6.3,instance_types_en.nt,228.98,12204836,3112.10
-corese.4.6.3,category_labels_en.nt,241.53,12769944,2627.90
-corese.4.6.3,skos_categories_en.nt,286.95,15017875,2691.10
-corese.4.6.3,images_en.nt,396.23,19221480,3391.52
-corese.4.6.3,specific_mappingbased_properties_en.nt,401.65,19405563,4112.95
-corese.4.6.3,persondata_en.nt,409.20,19762559,3657.77
+corese.4.6.3,disambiguations_en.nt,12.37,768924,310.73
+corese.4.6.3,homepages_en.nt,18.07,1163821,1606.77
+corese.4.6.3,category_labels_en.nt,28.35,1728929,1606.77
+corese.4.6.3,specific_mappingbased_properties_en.nt,31.79,1913012,2340.77
+corese.4.6.3,persondata_en.nt,37.41,2270008,1447.38
