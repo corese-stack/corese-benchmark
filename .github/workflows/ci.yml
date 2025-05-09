@@ -43,10 +43,6 @@ jobs:
     - name: Check public directory is here and contains required files
       run: ls -la ./public
 
-    # Debugging step: Check for .nojekyll file
-    - name: Check for .nojekyll file
-      run: ls -la ./public/.nojekyll
-
     # Step 5: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
