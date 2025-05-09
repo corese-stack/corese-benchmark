@@ -1,6 +1,0 @@
-triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
-jena.4.10.0,disambiguations_en.nt,2.71,765124,1594.84
-jena.4.10.0,homepages_en.nt,4.44,1160021,2223.83
-jena.4.10.0,category_labels_en.nt,6.87,1725129,2136.59
-jena.4.10.0,specific_mappingbased_properties_en.nt,7.42,1907659,2816.07
-jena.4.10.0,persondata_en.nt,8.29,2264573,2535.06

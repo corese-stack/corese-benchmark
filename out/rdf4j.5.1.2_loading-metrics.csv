@@ -1,6 +1,0 @@
-triplestoreName,file,loading_time_seconds,graph_size,memory_used_mb
-rdf4j.5.1.2,disambiguations_en.nt,1.57,765124,1098.51
-rdf4j.5.1.2,homepages_en.nt,1.78,765124,1031.40
-rdf4j.5.1.2,category_labels_en.nt,3.15,1330232,1895.43
-rdf4j.5.1.2,specific_mappingbased_properties_en.nt,3.82,1512762,2251.94
-rdf4j.5.1.2,persondata_en.nt,4.68,1869676,2553.93
