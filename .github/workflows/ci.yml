@@ -31,7 +31,9 @@ jobs:
 
     # Step 4: Run the workflow.py script
     - name: Run workflow.py
-      run: python python-utils/workflow.py
+      run: |
+        cd python-utils
+        python workflow.py
 
     # Step 5: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages
