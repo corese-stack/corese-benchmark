@@ -39,9 +39,13 @@ jobs:
         cd python-utils
         python workflow.py
 
-    # Debugging step: Check if the dashboard directory exists
-    - name: Check dashboard directory
+    # Debugging step: Check if the public directory exists
+    - name: Check public directory is here and contains required files
       run: ls -la ./public
+
+    # Debugging step: Check for .nojekyll file
+    - name: Check for .nojekyll file
+      run: ls -la ./public/.nojekyll
 
     # Step 5: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages
@@ -49,3 +53,4 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./public  # Path to the folder containing the HTML files
+        force_orphan: true    # Overwrite the gh-pages branch
