@@ -1,5 +1,9 @@
 name: Run Workflow and Deploy to GitHub Pages
 
+permissions:
+  contents: write
+
+
 on:
   push:
     branches:
@@ -34,6 +38,10 @@ jobs:
       run: |
         cd python-utils
         python workflow.py
+
+    # Debugging step: Check if the dashboard directory exists
+    - name: Check dashboard directory
+      run: ls -la ./dashboard
 
     # Step 5: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages

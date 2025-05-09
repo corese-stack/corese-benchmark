@@ -87,5 +87,6 @@ print("Benchmark execution completed.")
 python_script = os.path.join(current_dir, "plot-compare.py")
 if not os.path.exists(python_script):
     raise FileNotFoundError(f"Python script not found at {python_script}")
-print("Running Python script to generate plots...")
+print(f"Running Python script to generate plots... at {python_script}")
 subprocess.run(["python", python_script], check=True)
+print(f"Succesfully run Python script to generate plots!")
