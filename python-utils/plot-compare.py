@@ -98,9 +98,10 @@ fig.update_layout(
 
 
 # Save the plot as HTML + PNG
+plotname = 'loading_time_memory_comparison'
 output_dir = os.path.join(os.path.dirname(__file__), '..', 'public')
 os.makedirs(output_dir, exist_ok=True)
-output_path = os.path.join(output_dir, 'loading_time_memory_comparison')
+output_path = os.path.join(output_dir, plotname )
 
 print(f"saving to {output_path}")
 fig.write_html(output_path+'.html')
@@ -116,10 +117,10 @@ template = env.get_template('template.html')
 
 # Render the template with the Plotly graph URLs
 rendered_html = template.render(
-    plotly_graph_url=output_path+".html",
+    plotly_graph_url=plotname+".html",
 )
 
 # Save the rendered HTML to a file or serve it directly
-output_html_path = os.path.join(output_dir, 'output.html')
+output_html_path = os.path.join(output_dir, 'index.html')
 with open(output_html_path, 'w') as file:
     file.write(rendered_html)
