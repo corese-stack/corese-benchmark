@@ -89,11 +89,12 @@ fig.update_layout(
     legend=dict(
         orientation='h',
         yanchor='bottom',
-        y=-1,
+        y=-0.3,
         xanchor='center',
         x=0.5,
         tracegroupgap=10   # Add spacing between groups if needed
-        )
+        ),
+    height=800
     )
 
 
@@ -109,7 +110,7 @@ fig.write_image(output_path+'.png', 'png')
 
 #############
 # C/ Render the HTML template 
-#############
+#############   
 
 # Set up the Jinja2 environment
 env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
