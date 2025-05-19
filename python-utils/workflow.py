@@ -6,6 +6,8 @@ import bz2
 import shutil
 import subprocess
 
+triplestoreNames = "rdf4j.5.1.2,jena.4.10.0,corese.4.6.3"
+
 # Step 1: Create the "input" directory one step above the current directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
 input_dir = os.path.join(os.path.dirname(current_dir), "input")
@@ -14,12 +16,12 @@ print(f"Created input directory at: {input_dir}")
 
 # Step 2: Download the archive files to the "input" directory
 archive_urls = [
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/geo_coordinates_en.nt.bz2",
+    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/geo_coordinates_en.nt.bz2",
     "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/persondata_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/redirects_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/images_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/skos_categories_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/instance_types_en.nt.bz2",
+    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/redirects_en.nt.bz2",
+    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/images_en.nt.bz2",
+    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/skos_categories_en.nt.bz2",
+    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/instance_types_en.nt.bz2",
     "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/disambiguations_en.nt.bz2",
     "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/category_labels_en.nt.bz2",
     "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/specific_mappingbased_properties_en.nt.bz2",
@@ -79,7 +81,7 @@ print("Running Gradle build...")
 subprocess.run([gradle_wrapper, "clean", "build"], cwd=os.path.dirname(current_dir), check=True)
 
 print("Executing the benchmark.groovy script...")
-subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir], cwd=os.path.dirname(current_dir), check=True)
+subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+triplestoreNames], cwd=os.path.dirname(current_dir), check=True)
 
 print("Benchmark execution completed.")
 

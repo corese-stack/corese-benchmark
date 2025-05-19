@@ -18,7 +18,11 @@ class RDFBenchmark {
 
         directory.eachFileRecurse { file ->
             if (file.name.endsWith('.nt')) {
-                processFile(file, totalStartTime)
+                try {
+                    processFile(file, totalStartTime)
+                } catch (Exception e) {
+                    println "Error processing file ${file.name}: ${e.message}"
+                }
             }
         }
 

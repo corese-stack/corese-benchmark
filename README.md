@@ -59,10 +59,10 @@ conda activate benchmark_env
 ```bash
 ./gradlew  clean build
 ```
-* then run it without forgetting to give the path to the input directory
+* then run it without forgetting to give the path to the input directory and the list of triplestore names:
 
 ```bash
-./gradlew runGroovyScript --args="/path/to/directory"
+./gradlew runGroovyScript --args="/path/to/directory rdf4j.5.1.2,jena.4.10.0,corese.4.6.3"
 ```
 
 ### Run the plot-compare.py alone
