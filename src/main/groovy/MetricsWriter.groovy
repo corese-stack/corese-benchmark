@@ -2,15 +2,13 @@ class MetricsWriter {
     final File csvFile
     final String triplestoreName
 
-    MetricsWriter(String triplestoreName) {
+    MetricsWriter(String triplestoreName, String outDirPath) {
         this.triplestoreName = triplestoreName
-        def outDir = new File("out")
+        def outDir = new File(outDirPath)
         if (!outDir.exists()) {
-            outDir.mkdir()
+            outDir.mkdirs()
         }
 
-        //def timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date())
-        //this.csvFile = new File(outDir, "${this.triplestoreName}_loading-metrics-${timestamp}.csv")
         this.csvFile = new File(outDir, "${this.triplestoreName}_loading-metrics.csv")
         
         // Write CSV header

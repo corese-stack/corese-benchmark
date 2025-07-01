@@ -1,22 +1,31 @@
 # Import pandas for data handling
 import pandas as pd
-import os   
-import plotly.graph_objects as go
-import kaleido
+import os
+import sys
 import re
+import plotly.graph_objects as go
 from jinja2 import Environment, FileSystemLoader
+import itertools
 
+# Get the output directory from the command line argument, default to '../out' if not provided
+if len(sys.argv) > 1:
+    metrics_dir = sys.argv[1]
+else:
+    metrics_dir = '../out'
 
-#############
-# A/ data preparation
-#############
-# Load the CSV files into pandas DataFrames
-corese_data = pd.read_csv('../out/corese.4.6.3_loading-metrics.csv')
-rdf4j_data = pd.read_csv('../out/rdf4j.5.1.2_loading-metrics.csv')
-jena_data = pd.read_csv('../out/jena.4.10.0_loading-metrics.csv')
+# Find all *_loading-metrics.csv files in the directory
+csv_files = [f for f in os.listdir(metrics_dir) if f.endswith('_loading-metrics.csv')]
 
-# Concatenate the two datasets into a single DataFrame for easier comparison
-combined_data = pd.concat([corese_data, rdf4j_data, jena_data], ignore_index=True)
+# Load each CSV and extract triplestore name from filename
+dataframes = []
+for csv_file in csv_files:
+    triplestore_name = csv_file.split('_loading-metrics.csv')[0]
+    df = pd.read_csv(os.path.join(metrics_dir, csv_file))
+    df['triplestoreName'] = triplestore_name  # Ensure the column exists and is consistent
+    dataframes.append(df)
+
+# Concatenate all dataframes
+combined_data = pd.concat(dataframes, ignore_index=True)
 
 # Convert graph_size to millions (10^6) for better readability in plots
 combined_data['graph_size_millions'] = combined_data['graph_size'] / 1e6
@@ -25,19 +34,19 @@ combined_data['graph_size_millions'] = combined_data['graph_size'] / 1e6
 # B/ plotting 
 #############
 
-# Define a color mapping with patterns
-color_mapping = {
-    r'corese.*': 'blue',
-    r'rdf4j.*': 'red',
-    r'jena.*': 'green'
-}
+# Generate a color palette (add more colors if needed)
+color_palette = [
+    'blue', 'orange', 'green', 'red', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan'
+]
+color_cycle = itertools.cycle(color_palette)
+
+# Assign a unique color to each triplestoreName
+unique_names = combined_data['triplestoreName'].unique()
+color_mapping = {name: next(color_cycle) for name in unique_names}
 
 # Function to get the color based on the triplestoreName using regex
 def get_color(triplestore_name):
-    for pattern, color in color_mapping.items():
-        if re.match(pattern, triplestore_name):
-            return color
-    return 'black'  # Default color if no match is found
+    return color_mapping.get(triplestore_name, 'black')  # fallback to black
 
 # Create a plotly figure
 fig = go.Figure()
@@ -71,7 +80,7 @@ for triplestoreName in combined_data['triplestoreName'].unique():
 
 # Update layout for dual y-axes
 fig.update_layout(
-    title='3 Java Triplestores Performance Comparison - Loading Time and Memory Used by Graph Size',
+    title='Java Triplestores Performance Comparison \n Loading Time and Memory Used by Graph Size',
     xaxis=dict(title='Graph Size (Million triples)'),
     yaxis=dict(
         title='Loading Time (seconds)',

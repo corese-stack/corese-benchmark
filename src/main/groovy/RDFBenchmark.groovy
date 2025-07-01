@@ -4,11 +4,11 @@ class RDFBenchmark {
     final RDFLoader loader
     final MetricsWriter metricsWriter
 
-    RDFBenchmark(String triplestoreName) {
+    RDFBenchmark(String triplestoreName, String outDirPath) {
         this.triplestoreName = triplestoreName
         this.loader = RDFLoaderFactory.createLoader(triplestoreName)
         this.loader.init()
-        this.metricsWriter = new MetricsWriter(triplestoreName)
+        this.metricsWriter = new MetricsWriter(triplestoreName, outDirPath)
     }
 
     void processDirectory(String folderPath) {

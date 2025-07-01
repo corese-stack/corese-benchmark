@@ -12,11 +12,22 @@ plugins {
 
 repositories {
     mavenCentral()
+    flatDir {
+        dirs 'libs' // or the directory where your local JAR is stored
+    }
 }
 
 dependencies {
-    // corese
-    implementation 'fr.inria.corese:corese-core:4.6.3'
+    // corese : switch between local and remote
+    if (project.hasProperty('coreseVersion') && project.coreseVersion == 'local') {
+        // If coreseVersion is 'local', include local JAR files from the 'libs' directory
+        implementation fileTree(dir: 'libs', include: ['*.jar'])
+    } else if (project.hasProperty('coreseVersion') && project.coreseVersion != 'local') {
+        implementation 'fr.inria.corese:corese-core:' + project.coreseVersion
+    } else {
+        // default to the latest version if no property is set
+        implementation 'fr.inria.corese:corese-core:4.6.3'
+    }
     // Add the Groovy runtime library
     implementation 'org.apache.groovy:groovy-all:4.0.26'
     // Apache Jena dependencies
