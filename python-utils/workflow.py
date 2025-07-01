@@ -73,6 +73,12 @@ for archive_path in archive_paths:
 print("Extraction completed.")
 
 # Step 4: Launch the Gradle commands to build and execute the benchmark.groovy script
+# clear the output directory
+out_dir = os.path.join(os.path.dirname(current_dir), "out")
+if os.path.exists(out_dir):
+    shutil.rmtree(out_dir)
+os.makedirs(out_dir, exist_ok=True)
+
 gradle_wrapper = os.path.join(os.path.dirname(current_dir), "gradlew")
 if not os.path.exists(gradle_wrapper):
     raise FileNotFoundError(f"Gradle wrapper not found at {gradle_wrapper}")
@@ -80,8 +86,8 @@ if not os.path.exists(gradle_wrapper):
 print("Running Gradle build...")
 subprocess.run([gradle_wrapper, "clean", "build"], cwd=os.path.dirname(current_dir), check=True)
 
-print("Executing the benchmark.groovy script...")
-subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+triplestoreNames], cwd=os.path.dirname(current_dir), check=True)
+print("Executing the benchmark.groovy script and save results in the 'out' folder...")
+subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+"out"+" "+triplestoreNames], cwd=os.path.dirname(current_dir), check=True)
 
 print("Benchmark execution completed.")
 

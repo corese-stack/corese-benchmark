@@ -2,7 +2,9 @@
 
 ## Description 
 
-This repository offers some tools and utilities to run a benchmark of a set of java-based triple stores, namely Corese, RDF4J and Jena.
+This repository offers some tools and utilities to run a benchmark of a set of java-based triple stores, namely Corese, RDF4J and Jena. Its aim is to 
+- compare Corese with the other triplestore
+- compare different versions of Corese
 
 Its principles are
 * Focusing on performance measurements, such as loading time, memory used, query time, number of threads/CPU, etc.
@@ -27,13 +29,13 @@ There are 2 main parts of the code:
   * is versionned in `src` folder
   * processes the input data using the 3 triplestores : loading, and querying (WIP)
   * saves the CSV containing the measurements in the `out` folder. Examples of previous run are already given.
-* datavisualization and workflow automation code
-  * written in Python
-  * versionned in `python-utils` folder
-  * the `workflow.py` goes through the following steps:
-    * creating `input` folder, downloading and saving input data in it
-    * launching the `benchmark.groovy` script
-    * launching the `plot-compare.py` script which saves the plot files in `public` folder 
+* workflow automation code written in Python, and versionned in `python-utils` folder. The main steps automatized are :
+    * 1) creating `input` folder, downloading and saving input data in it
+    * 2) launching the `benchmark.groovy` script
+    * 3) launching the `plot-compare.py` script which saves the plot files in `public` folder 
+* 2 versions of the workflow  are available:
+  * `workflow.py` to compare 3 given versions of the 3 triplestores 
+  * `workflow-corese-versions.py` to compare 2 or more given version of Corese. 
 
 * The latest results that we version in this repo are visible in the [dashboard](./dashboard/README.md) folder. If you run it by yourself, updated plots will be saved in this folder.
 
@@ -50,7 +52,19 @@ conda activate benchmark_env
 ```bash
 (benchmark_env)cd python-utils
 (benchmark_env)python workflow.py
+# or 
+(benchmark_env)python workflow-corese-versions.py
 ```
+
+For the workflow-corese-versions.py:
+- modify as required the versions in the script file, modifying the following line
+```python
+coreseVersions = ["4.0.1","4.6.3","local"]
+```
+- if you want to test with a local version:
+  -  add "local" in the coreseVersions list
+  -  put the jar of the corese-core version in the 'libs' directory 
+
 
 ### Run the benchmark.groovy alone
 
@@ -59,10 +73,10 @@ conda activate benchmark_env
 ```bash
 ./gradlew  clean build
 ```
-* then run it without forgetting to give the path to the input directory and the list of triplestore names:
+* then run it without forgetting to give the path to the input directory, the path to the output directory, and the list of triplestore names, eg:
 
 ```bash
-./gradlew runGroovyScript --args="/path/to/directory rdf4j.5.1.2,jena.4.10.0,corese.4.6.3"
+./gradlew runGroovyScript --args="/path/to/directory /path/to/outdirectory rdf4j.5.1.2,jena.4.10.0,corese.4.6.3"
 ```
 
 ### Run the plot-compare.py alone
@@ -71,7 +85,13 @@ Assuming the python environment `benchmark_env` has been actived:
 ```bash
 (benchmark_env)cd python-utils
 (benchmark_env)python plot-compare.py
+# or optionaly indicating the folder to read the CSV files from
+(benchmark_env)python plot-compare.py outputdirectory
 ```
+
+It will loop throught the content of the given directory and plots the loading time and memory usage and generate 
+- a png and html version of the plot
+- a index.html file to be used as the dashboard 
 
 ## Datasets 
 
