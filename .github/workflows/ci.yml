@@ -15,7 +15,7 @@ on:
 jobs:
   build-and-deploy:
     #runs-on: ubuntu-latest
-    runs-on: self-hosted  # Use a self-hosted runner if you have one set up
+    runs-on: [self-hosted, p16-benchmark-corese]
 
     steps:
     # Step 1: Checkout the repository
@@ -33,6 +33,7 @@ jobs:
     - name: Create and activate conda environment
       run: |
         conda env update -f python-utils/environment.yml
+        source $HOME/miniconda3/etc/profile.d/conda.sh
         conda activate benchmark_env
         conda info --envs
         cd python-utils
