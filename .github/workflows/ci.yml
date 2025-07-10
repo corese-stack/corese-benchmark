@@ -15,7 +15,7 @@ on:
 jobs:
   build-and-deploy:
     #runs-on: ubuntu-latest
-    runs-on: p16-benchmark-corese
+    runs-on: self-hosted  # Use a self-hosted runner if you have one set up
 
     steps:
     # Step 1: Checkout the repository
