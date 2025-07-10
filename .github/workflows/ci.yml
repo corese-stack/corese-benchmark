@@ -27,6 +27,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         python-version: 3.9
+        use-mamba: false  # Set to true if you want to use mamba for faster dependency resolution
 
     # Step 3: Create and activate conda environment, install dependencies
     - name: Create and activate conda environment
@@ -34,10 +35,6 @@ jobs:
         conda env update -f python-utils/environment.yml
         conda activate benchmark_env
         conda info --envs
-        
-    # Step 4: Run the workflow.py script
-    - name: Run workflow.py
-      run: |
         cd python-utils
         python workflow.py
 
