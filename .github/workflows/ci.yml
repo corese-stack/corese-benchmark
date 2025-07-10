@@ -22,18 +22,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # Step 2: Set up Python
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    # Step 2: Set up Conda
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
       with:
-        python-version: 3.9  # Use the Python version compatible with your script
+        python-version: 3.9
 
-    # Step 3: Install dependencies
-    - name: Install dependencies
+    # Step 3: Create and activate conda environment, install dependencies
+    - name: Create and activate conda environment
       run: |
-        python -m pip install --upgrade pip
-        pip install -r python-utils/requirements.txt  # Ensure you have a requirements.txt file
-
+        conda env update -f python-utils/environment.yml
+        source activate benchmark_env
+        conda info --envs
+        
     # Step 4: Run the workflow.py script
     - name: Run workflow.py
       run: |
