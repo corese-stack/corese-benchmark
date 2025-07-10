@@ -32,7 +32,7 @@ jobs:
     - name: Create and activate conda environment
       run: |
         conda env update -f python-utils/environment.yml
-        source activate benchmark_env
+        conda activate benchmark_env
         conda info --envs
         
     # Step 4: Run the workflow.py script
