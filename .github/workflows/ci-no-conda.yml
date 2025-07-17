@@ -1,0 +1,54 @@
+name: Run Workflow and Deploy to GitHub Pages
+
+permissions:
+  contents: write
+
+
+on:
+  push:
+    branches:
+      - main  # Run the workflow on pushes to the main branch
+  pull_request:
+    branches:
+      - main  # Optionally run on pull requests to the main branch
+
+jobs:
+  build-and-deploy:
+    #runs-on: ubuntu-latest
+    #runs-on: [self-hosted, p16-benchmark-corese]
+    runs-on: self-hosted
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    # # Step 2: Set up Conda
+    # - name: Set up Miniconda
+    #   uses: conda-incubator/setup-miniconda@v3
+    #   with:
+    #    python-version: 3.9
+    #    use-mamba: false  # Set to true if you want to use mamba for faster dependency resolution
+
+    # Step 3: Create and activate conda environment, install dependencies
+    - name: Create and activate conda environment
+      run: |
+        source ~/miniconda3/bin/activate 
+        conda env update -f python-utils/environment.yml
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate benchmark_env
+        conda info --envs
+        cd python-utils
+        python workflow.py
+
+    # Debugging step: Check if the public directory exists
+    - name: Check public directory is here and contains required files
+      run: ls -la ./public
+
+    # Step 5: Deploy the dashboard folder to GitHub Pages
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./public  # Path to the folder containing the HTML files
+        force_orphan: true    # Overwrite the gh-pages branch
