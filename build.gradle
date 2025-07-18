@@ -26,7 +26,7 @@ dependencies {
         implementation 'fr.inria.corese:corese-core:' + project.coreseVersion
     } else {
         // default to the latest version if no property is set
-        implementation 'fr.inria.corese:corese-core:4.6.3'
+        implementation 'fr.inria.corese:corese-core:4.6.2'
     }
     // Add the Groovy runtime library
     implementation 'org.apache.groovy:groovy-all:4.0.26'
