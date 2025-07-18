@@ -128,6 +128,7 @@ template = env.get_template('template.html')
 # Render the template with the Plotly graph URLs
 rendered_html = template.render(
     plotly_graph_url=plotname+".html",
+    triplestore_names=unique_names,
 )
 
 # Save the rendered HTML to a file or serve it directly

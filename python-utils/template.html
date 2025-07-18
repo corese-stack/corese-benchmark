@@ -35,9 +35,9 @@
         <h2>Loading time and memory comparison</h2>
         <p><strong>Triple stores compared</strong></p>
             <ul>
-                <li>Corese</li>
-                <li>RDF4J</li>
-                <li>Jena</li>
+                {% for name in triplestore_names %}
+                    <li>{{ name }}</li>
+                {% endfor %}
             </ul>
             <p><strong>Metrics measured</strong></p>
             <p>measured after  each file has loaded sucessfuly:</p>

@@ -5,8 +5,18 @@ import tarfile
 import bz2
 import shutil
 import subprocess
+import argparse
 
-triplestoreNames = "rdf4j.5.1.2,jena.4.10.0,corese.4.6.3"
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Run the benchmark workflow.")
+parser.add_argument(
+    "--triplestoreNames",
+    type=str,
+    default="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3",
+    help="Comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). Each name should be in the format 'name.version'. where 'name' is one of 'rdf4j', 'corese', or 'jena' and 'version' is the version number (e.g., '5.1.2', '4.6.3', '4.10.0').",
+)
+args = parser.parse_args()
+triplestoreNames = args.triplestoreNames
 
 # Step 1: Create the "input" directory one step above the current directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -83,7 +93,18 @@ gradle_wrapper = os.path.join(os.path.dirname(current_dir), "gradlew")
 if not os.path.exists(gradle_wrapper):
     raise FileNotFoundError(f"Gradle wrapper not found at {gradle_wrapper}")
 
-print("Running Gradle build...")
+print("Running Gradle build using versions number provided in the tripleStoreNames parameter ...")
+# create a dictionary with the triplestore names as keys and the version numbers as values
+triplestore_names_list = triplestoreNames.split(",")
+triplestore_versions_dict = {
+    name.split(".", 1)[0]: name.split(".", 1)[1] for name in triplestore_names_list
+}
+# Example: {'rdf4j': '5.1.2', 'jena': '4.10.0', 'corese': '4.6.2'}
+gradle_version_arg = f"-PjenaVersion={triplestore_versions_dict.get('jena', '4.10.0')} " \
+                     f"-Prdf4jVersion={triplestore_versions_dict.get('rdf4j', '5.1.2')} " \
+                     f"-PcoreseVersion={triplestore_versions_dict.get('corese', '4.6.3')}"
+print("Running Gradle clean and build...")
+# run the Gradle clean and build command    
 subprocess.run([gradle_wrapper, "clean", "build"], cwd=os.path.dirname(current_dir), check=True)
 
 print("Executing the benchmark.groovy script and save results in the 'out' folder...")

@@ -46,9 +46,24 @@ conda activate benchmark_env
 (benchmark_env)python workflow.py
 ```
 
+By default the benchmark will run on the following triplestores
+
+
+But you can specify your own combination of versions for one, two, or the three supported triplestores, with the argument `--triplestoreNames` :
+* default values = "rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
+* description : Comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). Each name should be in the format 'name.version'. where 'name' is one of 'rdf4j', 'corese', or 'jena' and 'version' is the version number (e.g., '5.1.2', '4.6.3', '4.10.0').",
+* example usage, Assuming the python environment `benchmark_env` has been actived:
+
+```bash
+(benchmark_env)python workflow.py --triplestoreNames="jena.4.10.0,corese.4.6.3"
+(benchmark_env)python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.2"
+
+```
+
 ### Run the plot-compare.py alone
 
-Assuming the python environment `benchmark_env` has been actived:
+This can be useful if you already have CSV outputs from different run of the groovy script, and you want to plot them together. Assuming the python environment `benchmark_env` has been actived:
+
 ```bash
 (benchmark_env)cd python-utils
 (benchmark_env)python plot-compare.py
