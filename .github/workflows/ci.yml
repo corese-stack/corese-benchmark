@@ -14,23 +14,14 @@ on:
 
 jobs:
   build-and-deploy:
-    #runs-on: ubuntu-latest
     runs-on: p16-benchmark-corese
-    #runs-on: self-hosted
 
     steps:
     # Step 1: Checkout the repository
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # # Step 2: Set up Conda
-    # - name: Set up Miniconda
-    #   uses: conda-incubator/setup-miniconda@v3
-    #   with:
-    #    python-version: 3.9
-    #    use-mamba: false  # Set to true if you want to use mamba for faster dependency resolution
-
-    # Step 3: Create and activate conda environment, install dependencies
+    # Step 2: Create and activate conda environment, install dependencies, and run 
     - name: Create and activate conda environment
       run: |
         source ~/miniconda3/bin/activate
@@ -41,11 +32,11 @@ jobs:
         cd python-utils
         python workflow.py
 
-    # Debugging step: Check if the public directory exists
+    # Step 3 : Debugging step: Check if the public directory exists
     - name: Check public directory is here and contains required files
       run: ls -la ./public
 
-    # Step 5: Deploy the dashboard folder to GitHub Pages
+    # Step 4: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
