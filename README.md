@@ -41,27 +41,41 @@ There are 2 main parts of the code:
 
 ## HOW TO run it
 
+
 ### Run the workflow.py automation script 
+
 
 * 1st install dependencies defined in [python-utils/environment.yml](./python-utils/environment.yml) using conda => see [python-utils](./python-utils/README.md)
 * activate python environment 
 ```bash
 conda activate benchmark_env
-```
-* launch the script
-```bash
 (benchmark_env)cd python-utils
-(benchmark_env)python workflow.py
-# or 
-(benchmark_env)python workflow-corese-versions.py
 ```
 
-For the workflow-corese-versions.py:
-- modify as required the versions in the script file, modifying the following line
-```python
-coreseVersions = ["4.0.1","4.6.3","local"]
+
+####  A) launch the script with triplestore names
+
+You can specify your own combination of versions for one, two, or the three supported triplestores, with the argument `--triplestoreNames` :
+
+```bash
+# with 2 
+(benchmark_env)python workflow.py --triplestoreNames="jena.4.10.0,corese.4.6.3"
+# Or with 3
+(benchmark_env)python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.2"
 ```
-- if you want to test with a local version:
+
+**description** : Comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). Each name should be in the format 'name.version'. where 'name' is one of 'rdf4j', 'corese', or 'jena' and 'version' is the version number (e.g., '5.1.2', '4.6.3', '4.10.0').",
+
+####  B) launch the script with corese versions names
+
+```bash
+(benchmark_env)python workflow.py --coreseVersions="4.6.2,4.6.3"
+# OR 
+(benchmark_env)python workflow.py --coreseVersions="4.0.1,4.6.3,local"
+```
+
+* You can test any tagged and released on Maven version of Corese this way
+* if you want to include a local version:
   -  add "local" in the coreseVersions list
   -  put the jar of the corese-core version in the 'libs' directory 
 
@@ -165,4 +179,16 @@ It will loop throught the content of the given directory and plots the loading t
 
 
 
+## Designing test suite for RDF parsers
 
+W3C turtle test suite: https://www.w3.org/2011/rdf-wg/wiki/Turtle_Test_Suite
+
+W3C JSON-LD test suite: https://w3c.github.io/json-ld-api/tests/
+
+W3C Trig test suite: https://www.w3.org/2013/TrigTests/
+
+W3C NTriples test suite: https://www.w3.org/2013/N-TriplesTests/
+
+W3C RDF/XML test suite: https://www.w3.org/2013/RDFXMLTests/
+
+W3C NQuads test suite: https://www.w3.org/2013/N-QuadsTests/

@@ -26,9 +26,12 @@ dependencies {
         implementation fileTree(dir: 'libs', include: ['*.jar'])
     } else if (project.hasProperty('coreseVersion') && project.coreseVersion != 'local') {
         implementation 'fr.inria.corese:corese-core:' + project.coreseVersion
+    } else if (project.hasProperty('coreseCommit')) {
+        // If coreseCommit is provided, use the specific commit version
+        implementation fileTree(dir: 'commit/corese-core/build/libs/', include: ['corese-core.jar'])
     } else {
         // default to the latest version if no property is set
-        implementation 'fr.inria.corese:corese-core:4.6.2'
+        implementation 'fr.inria.corese:corese-core:4.6.3'
     }
     // Apache Jena dependencies
     def jenaVersion = project.hasProperty('jenaVersion') ? project.jenaVersion : '4.10.0'

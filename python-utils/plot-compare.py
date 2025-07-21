@@ -11,7 +11,7 @@ import itertools
 if len(sys.argv) > 1:
     metrics_dir = sys.argv[1]
 else:
-    metrics_dir = '../out'
+    metrics_dir = os.path.join(os.path.dirname(__file__), '..', 'out')
 
 # Find all *_loading-metrics.csv files in the directory
 csv_files = [f for f in os.listdir(metrics_dir) if f.endswith('_loading-metrics.csv')]
@@ -113,7 +113,7 @@ output_dir = os.path.join(os.path.dirname(__file__), '..', 'public')
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, plotname )
 
-print(f"saving to {output_path}")
+print(f"saving to {output_dir}")
 fig.write_html(output_path+'.html')
 fig.write_image(output_path+'.png', 'png')
 
