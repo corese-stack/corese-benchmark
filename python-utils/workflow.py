@@ -6,6 +6,7 @@ import bz2
 import shutil
 import subprocess
 import argparse
+import time
 
 
 ####################################################################################
@@ -53,11 +54,11 @@ if os.path.exists(out_dir):
 os.makedirs(out_dir, exist_ok=True)
 
 # *public* Create the "public" directory to store the HTML files of the benchmark minisite
-# TBD : remove this step from plot-compare.py 
+# TBD : remove this step from plot-compare.py
 public_dir = os.path.join(os.path.dirname(current_dir), "public")
 
 ####################################################################################
-# Step 1: Archives dowloader 
+# Step 1: Archives dowloader
 ####################################################################################
 
 # 1.1  Class ArchiveDownloader
@@ -132,7 +133,7 @@ print("Extraction completed.")
 # Case A : triplestoreNames argument is provided, we build and run the benchmark.groovy script once with the provided triplestore names and versions
 # Class Benchmark
 ########################
-gradle_wrapper = os.path.join(os.path.dirname(current_dir), "gradlew")
+gradle_wrapper = os.path.join(os.path.dirname(current_dir), "gradlew.bat")
 if not os.path.exists(gradle_wrapper):
     raise FileNotFoundError(f"Gradle wrapper not found at {gradle_wrapper}")
 
@@ -180,12 +181,33 @@ if args.coreseVersions :
 if args.coreseCommits:
     coreseCommitsList = args.coreseCommits.split(",")
 
+    # Store the original working directory to return to it reliably
+    original_cwd = os.getcwd()
+
     for coreseCommit in coreseCommitsList:
         # 1. create OR clear "commit", one level above current_dir
         commit_dir = os.path.join(os.path.dirname(current_dir), "commit")
         if os.path.exists(commit_dir):
-            shutil.rmtree(commit_dir)
-            print(f"Cleared commit directory at: {commit_dir}")
+            os.chdir(os.path.dirname(current_dir))
+            # Implement retry logic for shutil.rmtree due to common Windows PermissionError
+            max_retries = 5
+            retry_delay_seconds = 1
+            for i in range(max_retries):
+                try:
+                    shutil.rmtree(commit_dir)
+                    print(f"Cleared commit directory at: {commit_dir}")
+                    break # If successful, exit the retry loop
+                except PermissionError as e:
+                    print(f"PermissionError: {e}. Retrying in {retry_delay_seconds} seconds... (Attempt {i+1}/{max_retries})")
+                    time.sleep(retry_delay_seconds)
+                except Exception as e:
+                    print(f"An unexpected error occurred during directory cleanup attempt {i+1}: {e}")
+                    break # Exit on other errors
+            else:
+                print(f"Failed to clear commit directory after {max_retries} attempts: {commit_dir}. Please delete it manually.")
+                os.chdir(original_cwd) # Return to original CWD if cleanup fails
+                continue # Skip this commit if directory cannot be cleared
+
         os.makedirs(commit_dir, exist_ok=True)
         print(f"Created commit directory at: {commit_dir}")
         # 2. Clone the Corese repository and checkout the specific commit
@@ -194,12 +216,12 @@ if args.coreseCommits:
             # cd to the commit directory
             os.chdir(commit_dir)
             # clone the Corese repository
-            subprocess.run(["git", "clone", "https://github.com/corese-stack/corese-core"])
+            subprocess.run(["git", "clone", "https://github.com/corese-stack/corese-core"], check=True)
             # cd to the Corese repository
             os.chdir(os.path.join(commit_dir, "corese-core"))
             # checkout the specific commit
             subprocess.run(["git", "checkout", coreseCommit], check=True)
-       
+
             # 3. Build the Corese project using Gradlew
             #   $ ./gradlew assemble
             print(f"Building Corese commit {coreseCommit}...")
@@ -207,38 +229,58 @@ if args.coreseCommits:
             corese_gradle_wrapper = os.path.join(commit_dir,"corese-core", "gradlew")
             if not os.path.exists(corese_gradle_wrapper):
                 print(f"Gradle wrapper not found at {corese_gradle_wrapper}. Skipping this commit.\n* * *\n ")
+                os.chdir(original_cwd) # Return to original CWD if skipping
                 continue  # Skip this commit if the Gradle wrapper is not found
             subprocess.run([corese_gradle_wrapper, "shadowJar"], cwd=os.path.join(commit_dir, "corese-core"), check=True)
          
         except subprocess.CalledProcessError as e:
             print(f"Error building Corese commit {coreseCommit}: {e}")
+            os.chdir(original_cwd) # Return to original CWD on error
             continue
         except subprocess.FileNotFoundError as e:
-            (f"Gradle wrapper not found at {corese_gradle_wrapper}")
+            print(f"Gradle wrapper not found at {corese_gradle_wrapper}. Skipping this commit.\n* * *\n ")
+            os.chdir(original_cwd) # Return to original CWD on error
             continue
-    
+
         # 4. Build the benchmark.groovy script using the local Corese version
         print(f"Running Gradle build with Corese commit {coreseCommit}...")
         gradle_version_arg = "-PcoreseCommit"
-        try:    
+        try:
             subprocess.run([gradle_wrapper, "clean", "build", gradle_version_arg], cwd=os.path.dirname(current_dir), check=True)
            
             # 5. Set the triplestore name for the output CSV
             triplestore_name = f"corese.commit.{coreseCommit}"# Set the triplestore name for the output CSV
             print(f"Executing the benchmark.groovy script with corese commit {coreseCommit}...")
-            # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
             subprocess.run(
                 [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " out " + triplestore_name],
                 cwd=os.path.dirname(current_dir), check=True
-            )            
+            )
             print(f"Benchmark execution completed with corese commit {coreseCommit}...")
         except subprocess.CalledProcessError as e:
             print(f"Error running Gradle build with Corese commit {coreseCommit}: {e}")
+            os.chdir(original_cwd) # Return to original CWD on error
             continue
-    # 6. Clear the commit directory
-    shutil.rmtree(commit_dir)
-    print(f"Cleared commit directory at: {commit_dir}")
-    
+
+    # After the loop, ensure we are in a neutral directory before attempting final cleanup
+    os.chdir(original_cwd)
+
+    # 6. Clear the commit directory for the overall cleanup
+    # This ensures commit_dir is removed even if the loop finishes without inner cleanup issues
+    max_retries = 5
+    retry_delay_seconds = 1
+    for i in range(max_retries):
+        try:
+            shutil.rmtree(commit_dir)
+            print(f"Cleared final commit directory at: {commit_dir}")
+            break # If successful, exit the retry loop
+        except PermissionError as e:
+            print(f"PermissionError during final cleanup: {e}. Retrying in {retry_delay_seconds} seconds... (Attempt {i+1}/{max_retries})")
+            time.sleep(retry_delay_seconds)
+        except Exception as e:
+            print(f"An unexpected error occurred during final directory cleanup: {e}")
+            break # Exit on other errors
+    else:
+        print(f"Failed to clear final commit directory after {max_retries} attempts. Please delete it manually: {commit_dir}")
 
 
 ####################################################################################
