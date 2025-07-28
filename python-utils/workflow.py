@@ -203,11 +203,13 @@ if args.coreseCommits:
             # 3. Build the Corese project using Gradlew
             #   $ ./gradlew assemble
             print(f"Building Corese commit {coreseCommit}...")
+            print(f"Executing the command .\gradlew  shadowJar ...")
             corese_gradle_wrapper = os.path.join(commit_dir,"corese-core", "gradlew")
             if not os.path.exists(corese_gradle_wrapper):
                 print(f"Gradle wrapper not found at {corese_gradle_wrapper}. Skipping this commit.\n* * *\n ")
                 continue  # Skip this commit if the Gradle wrapper is not found
-            subprocess.run([corese_gradle_wrapper, "assemble"], cwd=os.path.join(commit_dir, "corese-core"), check=True)
+            subprocess.run([corese_gradle_wrapper, "shadowJar"], cwd=os.path.join(commit_dir, "corese-core"), check=True)
+         
         except subprocess.CalledProcessError as e:
             print(f"Error building Corese commit {coreseCommit}: {e}")
             continue
@@ -220,6 +222,7 @@ if args.coreseCommits:
         gradle_version_arg = "-PcoreseCommit"
         try:    
             subprocess.run([gradle_wrapper, "clean", "build", gradle_version_arg], cwd=os.path.dirname(current_dir), check=True)
+           
             # 5. Set the triplestore name for the output CSV
             triplestore_name = f"corese.commit.{coreseCommit}"# Set the triplestore name for the output CSV
             print(f"Executing the benchmark.groovy script with corese commit {coreseCommit}...")

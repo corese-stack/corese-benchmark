@@ -28,7 +28,7 @@ dependencies {
         implementation 'fr.inria.corese:corese-core:' + project.coreseVersion
     } else if (project.hasProperty('coreseCommit')) {
         // If coreseCommit is provided, use the specific commit version
-        implementation fileTree(dir: 'commit/corese-core/build/libs/', include: ['corese-core.jar'])
+        implementation fileTree(dir: 'commit/corese-core/build/libs/', include: ['*.jar'])
     } else {
         // default to the latest version if no property is set
         implementation 'fr.inria.corese:corese-core:4.6.3'

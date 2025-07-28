@@ -32,7 +32,7 @@ combined_data['graph_size_millions'] = combined_data['graph_size'] / 1e6
 
 #############
 # B/ plotting 
-#############
+#############   
 
 # Generate a color palette (add more colors if needed)
 color_palette = [
@@ -43,6 +43,7 @@ color_cycle = itertools.cycle(color_palette)
 # Assign a unique color to each triplestoreName
 unique_names = combined_data['triplestoreName'].unique()
 color_mapping = {name: next(color_cycle) for name in unique_names}
+
 
 # Function to get the color based on the triplestoreName using regex
 def get_color(triplestore_name):
@@ -129,6 +130,7 @@ template = env.get_template('template.html')
 rendered_html = template.render(
     plotly_graph_url=plotname+".html",
     triplestore_names=unique_names,
+    todaysdate= pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
 )
 
 # Save the rendered HTML to a file or serve it directly

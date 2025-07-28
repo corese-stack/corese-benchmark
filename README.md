@@ -18,7 +18,7 @@ Its principles are
   
 ## Links to dashboard
 
-* The minisite with dynamic versions of the plots is available at ...
+* The minisite with dynamic versions of the plots is available at [https://corese-stack.github.io/corese-benchmark/](https://corese-stack.github.io/corese-benchmark/)
 * You can also have a look at the image version of the plots in the [dashboard](./dashboard/README.md) folder. See below [HOW TO run it](#how-to-run-it) section to run locally the benchmark and generate a new version of the plots.
 
 
@@ -44,6 +44,7 @@ There are 2 main parts of the code:
 
 ### Run the workflow.py automation script 
 
+The benchmark's workflow is implemented as a Python script.
 
 * 1st install dependencies defined in [python-utils/environment.yml](./python-utils/environment.yml) using conda => see [python-utils](./python-utils/README.md)
 * activate python environment 
@@ -52,10 +53,12 @@ conda activate benchmark_env
 (benchmark_env)cd python-utils
 ```
 
+Once the dependencies installed, you have to choose between 3 ways to use it (see output examples in the [dashboard_examples](./example_outputs/dashboard_examples/) to see examples results for one of each way)
+
 
 ####  A) launch the script with triplestore names
 
-You can specify your own combination of versions for one, two, or the three supported triplestores, with the argument `--triplestoreNames` :
+You can specify your own combination of versions for each of the three supported triplestores, with the argument `--triplestoreNames` :
 
 ```bash
 # with 2 
@@ -64,9 +67,14 @@ You can specify your own combination of versions for one, two, or the three supp
 (benchmark_env)python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.2"
 ```
 
-**description** : Comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). Each name should be in the format 'name.version'. where 'name' is one of 'rdf4j', 'corese', or 'jena' and 'version' is the version number (e.g., '5.1.2', '4.6.3', '4.10.0').",
+* The given  `--triplestoreNames` parameter is a comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). 
+* Each name should be in the format 'name.version'. where 'name' is one of 'rdf4j', 'corese', or 'jena' and 'version' is the version number (e.g., '5.1.2', '4.6.3', '4.10.0').",
+* This version of the script compiles the groovy benchmark only once;
+* Each combination can only contain one version of a triplestore. Eg 'jena.5.10.0,jena.5.4.0,corese.4.6.3' is not a valid combination.
 
 ####  B) launch the script with corese versions names
+
+This version of the workflow tests only differet versions of corese, one of which can be a local compiled jar.
 
 ```bash
 (benchmark_env)python workflow.py --coreseVersions="4.6.2,4.6.3"
@@ -77,7 +85,20 @@ You can specify your own combination of versions for one, two, or the three supp
 * You can test any tagged and released on Maven version of Corese this way
 * if you want to include a local version:
   -  add "local" in the coreseVersions list
-  -  put the jar of the corese-core version in the 'libs' directory 
+  -  put the jar of the corese-core version in a directory at the root of the project that you have to name as "libs" and create if not existing.
+
+####  C) launch the script with corese-core's repository commit hashes 
+
+This version of the workflow allows to compare different versions of Corese only, but at a finer granularity, the commits of the github repository:
+
+```bash
+(benchmark_env)python workflow.py --coreseCommits='a17f3d6,b089a03,6efa666' 
+# OR 
+(benchmark_env)python workflow.py --coreseCommits='a17f3d6,b089a03' 
+```
+
+* You can test any [commit](https://github.com/corese-stack/corese-core/commits/a17f3d60846db6794b12f723888c7c12ceef4cd7/) of the [corese-core github repository](https://github.com/corese-stack/corese-core) this way. 
+* For each commit hash provided in the list, the script downloads the whole repository code of Corese-Core and compiles it before running the benchmark itself 
 
 
 ### Run the benchmark.groovy alone
