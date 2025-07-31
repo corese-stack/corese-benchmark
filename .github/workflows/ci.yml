@@ -14,8 +14,8 @@ on:
 
 jobs:
   build-and-deploy:
-    #runs-on: p16-benchmark-corese
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+    runs-on: p16-benchmark-corese
+    #runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
     steps:
     # Step 1: Checkout the repository
