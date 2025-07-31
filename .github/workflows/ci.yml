@@ -14,7 +14,8 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: p16-benchmark-corese
+    #runs-on: p16-benchmark-corese
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
     steps:
     # Step 1: Checkout the repository
@@ -32,7 +33,7 @@ jobs:
         conda info --envs
         cd python-utils
         python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
-        
+
 
     # Step 3 : Debugging step: Check if the public directory exists
     - name: Check public directory is here and contains required files
