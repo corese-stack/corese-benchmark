@@ -49,8 +49,8 @@ The benchmark's workflow is implemented as a Python script.
 * 1st install dependencies defined in [python-utils/environment.yml](./python-utils/environment.yml) using conda => see [python-utils](./python-utils/README.md)
 * activate python environment 
 ```bash
-conda activate benchmark_env
-(benchmark_env)cd python-utils
+conda activate benchmarkenv
+(benchmarkenv)cd python-utils
 ```
 
 Once the dependencies installed, you have to choose between 3 ways to use it (see output examples in the [dashboard_examples](./example_outputs/dashboard_examples/) to see examples results for one of each way)
@@ -62,9 +62,9 @@ You can specify your own combination of versions for each of the three supported
 
 ```bash
 # with 2 
-(benchmark_env)python workflow.py --triplestoreNames="jena.4.10.0,corese.4.6.3"
+(benchmarkenv)python workflow.py --triplestoreNames="jena.4.10.0,corese.4.6.3"
 # Or with 3
-(benchmark_env)python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.2"
+(benchmarkenv)python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.2"
 ```
 
 * The given  `--triplestoreNames` parameter is a comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). 
@@ -77,9 +77,9 @@ You can specify your own combination of versions for each of the three supported
 This version of the workflow tests only differet versions of corese, one of which can be a local compiled jar.
 
 ```bash
-(benchmark_env)python workflow.py --coreseVersions="4.6.2,4.6.3"
+(benchmarkenv)python workflow.py --coreseVersions="4.6.2,4.6.3"
 # OR 
-(benchmark_env)python workflow.py --coreseVersions="4.0.1,4.6.3,local"
+(benchmarkenv)python workflow.py --coreseVersions="4.0.1,4.6.3,local"
 ```
 
 * You can test any tagged and released on Maven version of Corese this way
@@ -92,9 +92,9 @@ This version of the workflow tests only differet versions of corese, one of whic
 This version of the workflow allows to compare different versions of Corese only, but at a finer granularity, the commits of the github repository:
 
 ```bash
-(benchmark_env)python workflow.py --coreseCommits='a17f3d6,b089a03,6efa666' 
+(benchmarkenv)python workflow.py --coreseCommits='a17f3d6,b089a03,6efa666' 
 # OR 
-(benchmark_env)python workflow.py --coreseCommits='a17f3d6,b089a03' 
+(benchmarkenv)python workflow.py --coreseCommits='a17f3d6,b089a03' 
 ```
 
 * You can test any [commit](https://github.com/corese-stack/corese-core/commits/a17f3d60846db6794b12f723888c7c12ceef4cd7/) of the [corese-core github repository](https://github.com/corese-stack/corese-core) this way. 
@@ -116,12 +116,12 @@ This version of the workflow allows to compare different versions of Corese only
 
 ### Run the plot-compare.py alone
 
-Assuming the python environment `benchmark_env` has been actived:
+Assuming the python environment `benchmarkenv` has been actived:
 ```bash
-(benchmark_env)cd python-utils
-(benchmark_env)python plot-compare.py
+(benchmarkenv)cd python-utils
+(benchmarkenv)python plot-compare.py
 # or optionaly indicating the folder to read the CSV files from
-(benchmark_env)python plot-compare.py outputdirectory
+(benchmarkenv)python plot-compare.py outputdirectory
 ```
 
 It will loop throught the content of the given directory and plots the loading time and memory usage and generate 
