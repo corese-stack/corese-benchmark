@@ -22,14 +22,17 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # Step 2: Create and activate conda environment, install dependencies, and run 
-    - name: Create and activate conda environment
+    # Step 2.1: Create and activate conda environment, install dependencies
+    - name: Set up conda environment
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        environment-file: python-utils/environment.yml
+        activate-environment: benchmarkenv
+        auto-activate-base: false
+      
+    # Step 2.2: Create and activate conda environment, install dependencies
+    - name: Run workflow
       run: |
-        source ~/miniconda3/bin/activate
-        conda env update -f python-utils/environment.yml
-        source $HOME/miniconda3/etc/profile.d/conda.sh
-        conda activate benchmark_env
-        kaleido_get_chrome
         conda info --envs
         cd python-utils
         python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
