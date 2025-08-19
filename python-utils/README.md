@@ -23,7 +23,7 @@ conda env create -f environment.yml
 3. activate the environment
 
 ```bash
-conda activate benchmark_env
+conda activate benchmarkenv
 ```
 
 4. when you add new dependencies, you need to update the environment.yml file and re-run the above command: 
