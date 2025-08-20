@@ -8,9 +8,12 @@ on:
   push:
     branches:
       - main  # Run the workflow on pushes to the main branch
+      - p16-benchmark  # Run the workflow on pushes to the p16-benchmark branch
   pull_request: 
     branches:
       - main  # Optionally run on pull requests to the main branch
+      - p16-benchmark  # Optionally run on pull requests to the p16-benchmark branch
+      
 
 jobs:
   #####################################
