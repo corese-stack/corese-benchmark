@@ -6,6 +6,40 @@ import re
 import plotly.graph_objects as go
 from jinja2 import Environment, FileSystemLoader
 import itertools
+import subprocess
+import platform
+
+##################################################################
+# METHODS
+##################################################################
+def get_ram():
+    system = platform.system()
+    try:
+        if system == "Linux":
+            # Total memory in MB
+            mem = subprocess.check_output("free -m | awk '/Mem:/ {print $2}'", shell=True).decode().strip()
+            return f"{mem} MB"
+        elif system == "Darwin":
+            # macOS: total memory in bytes, convert to MB
+            mem_bytes = subprocess.check_output("sysctl -n hw.memsize", shell=True).decode().strip()
+            mem_mb = int(mem_bytes) // (1024 * 1024)
+            return f"{mem_mb} MB"
+        else:
+            return "Unknown"
+    except Exception:
+        return "Unknown"
+
+def get_cpu():
+    try:
+        cpus = os.cpu_count()
+        return f"{cpus} cores"
+    except Exception:
+        return "Unknown"
+
+##################################################################
+
+
+
 
 # Get the output directory from the command line argument, default to '../out' if not provided
 if len(sys.argv) > 1:
@@ -126,11 +160,20 @@ fig.write_image(output_path+'.png', 'png')
 env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
 template = env.get_template('template.html')
 
+
+runnerenv = os.environ.get('RUNNER_ENV', 'local')
+# get available RAM and CPU from system command line 
+ramavailable = get_ram()
+cpuavailable = get_cpu()
+
 # Render the template with the Plotly graph URLs
 rendered_html = template.render(
     plotly_graph_url=plotname+".html",
     triplestore_names=unique_names,
-    todaysdate= pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
+    todaysdate=pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
+    runnerenv=runnerenv,
+    ramavailable=ramavailable,
+    cpuavailable=cpuavailable,
 )
 
 # Save the rendered HTML to a file or serve it directly

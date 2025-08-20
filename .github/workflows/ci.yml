@@ -13,7 +13,11 @@ on:
       - main  # Optionally run on pull requests to the main branch
 
 jobs:
-  build-and-deploy:
+  #####################################
+  # using Github public runner
+  #####################################
+  public-build:
+    if: github.ref != 'refs/heads/p16-benchmark' 
     #runs-on: p16-benchmark-corese
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
@@ -33,6 +37,8 @@ jobs:
     # Step 2.2: Create and activate conda environment, install dependencies
     - name: Run workflow
       shell: bash -l {0}
+      env:
+        RUNNER_ENV: github-public
       run: |
         conda info --envs
         cd python-utils
@@ -44,6 +50,44 @@ jobs:
       run: ls -la ./public
 
     # Step 4: Deploy the dashboard folder to GitHub Pages
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./public  # Path to the folder containing the HTML files
+        force_orphan: true    # Overwrite the gh-pages branch
+
+
+  #####################################
+  # using P16 private runner
+  #####################################
+  private-build:
+    if: github.ref == 'refs/heads/p16-benchmark' 
+    runs-on: p16-benchmark-corese
+
+    steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    # Step 2: Create and activate conda environment, install dependencies
+    - name: Create and activate conda environment
+      env:
+        RUNNER_ENV: P16-benchmark
+      run: |
+        source ~/miniconda3/bin/activate
+        conda env update -f python-utils/environment.yml
+        source $HOME/miniconda3/etc/profile.d/conda.sh
+        conda activate benchmark_env
+        conda info --envs
+        cd python-utils
+        python workflow.py
+
+    # Debugging step: Check if the public directory exists
+    - name: Check public directory is here and contains required files
+      run: ls -la ./public
+
+    # Step 3: Deploy the dashboard folder to GitHub Pages
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
