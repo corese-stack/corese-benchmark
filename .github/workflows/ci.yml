@@ -85,7 +85,7 @@ jobs:
         conda activate benchmark_env
         conda info --envs
         cd python-utils
-        python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
+        python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3" --dataDir="/media/storage/corese-benchmark/benchmark_data"
 
     # Debugging step: Check if the public directory exists
     - name: Check public directory is here and contains required files

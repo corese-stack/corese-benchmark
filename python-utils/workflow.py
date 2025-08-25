@@ -35,26 +35,41 @@ parser.add_argument(
     default=None,
     help="Comma-separated list of Corese commit hashes to benchmark (e.g., 'a17f3d6,b089a03,6efa666').",
 )
+# input dataDir 
+parser.add_argument(
+    "--dataDir",
+    type=str,
+    default=None,
+    help="Absolute path to the directory containing the data files.",
+)
 args = parser.parse_args()
 triplestoreNames = args.triplestoreNames
 
 # Class DirectoryManager
 #############################
-# *input* Create the "input" directory one step above the current directory
+# If  dataDir argument is provided, use it; otherwise, create an "input" 
+# directory one level above the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
-input_dir = os.path.join(os.path.dirname(current_dir), "input")
+if args.dataDir:
+    input_dir = os.path.join(args.dataDir, "input")
+    out_dir = os.path.join(args.dataDir, "out")
+    public_dir = os.path.join(args.dataDir, "public")
+else:
+    
+    input_dir = os.path.join(os.path.dirname(current_dir), "input")
+    out_dir = os.path.join(os.path.dirname(current_dir), "out")
+    public_dir = os.path.join(os.path.dirname(current_dir), "public")
+# Now check and create/clear the input and output directories
 os.makedirs(input_dir, exist_ok=True)
-print(f"Created input directory at: {input_dir}")
-
-# *out* Create and clear the output directory to store the CSV files
-out_dir = os.path.join(os.path.dirname(current_dir), "out")
 if os.path.exists(out_dir):
     shutil.rmtree(out_dir)
 os.makedirs(out_dir, exist_ok=True)
+print(f"Created input directory at: {input_dir}")
+print(f"Created output directory at: {out_dir}")
 
 # *public* Create the "public" directory to store the HTML files of the benchmark minisite
 # TBD : remove this step from plot-compare.py 
-public_dir = os.path.join(os.path.dirname(current_dir), "public")
+
 
 ####################################################################################
 # Step 1: Archives dowloader 
@@ -144,7 +159,7 @@ if args.triplestoreNames:
     triplestore_versions_dict = {
         name.split(".", 1)[0]: name.split(".", 1)[1] for name in triplestore_names_list
     }
-    # Example: {'rdf4j': '5.1.2', 'jena': '4.10.0', 'corese': '4.6.2'}
+    # Example: {'rdf4j': '5.1.2', 'jena': '4.10.0', 'corese': '4.6.3'}
     gradle_version_arg = f"-PjenaVersion={triplestore_versions_dict.get('jena', '4.10.0')} " \
                         f"-Prdf4jVersion={triplestore_versions_dict.get('rdf4j', '5.1.2')} " \
                         f"-PcoreseVersion={triplestore_versions_dict.get('corese', '4.6.3')}"
@@ -155,7 +170,7 @@ if args.triplestoreNames:
     # Class BenchmarkRunner
     ########################
     print("Executing the benchmark.groovy script and save results in the 'out' folder...")
-    subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+"out"+" "+triplestoreNames], cwd=os.path.dirname(current_dir), check=True)
+    subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+out_dir+" "+triplestoreNames], cwd=os.path.dirname(current_dir), check=True)
 
 
 if args.coreseVersions :
@@ -172,7 +187,7 @@ if args.coreseVersions :
         print(f"Executing the benchmark.groovy script with corese version {coreseVersion}...")
         # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
         subprocess.run(
-            [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " out " + triplestore_name],
+            [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name],
             cwd=os.path.dirname(current_dir), check=True
         )
 
@@ -182,7 +197,11 @@ if args.coreseCommits:
 
     for coreseCommit in coreseCommitsList:
         # 1. create OR clear "commit", one level above current_dir
-        commit_dir = os.path.join(os.path.dirname(current_dir), "commit")
+        # if dataDir argument is provided, create the "commit" directory inside dataDir
+        if args.dataDir:
+            commit_dir = os.path.join(args.dataDir, "commit")
+        else:
+            commit_dir = os.path.join(os.path.dirname(current_dir), "commit")
         if os.path.exists(commit_dir):
             shutil.rmtree(commit_dir)
             print(f"Cleared commit directory at: {commit_dir}")
@@ -219,7 +238,7 @@ if args.coreseCommits:
     
         # 4. Build the benchmark.groovy script using the local Corese version
         print(f"Running Gradle build with Corese commit {coreseCommit}...")
-        gradle_version_arg = "-PcoreseCommit"
+        gradle_version_arg = f"-PcoreseCommit={commit_dir}/corese-core/build/libs/"
         try:    
             subprocess.run([gradle_wrapper, "clean", "build", gradle_version_arg], cwd=os.path.dirname(current_dir), check=True)
            
@@ -228,7 +247,7 @@ if args.coreseCommits:
             print(f"Executing the benchmark.groovy script with corese commit {coreseCommit}...")
             # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
             subprocess.run(
-                [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " out " + triplestore_name],
+                [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name],
                 cwd=os.path.dirname(current_dir), check=True
             )            
             print(f"Benchmark execution completed with corese commit {coreseCommit}...")
@@ -236,6 +255,7 @@ if args.coreseCommits:
             print(f"Error running Gradle build with Corese commit {coreseCommit}: {e}")
             continue
     # 6. Clear the commit directory
+    os.chdir(current_dir)  # or any directory outside commit_dir
     shutil.rmtree(commit_dir)
     print(f"Cleared commit directory at: {commit_dir}")
     
@@ -251,5 +271,5 @@ python_script = os.path.join(current_dir, "plot-compare.py")
 if not os.path.exists(python_script):
     raise FileNotFoundError(f"Python script not found at {python_script}")
 print(f"Running Python script to generate plots... at {python_script}")
-subprocess.run(["python", python_script], check=True)
+subprocess.run(["python", python_script, out_dir], check=True)
 print(f"Succesfully run Python script to generate plots!")
