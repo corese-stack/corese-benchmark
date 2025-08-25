@@ -1,4 +1,30 @@
-# corese-benchmark
+corese-benchmark
+=================
+
+
+## Table of Contents
+
+- [corese-benchmark](#corese-benchmark)
+  - [Table of Contents](#table-of-contents)
+  - [Description](#description)
+  - [Links to dashboard](#links-to-dashboard)
+  - [Organisation of the repository](#organisation-of-the-repository)
+  - [HOW TO run it](#how-to-run-it)
+    - [Run the workflow.py automation script](#run-the-workflowpy-automation-script)
+      - [A) launch the script with triplestore names](#a-launch-the-script-with-triplestore-names)
+      - [B) launch the script with corese versions names](#b-launch-the-script-with-corese-versions-names)
+      - [C) launch the script with corese-core's repository commit hashes](#c-launch-the-script-with-corese-cores-repository-commit-hashes)
+    - [Run the benchmark.groovy alone](#run-the-benchmarkgroovy-alone)
+    - [Run the plot-compare.py alone](#run-the-plot-comparepy-alone)
+  - [CI](#ci)
+  - [Datasets](#datasets)
+    - [Bowlogna](#bowlogna)
+    - [DBPedia sample](#dbpedia-sample)
+  - [Metrics for measuring and comparing triple stores performance](#metrics-for-measuring-and-comparing-triple-stores-performance)
+  - [Typical Configuration used](#typical-configuration-used)
+  - [Designing test suite for RDF parsers](#designing-test-suite-for-rdf-parsers)
+
+
 
 ## Description 
 
@@ -128,6 +154,18 @@ It will loop throught the content of the given directory and plots the loading t
 - a png and html version of the plot
 - a index.html file to be used as the dashboard 
 
+## CI
+
+A CI script is available at [.github/workflows/ci.yml)](.github/workflows/ci.yml) 
+
+It is programmed to run the full benchmark through the workflow.py python script. 2 jobs can be  triggered depending on the branch pushed
+
+1. `public-build` on `main` branch : this one uses a vanilla public runner on github
+2. `private-build` on `p16-benchmark` branch : this one uses a private runner nammed `p16-benchmark-corese`
+
+The execution is so far the same, but can be further customised using the parameters of the workflow.py script. The main differences remaining at the level of the dependencies installation, ie in the installation and activation of the conda environment.
+
+
 ## Datasets 
 
 ### Bowlogna
@@ -196,6 +234,7 @@ It will loop throught the content of the given directory and plots the loading t
     * nt
     * turtle
     * trig 
+
 
 
 
