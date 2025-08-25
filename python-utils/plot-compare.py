@@ -8,6 +8,8 @@ from jinja2 import Environment, FileSystemLoader
 import itertools
 import subprocess
 import platform
+import kaleido
+kaleido.get_chrome_sync()
 
 ##################################################################
 # METHODS
