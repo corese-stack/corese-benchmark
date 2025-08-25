@@ -48,6 +48,7 @@ jobs:
         python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
 
 
+        
     # Step 3 : Debugging step: Check if the public directory exists
     - name: Check public directory is here and contains required files
       run: ls -la ./public
