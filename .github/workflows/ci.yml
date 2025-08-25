@@ -82,7 +82,7 @@ jobs:
         source ~/miniconda3/bin/activate
         conda env update -f python-utils/environment.yml
         source $HOME/miniconda3/etc/profile.d/conda.sh
-        conda activate benchmark_env
+        conda activate benchmarkenv
         conda info --envs
         cd python-utils
         python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3" --dataDir="/media/storage/corese-benchmark/benchmark_data"
