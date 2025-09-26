@@ -42,7 +42,7 @@ jobs:
       shell: bash -l {0}
       env:
         RUNNER_ENV: github-public
-      run: |
+      run: |  
         conda info --envs
         cd python-utils
         python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
