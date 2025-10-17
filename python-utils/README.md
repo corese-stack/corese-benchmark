@@ -26,11 +26,14 @@ conda env create -f environment.yml
 conda activate benchmarkenv
 ```
 
-4. when you add new dependencies, you need to update the environment.yml file and re-run the above command: 
+4. when you add new dependencies, you need to update the ronment.yml file and re-run the above command: 
 
 ```bash
 conda env update -f environment.yml
 ```
+
+5. deactivate 
+```bash gi
 
 ## How to run
 

@@ -9,7 +9,7 @@ import itertools
 import subprocess
 import platform
 import kaleido
-kaleido.get_chrome_sync()
+# kaleido.get_chrome_sync()
 
 ##################################################################
 # METHODS
@@ -49,8 +49,24 @@ if len(sys.argv) > 1:
 else:
     metrics_dir = os.path.join(os.path.dirname(__file__), '..', 'out')
 
+print(f"DEBUG: Attempting to use metrics directory: {os.path.abspath(metrics_dir)}")
+
+# Check if the directory exists
+if not os.path.isdir(metrics_dir):
+    print(f"ERROR: Metrics directory not found at '{os.path.abspath(metrics_dir)}'.")
+    print("Please run the benchmark first to generate the output files, or provide the correct path as an argument.")
+    sys.exit(1)
+
 # Find all *_loading-metrics.csv files in the directory
 csv_files = [f for f in os.listdir(metrics_dir) if f.endswith('_loading-metrics.csv')]
+
+print(f"DEBUG: Found {len(csv_files)} CSV files: {csv_files}")
+
+# Exit if no CSV files are found
+if not csv_files:
+    print(f"ERROR: No '*_loading-metrics.csv' files found in '{os.path.abspath(metrics_dir)}'.")
+    print("Cannot generate plots without data.")
+    sys.exit(1)
 
 # Load each CSV and extract triplestore name from filename
 dataframes = []
@@ -62,6 +78,7 @@ for csv_file in csv_files:
 
 # Concatenate all dataframes
 combined_data = pd.concat(dataframes, ignore_index=True)
+print(f"DEBUG: Successfully combined data into a dataframe with {len(combined_data)} rows.")
 
 # Convert graph_size to millions (10^6) for better readability in plots
 combined_data['graph_size_millions'] = combined_data['graph_size'] / 1e6
@@ -150,9 +167,9 @@ output_dir = os.path.join(os.path.dirname(__file__), '..', 'public')
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, plotname )
 
-print(f"saving to {output_dir}")
+print(f"DEBUG: Saving plot to {os.path.abspath(output_path)}.html/png")
 fig.write_html(output_path+'.html')
-fig.write_image(output_path+'.png', 'png')
+# fig.write_image(output_path+'.png', 'png')
 
 #############
 # C/ Render the HTML template 

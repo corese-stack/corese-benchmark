@@ -13,5 +13,5 @@ dependencies:
   - matplotlib
   - jinja2
   - plotly
-  - openjdk 
+  - openjdk=21.0.8
   - python-kaleido

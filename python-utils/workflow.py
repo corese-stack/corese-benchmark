@@ -164,13 +164,18 @@ if args.triplestoreNames:
                         f"-Prdf4jVersion={triplestore_versions_dict.get('rdf4j', '5.1.2')} " \
                         f"-PcoreseVersion={triplestore_versions_dict.get('corese', '4.6.3')}"
     print("Running Gradle clean and build...")
+    print(gradle_version_arg)
     # run the Gradle clean and build command    
-    subprocess.run([gradle_wrapper, "clean", "build"], cwd=os.path.dirname(current_dir), check=True)
+    command = [gradle_wrapper, "clean", "build"] + gradle_version_arg.split()
+    print(f"Executing command: {' '.join(command)}")
+    subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
 
     # Class BenchmarkRunner
     ########################
     print("Executing the benchmark.groovy script and save results in the 'out' folder...")
-    subprocess.run([gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+out_dir+" "+triplestoreNames], cwd=os.path.dirname(current_dir), check=True)
+    command = [gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+out_dir+" "+triplestoreNames]
+    print(f"Executing command: {' '.join(command)}")
+    subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
 
 
 if args.coreseVersions :
@@ -179,15 +184,19 @@ if args.coreseVersions :
     for coreseVersion in  coreseVersionsList:
         print(f"Running Gradle build with Corese version {coreseVersion}...")
         gradle_version_arg = "-PcoreseVersion=local" if coreseVersion == "local" else f"-PcoreseVersion={coreseVersion}"
-        subprocess.run([gradle_wrapper, "clean", "build", gradle_version_arg], cwd=os.path.dirname(current_dir), check=True)
+        command = [gradle_wrapper, "clean", "build", gradle_version_arg]
+        print(f"Executing command: {' '.join(command)}")
+        subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
 
         # Set the triplestore name for the output CSV
         triplestore_name = f"corese.{coreseVersion}"
 
         print(f"Executing the benchmark.groovy script with corese version {coreseVersion}...")
         # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
+        command = [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name]
+        print(f"Executing command: {' '.join(command)}")
         subprocess.run(
-            [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name],
+            command,
             cwd=os.path.dirname(current_dir), check=True
         )
 
@@ -213,11 +222,15 @@ if args.coreseCommits:
             # cd to the commit directory
             os.chdir(commit_dir)
             # clone the Corese repository
-            subprocess.run(["git", "clone", "https://github.com/corese-stack/corese-core"])
+            command = ["git", "clone", "https://github.com/corese-stack/corese-core"]
+            print(f"Executing command: {' '.join(command)}")
+            subprocess.run(command)
             # cd to the Corese repository
             os.chdir(os.path.join(commit_dir, "corese-core"))
             # checkout the specific commit
-            subprocess.run(["git", "checkout", coreseCommit], check=True)
+            command = ["git", "checkout", coreseCommit]
+            print(f"Executing command: {' '.join(command)}")
+            subprocess.run(command, check=True)
        
             # 3. Build the Corese project using Gradlew
             #   $ ./gradlew assemble
@@ -227,7 +240,9 @@ if args.coreseCommits:
             if not os.path.exists(corese_gradle_wrapper):
                 print(f"Gradle wrapper not found at {corese_gradle_wrapper}. Skipping this commit.\n* * *\n ")
                 continue  # Skip this commit if the Gradle wrapper is not found
-            subprocess.run([corese_gradle_wrapper, "shadowJar"], cwd=os.path.join(commit_dir, "corese-core"), check=True)
+            command = [corese_gradle_wrapper, "shadowJar"]
+            print(f"Executing command: {' '.join(command)}")
+            subprocess.run(command, cwd=os.path.join(commit_dir, "corese-core"), check=True)
          
         except subprocess.CalledProcessError as e:
             print(f"Error building Corese commit {coreseCommit}: {e}")
@@ -240,14 +255,18 @@ if args.coreseCommits:
         print(f"Running Gradle build with Corese commit {coreseCommit}...")
         gradle_version_arg = f"-PcoreseCommit={commit_dir}/corese-core/build/libs/"
         try:    
-            subprocess.run([gradle_wrapper, "clean", "build", gradle_version_arg], cwd=os.path.dirname(current_dir), check=True)
+            command = [gradle_wrapper, "clean", "build", gradle_version_arg]
+            print(f"Executing command: {' '.join(command)}")
+            subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
            
             # 5. Set the triplestore name for the output CSV
             triplestore_name = f"corese.commit.{coreseCommit}"# Set the triplestore name for the output CSV
             print(f"Executing the benchmark.groovy script with corese commit {coreseCommit}...")
             # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
+            command = [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name]
+            print(f"Executing command: {' '.join(command)}")
             subprocess.run(
-                [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name],
+                command,
                 cwd=os.path.dirname(current_dir), check=True
             )            
             print(f"Benchmark execution completed with corese commit {coreseCommit}...")
@@ -271,5 +290,7 @@ python_script = os.path.join(current_dir, "plot-compare.py")
 if not os.path.exists(python_script):
     raise FileNotFoundError(f"Python script not found at {python_script}")
 print(f"Running Python script to generate plots... at {python_script}")
-subprocess.run(["python", python_script, out_dir], check=True)
+command = ["python", python_script, out_dir]
+print(f"Executing command: {' '.join(command)}")
+subprocess.run(command, check=True)
 print(f"Succesfully run Python script to generate plots!")

@@ -15,6 +15,9 @@ corese-benchmark
       - [B) launch the script with corese versions names](#b-launch-the-script-with-corese-versions-names)
       - [C) launch the script with corese-core's repository commit hashes](#c-launch-the-script-with-corese-cores-repository-commit-hashes)
     - [Run the benchmark.groovy alone](#run-the-benchmarkgroovy-alone)
+      - [A - comparing triple stores versions](#a---comparing-triple-stores-versions)
+      - [B - comparing corese versions names](#b---comparing-corese-versions-names)
+      - [C - comparing corese commits](#c---comparing-corese-commits)
     - [Run the plot-compare.py alone](#run-the-plot-comparepy-alone)
   - [CI](#ci)
   - [Datasets](#datasets)
@@ -129,16 +132,45 @@ This version of the workflow allows to compare different versions of Corese only
 
 ### Run the benchmark.groovy alone
 
+#### A - comparing triple stores versions
+
 * 1st build the execution environement
 
+Choose first the versions you want to compare, eg
+- jena 4.6.1
+- rdf4j 5.1.2
+- corese 4.6.1
+
+Then issue the command specifying the version number for each of the triplestore this way : `-P{tsName}Version={versionNumber}`
+
 ```bash
-./gradlew  clean build
+./gradlew  clean build -Prdf4jVersion=5.1.2 -PjenaVersion=4.6.1  -PcoreseVersion=4.6.1
+
 ```
 * then run it without forgetting to give the path to the input directory, the path to the output directory, and the list of triplestore names, eg:
 
 ```bash
-./gradlew runGroovyScript --args="/path/to/directory /path/to/outdirectory rdf4j.5.1.2,jena.4.10.0,corese.4.6.3"
+./gradlew runGroovyScript --args="/path/to/directory /path/to/outdirectory rdf4j.5.1.2,jena.4.6.1,corese.4.6.1"
+# for example
+./gradlew runGroovyScript --args="input/unzip out rdf4j.5.1.2,jena.4.6.1,corese.4.6.1"
 ```
+
+#### B - comparing corese versions names
+
+To do this one has to build and run the benchmark as many times as the number of Corese's version you want to compare. 
+
+E.g to compare 4.6.2 with 4.6.3 :
+
+```bash
+gradlew clean build -PcoreseVersion=4.6.2
+./gradlew runGroovyScript --args="input/unzip out corese.4.6.1"
+gradlew clean build -PcoreseVersion=4.6.3
+./gradlew runGroovyScript --args="input/unzip out corese.4.6.3"
+```
+
+#### C - comparing corese commits
+
+TBD
 
 ### Run the plot-compare.py alone
 
