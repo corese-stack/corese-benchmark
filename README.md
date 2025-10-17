@@ -170,11 +170,32 @@ gradlew clean build -PcoreseVersion=4.6.3
 
 #### C - comparing corese commits
 
-TBD
+E.g `a17f3d6` and `b089a03`. Again, to run this manually, one has to loop through the commits value and do:
+
+```bash
+#create/clear a "commit" directory
+mkdir -p commit
+
+# cd into it, and git clone the commit from Corese core repo
+cd commit/
+git clone https://github.com/corese-stack/corese-core/
+cd corese-core
+git checkout a17f3d6
+# build corese 
+./gradlew shadowJar
+
+# cd 2 levels above, and build the corese  benchmark with this newly built corese-core
+cd ../..
+./gradlew clean build -PcoreseCommit=./commit/corese-core/build/libs/
+./gradlew runGroovyScript --args="input/unzip out corese.commit.a17f3d6"
+
+```
 
 ### Run the plot-compare.py alone
 
-Assuming the python environment `benchmarkenv` has been actived:
+Once any of the above method has been followed up to the execution of the groovy benchmark, the output folder should contains a list of CSV files, one for each triple-store's version/commit, which contain the loading time and memory usage for each dataset loaded. The plot-compare.py script will go through these file and generate a graphical plot of these values and export them as an HTML file.
+
+To run it, assuming the python environment `benchmarkenv` has been actived:
 ```bash
 (benchmarkenv)cd python-utils
 (benchmarkenv)python plot-compare.py
@@ -183,8 +204,10 @@ Assuming the python environment `benchmarkenv` has been actived:
 ```
 
 It will loop throught the content of the given directory and plots the loading time and memory usage and generate 
-- a png and html version of the plot
+- an html version of the plot
 - a index.html file to be used as the dashboard 
+
+See some examples [here](./example_outputs/dashboard_examples/) 
 
 ## CI
 
