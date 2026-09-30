@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 import zipfile
 import tarfile
@@ -147,7 +148,8 @@ print("Extraction completed.")
 # Case A : triplestoreNames argument is provided, we build and run the benchmark.groovy script once with the provided triplestore names and versions
 # Class Benchmark
 ########################
-gradle_wrapper = os.path.join(os.path.dirname(current_dir), "gradlew")
+gradle_wrapper_name = "gradlew.bat" if sys.platform == "win32" else "gradlew"
+gradle_wrapper = os.path.join(os.path.dirname(current_dir), gradle_wrapper_name)
 if not os.path.exists(gradle_wrapper):
     raise FileNotFoundError(f"Gradle wrapper not found at {gradle_wrapper}")
 

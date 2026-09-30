@@ -16,6 +16,7 @@ class MetricsWriter {
     }
 
     void writeMetrics(String fileName, Map metrics) {
-        csvFile.append("""${this.triplestoreName},${fileName},${String.format('%.2f', metrics.loadingTime)},${metrics.graphSize},${String.format('%.2f', metrics.memoryUsed)}\n""".stripIndent())
+        def fmt = { value -> String.format(Locale.US, '%.2f', value) }
+        csvFile.append("${this.triplestoreName},${fileName},${fmt(metrics.loadingTime)},${metrics.graphSize},${fmt(metrics.memoryUsed)}\n")
     }
 }
