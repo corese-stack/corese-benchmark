@@ -4,14 +4,5 @@ channels:
   - defaults
 dependencies:
   - python=3.9
-  - sparqlwrapper
   - rdflib
-  - pathlib
-  - pandas
   - requests
-  - zipfile2
-  - matplotlib
-  - jinja2
-  - plotly
-  - openjdk=21.0.8
-  - python-kaleido
