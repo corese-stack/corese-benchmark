@@ -4,14 +4,17 @@ import fr.inria.corese.core.Graph;
 import fr.inria.corese.core.load.Load;
 import fr.inria.corese.core.api.Loader;
 import fr.inria.corese.core.query.QueryProcess;
+import fr.inria.corese.core.rule.RuleEngine;
 
 public class CoreseDriver implements TripleStoreDriver {
 
     private final String name;
+    private final boolean inference;
     private Graph graph;
 
-    public CoreseDriver(String name) {
+    public CoreseDriver(String name, boolean inference) {
         this.name = name;
+        this.inference = inference;
     }
 
     @Override
@@ -19,10 +22,19 @@ public class CoreseDriver implements TripleStoreDriver {
         this.graph = Graph.create();
     }
 
+    private void applyInference() throws Exception {
+        if (inference) {
+            RuleEngine re = RuleEngine.create(graph);
+            re.setProfile(RuleEngine.OWL_RL);
+            re.process();
+        }
+    }
+
     @Override
     public void load(String filePath) throws Exception {
         Load loader = Load.create(graph);
         loader.parse(filePath, Loader.format.NT_FORMAT);
+        applyInference();
     }
 
     @Override
@@ -39,7 +51,7 @@ public class CoreseDriver implements TripleStoreDriver {
     }
 
     @Override
-    public void clear() {
+    public void clear() throws Exception {
         this.graph = Graph.create();
     }
 

@@ -7,8 +7,12 @@ package fr.inria.corese.benchmark.driver;
 public class DriverFactory {
 
     public static TripleStoreDriver create(String engineName) {
+        return create(engineName, false);
+    }
+
+    public static TripleStoreDriver create(String engineName, boolean inference) {
         if (engineName.startsWith("corese.")) {
-            return new CoreseDriver(engineName);
+            return new CoreseDriver(engineName, inference);
         } else if (engineName.startsWith("jena.")) {
             return new JenaDriver(engineName);
         } else if (engineName.startsWith("rdf4j.")) {

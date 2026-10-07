@@ -28,9 +28,17 @@ public class JenaDriver implements TripleStoreDriver {
     @Override
     public long query(String sparql) {
         long start = System.currentTimeMillis();
-        try (QueryExecution qe = QueryExecutionFactory.create(sparql, model)) {
-            ResultSet rs = qe.execSelect();
-            while (rs.hasNext()) rs.next();
+        try (QueryExecution qe = QueryExecution.model(model).query(sparql).build()) {
+            if (qe.getQuery().isSelectType()) {
+                ResultSet rs = qe.execSelect();
+                while (rs.hasNext()) rs.next();
+            } else if (qe.getQuery().isConstructType()) {
+                qe.execConstruct();
+            } else if (qe.getQuery().isAskType()) {
+                qe.execAsk();
+            } else if (qe.getQuery().isDescribeType()) {
+                qe.execDescribe();
+            }
         }
         return System.currentTimeMillis() - start;
     }
