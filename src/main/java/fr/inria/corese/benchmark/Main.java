@@ -4,8 +4,13 @@ import fr.inria.corese.benchmark.driver.DriverFactory;
 import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.harness.BenchmarkHarness;
 import fr.inria.corese.benchmark.metrics.FileResult;
+import fr.inria.corese.benchmark.metrics.QueryResult;
 import fr.inria.corese.benchmark.report.BenchmarkReport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,9 +24,11 @@ import java.util.List;
  */
 public class Main {
 
-    public static void main(String[] args) throws Exception {
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+
+    public static void main(String[] args) {
         if (args.length < 3) {
-            System.err.println("Usage: benchmark <datasetDir> <outputFile> <engine1,engine2,...> [datasetName]");
+            log.error("Usage: benchmark <datasetDir> <outputFile> <engine1,engine2,...> [datasetName] [queriesFile]");
             System.exit(1);
         }
 
@@ -30,18 +37,58 @@ public class Main {
         String[] engines   = args[2].split(",");
         String datasetName = args.length > 3 ? args[3] : "dataset";
 
-        List<FileResult> allResults = new ArrayList<>();
+        // Parse remaining args: optional queries file and --inference flag
+        String queriesFile = null;
+        boolean inference  = false;
+        for (int i = 4; i < args.length; i++) {
+            if ("--inference".equals(args[i])) {
+                inference = true;
+            } else if (queriesFile == null) {
+                queriesFile = args[i];
+            }
+        }
+
+        List<String> queries = new ArrayList<>();
+        if (queriesFile != null) {
+            try {
+                queries = Files.readAllLines(Path.of(queriesFile));
+                queries.removeIf(String::isBlank);
+                log.info("Loaded {} queries from: {}", queries.size(), queriesFile);
+            } catch (Exception e) {
+                log.error("Failed to read queries file {}: {}", queriesFile, e.getMessage());
+                System.exit(1);
+            }
+        }
+
+        List<FileResult>  allFileResults  = new ArrayList<>();
+        List<QueryResult> allQueryResults = new ArrayList<>();
 
         for (String engineName : engines) {
             engineName = engineName.trim();
-            System.out.println("\nStarting engine: " + engineName);
+            log.info("Starting engine: {}", engineName);
+            try {
+                TripleStoreDriver driver = DriverFactory.create(engineName, inference);
+                BenchmarkHarness harness = new BenchmarkHarness(driver, datasetName);
 
-            TripleStoreDriver driver = DriverFactory.create(engineName);
-            BenchmarkHarness harness = new BenchmarkHarness(driver, datasetName);
-            List<FileResult> results = harness.run(datasetDir);
-            allResults.addAll(results);
+                // Load benchmark
+                List<FileResult> fileResults = harness.run(datasetDir);
+                allFileResults.addAll(fileResults);
+
+                // Query benchmark (optional)
+                if (!queries.isEmpty()) {
+                    List<QueryResult> queryResults = harness.runQueryBenchmark(datasetDir, queries);
+                    allQueryResults.addAll(queryResults);
+                }
+            } catch (Exception e) {
+                log.error("Engine {} failed: {} — skipping to next engine", engineName, e.getMessage(), e);
+            }
         }
 
-        BenchmarkReport.write(allResults, outputFile);
+        try {
+            BenchmarkReport.write(allFileResults, allQueryResults, outputFile);
+        } catch (Exception e) {
+            log.error("Failed to write report: {}", e.getMessage(), e);
+            System.exit(1);
+        }
     }
 }

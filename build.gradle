@@ -16,6 +16,18 @@ repositories {
     }
 }
 
+// CoreseNextDriver requires the Corese 5 API from libs/*.jar.
+// When libs/ is empty (e.g. CI without a local build), exclude it from compilation.
+def localJars = fileTree(dir: 'libs', include: ['*.jar'])
+if (localJars.isEmpty()) {
+    sourceSets.main.java.exclude '**/CoreseNextDriver.java'
+} else {
+    // Provide Corese 5 API for compilation (runtime is covered by coreseVersion=local)
+    dependencies {
+        compileOnly localJars
+    }
+}
+
 dependencies {
     // Corese
     if (project.hasProperty('coreseVersion') && project.coreseVersion == 'local') {
@@ -25,7 +37,7 @@ dependencies {
     } else if (project.hasProperty('coreseCommit')) {
         implementation fileTree(dir: project.coreseCommit, include: ['*.jar'])
     } else {
-        implementation 'fr.inria.corese:corese-core:4.6.3'
+        implementation 'fr.inria.corese:corese-core:4.6.5'
     }
 
     // Apache Jena
@@ -40,27 +52,11 @@ dependencies {
     implementation "org.eclipse.rdf4j:rdf4j-repository-sail:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio:${rdf4jVersion}"
 
-    // HTTP client (RDF4J)
-    implementation 'org.apache.httpcomponents:httpclient:4.5.13'
-    implementation 'org.apache.httpcomponents:httpcore:4.4.14'
-    implementation 'commons-logging:commons-logging:1.2'
-
     // JSON output
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.0'
 
     // Logging
     implementation 'ch.qos.logback:logback-classic:1.4.14'
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs = ['src/main/java']
-        }
-        resources {
-            srcDirs = ['src/main/resources']
-        }
-    }
 }
 
 application {
