@@ -39,6 +39,16 @@ public class MetricsCollector {
             : sorted[mid];
     }
 
+    /** Compute median of an array of double values. */
+    public static double medianDouble(double[] values) {
+        double[] sorted = values.clone();
+        java.util.Arrays.sort(sorted);
+        int mid = sorted.length / 2;
+        return sorted.length % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2.0
+            : sorted[mid];
+    }
+
     /** Compute throughput in triples/second. */
     public static double throughput(long triples, long timeMs) {
         if (timeMs <= 0) return 0;

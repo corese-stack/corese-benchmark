@@ -35,16 +35,32 @@ public class CoreseNextDriver implements TripleStoreDriver {
     private Repository repository;
     private RepositoryConnection connection;
 
+    /**
+     * Constructs a new driver with the given engine name.
+     *
+     * @param name human-readable engine name reported in benchmark results (e.g. {@code "corese.next"})
+     */
     public CoreseNextDriver(String name) {
         this.name = name;
     }
 
+    /**
+     * Initialises the Corese 5 in-memory repository and opens a connection.
+     */
     @Override
     public void init() {
         repository = Repositories.create();
         connection = repository.getConnection();
     }
 
+    /**
+     * Loads an N-Triples file into the repository line by line.
+     * Lines with invalid IRIs are silently skipped and counted; the count is
+     * logged as a warning after the file is fully processed.
+     *
+     * @param filePath absolute path to the {@code .nt} file to load
+     * @throws IOException if the file cannot be read
+     */
     @Override
     public void load(String filePath) throws IOException {
         Path path = Path.of(filePath);
@@ -68,6 +84,14 @@ public class CoreseNextDriver implements TripleStoreDriver {
         }
     }
 
+    /**
+     * Executes a SPARQL query and fully iterates the result set to ensure the engine
+     * has performed all work before the timer stops.
+     * Supports SELECT, ASK, CONSTRUCT, and DESCRIBE query forms.
+     *
+     * @param sparql the SPARQL query string
+     * @return execution time in milliseconds
+     */
     @Override
     public long query(String sparql) {
         long start = System.currentTimeMillis();
@@ -87,16 +111,28 @@ public class CoreseNextDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /**
+     * Returns the total number of statements currently held in the repository.
+     *
+     * @return triple count
+     */
     @Override
     public long getGraphSize() {
         return connection.size();
     }
 
+    /**
+     * Removes all statements from the repository connection.
+     */
     @Override
     public void clear() {
         connection.clear();
     }
 
+    /**
+     * Closes the repository connection and shuts down the repository, releasing
+     * all resources. Safe to call even if {@link #init()} was never called.
+     */
     @Override
     public void close() {
         if (connection != null) {
@@ -117,6 +153,13 @@ public class CoreseNextDriver implements TripleStoreDriver {
 
     private enum QueryType { SELECT, ASK, GRAPH }
 
+    /**
+     * Determines the SPARQL query form by inspecting the first keyword after any
+     * PREFIX/BASE declarations.
+     *
+     * @param sparql the SPARQL query string
+     * @return the detected {@link QueryType}
+     */
     private QueryType detectQueryType(String sparql) {
         String upper = sparql.trim().toUpperCase();
         // Strip PREFIX and BASE declarations (one per line)

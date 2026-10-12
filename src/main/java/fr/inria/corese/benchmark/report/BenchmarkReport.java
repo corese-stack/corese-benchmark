@@ -27,6 +27,23 @@ public class BenchmarkReport {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkReport.class);
 
+    /**
+     * Writes benchmark results to a JSON file and a sibling CSV file.
+     *
+     * <p>The JSON file is written to {@code outputPath}. The CSV file is placed in
+     * a {@code csv/} directory that is a sibling of the JSON file's parent directory,
+     * using the same filename with a {@code .csv} extension.</p>
+     *
+     * <p>The JSON structure contains a {@code metadata} block (timestamp, protocol,
+     * Java version, OS), a {@code runs} array of {@link FileResult} objects, and an
+     * optional {@code queryRuns} array of {@link QueryResult} objects.</p>
+     *
+     * @param results      load-benchmark results (may be empty but not {@code null})
+     * @param queryResults query-benchmark results; {@code null} or empty means the
+     *                     {@code queryRuns} section is omitted from the report
+     * @param outputPath   path of the JSON output file; parent directories must exist
+     * @throws Exception if serialisation or file I/O fails
+     */
     public static void write(List<FileResult> results, List<QueryResult> queryResults, String outputPath) throws Exception {
         Map<String, Object> report = new LinkedHashMap<>();
 
@@ -67,6 +84,15 @@ public class BenchmarkReport {
         log.info("CSV written to: {}", csvPath);
     }
 
+    /**
+     * Writes results to a CSV file with two labelled sections: {@code # LOAD BENCHMARK}
+     * and (optionally) {@code # QUERY BENCHMARK}.
+     *
+     * @param results      load-benchmark results
+     * @param queryResults query-benchmark results; {@code null} or empty skips the query section
+     * @param csvPath      absolute path of the CSV file to create or overwrite
+     * @throws Exception if file I/O fails
+     */
     private static void writeCsv(List<FileResult> results, List<QueryResult> queryResults, String csvPath) throws Exception {
         try (PrintWriter pw = new PrintWriter(csvPath)) {
             // Load benchmark section

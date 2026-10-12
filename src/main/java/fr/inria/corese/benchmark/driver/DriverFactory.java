@@ -9,10 +9,34 @@ public class DriverFactory {
     private static final String CORESE_NEXT_CLASS =
             "fr.inria.corese.benchmark.driver.CoreseNextDriver";
 
+    /**
+     * Creates a driver for the given engine name with inference disabled.
+     *
+     * @param engineName engine identifier (e.g. {@code "corese.4.6.5"}, {@code "jena.5.2.0"})
+     * @return a ready-to-use {@link TripleStoreDriver} (not yet initialised)
+     * @throws IllegalArgumentException if the engine name is not recognised
+     */
     public static TripleStoreDriver create(String engineName) {
         return create(engineName, false);
     }
 
+    /**
+     * Creates a driver for the given engine name.
+     *
+     * <p>Engine name prefix determines the implementation:
+     * <ul>
+     *   <li>{@code corese.next} — {@link CoreseNextDriver} loaded via reflection</li>
+     *   <li>{@code corese.*}    — {@code CoreseDriver} with optional RDFS inference</li>
+     *   <li>{@code jena.*}      — {@link JenaDriver}</li>
+     *   <li>{@code rdf4j.*}     — {@link RDF4JDriver}</li>
+     * </ul>
+     *
+     * @param engineName engine identifier string
+     * @param inference  {@code true} to enable RDFS inference (only applies to Corese drivers)
+     * @return a ready-to-use {@link TripleStoreDriver} (not yet initialised)
+     * @throws IllegalArgumentException if the engine name is not recognised or if
+     *         {@code corese.next} is requested but the Corese 5 JAR is absent
+     */
     public static TripleStoreDriver create(String engineName, boolean inference) {
         if ("corese.next".equals(engineName)) {
             return createCoreseNext(engineName);
@@ -28,6 +52,15 @@ public class DriverFactory {
         }
     }
 
+    /**
+     * Instantiates {@link CoreseNextDriver} via reflection so that the main classpath
+     * does not need a hard compile-time dependency on the Corese 5 JAR.
+     *
+     * @param engineName engine name passed through to the driver constructor
+     * @return a new {@link CoreseNextDriver} instance
+     * @throws IllegalArgumentException if the Corese 5 JAR is not on the classpath
+     * @throws RuntimeException         if reflection-based instantiation fails for any other reason
+     */
     @SuppressWarnings("unchecked")
     private static TripleStoreDriver createCoreseNext(String engineName) {
         try {

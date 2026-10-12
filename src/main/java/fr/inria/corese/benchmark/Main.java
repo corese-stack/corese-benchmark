@@ -16,16 +16,31 @@ import java.util.List;
 
 /**
  * Entry point for the benchmark harness.
- * Usage:
- *   java -jar benchmark.jar <datasetDir> <outputFile> <engine1,engine2,...> [datasetName]
- * Examples:
- *   java -jar benchmark.jar input/unzip out/report.json corese.4.6.3,jena.5.2.0 dbpedia
- *   java -jar benchmark.jar input/unzip out/report.json corese.local corese-next
  */
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
+    /**
+     * Parses command-line arguments, runs the load and (optionally) query benchmarks
+     * for each specified engine, then writes the combined report.
+     *
+     * <p>Arguments:
+     * <ol>
+     *   <li>{@code datasetDir}   — directory containing {@code .nt} files</li>
+     *   <li>{@code outputFile}   — path for the generated JSON report</li>
+     *   <li>{@code engines}      — comma-separated engine names (e.g. {@code corese.4.6.3,jena.5.2.0})</li>
+     *   <li>{@code datasetName}  — (optional) logical dataset label; defaults to {@code "dataset"}</li>
+     *   <li>{@code queriesFile}  — (optional) path to a file with one SPARQL query per line</li>
+     *   <li>{@code --inference}  — (optional flag) enables RDFS inference for Corese drivers</li>
+     * </ol>
+     *
+     * <p>If an engine fails, the error is logged and the harness continues with the next engine.
+     * The process exits with status 1 if the report cannot be written or if fewer than
+     * 3 arguments are supplied.
+     *
+     * @param args command-line arguments as described above
+     */
     public static void main(String[] args) {
         if (args.length < 3) {
             log.error("Usage: benchmark <datasetDir> <outputFile> <engine1,engine2,...> [datasetName] [queriesFile]");

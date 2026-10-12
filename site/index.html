@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corese · Benchmark Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-wrapper">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="page-header">
+    <div class="header-top-row">
+      <div class="brand-group">
+        <h1 class="main-title">Corese</h1>
+        <span class="badge-tag">Benchmark</span>
+        <span class="badge-tag" id="hdr-dataset">—</span>
+      </div>
+
+      <div class="header-controls">
+        <div class="meta-tags">
+          <span class="meta-tag" id="hdr-date">—</span>
+          <span class="meta-tag font-mono" id="hdr-java">—</span>
+        </div>
+
+        <div class="download-group">
+          <a class="btn-download" id="download-json" href="data/benchmark-report.json" download title="Télécharger le rapport JSON">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="12" y2="18"></line>
+              <line x1="15" y1="15" x2="12" y2="18"></line>
+            </svg>
+            <span>JSON</span>
+          </a>
+          <a class="btn-download" id="download-csv" href="data/benchmark-report.csv" download title="Télécharger le rapport CSV">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="12" y2="18"></line>
+              <line x1="15" y1="15" x2="12" y2="18"></line>
+            </svg>
+            <span>CSV</span>
+          </a>
+        </div>
+
+        <button id="theme-toggle" class="theme-btn" title="Thème : Auto (Système)" aria-label="Changer le thème (Auto, Clair, Sombre)">
+          <svg id="icon-auto" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <svg id="icon-sun" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" style="display:none">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg id="icon-moon" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" style="display:none">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <p class="main-desc">
+      Corese reference benchmark dashboard —
+      Loading performance comparison&nbsp;:
+      <strong>Corese</strong> · <strong>Apache Jena</strong> · <strong> RDF4J</strong>
+    </p>
+  </header>
+
+  <!-- ── Infos exécution ────────────────────────────────────────────────── -->
+  <section class="run-info-bar" id="run-info-bar">
+    <span class="run-info-label">Run info</span>
+    <span class="run-info-item"><span class="run-info-key">Generated</span><span id="info-date">—</span></span>
+    <span class="run-info-item"><span class="run-info-key">Java</span><span id="info-java" class="font-mono">—</span></span>
+    <span class="run-info-item"><span class="run-info-key">OS</span><span id="info-os">—</span></span>
+    <span class="run-info-item"><span class="run-info-key">Protocol</span><span id="info-protocol">—</span></span>
+  </section>
+
+  <!-- ── KPI ────────────────────────────────────────────────────────────── -->
+  <section class="metrics-grid" id="metrics-grid">
+    <!-- filled by JS -->
+  </section>
+
+  <!-- ── Global meter ───────────────────────────────────────────────────── -->
+  <div class="global-meter-wrap">
+    <div class="global-meter" id="global-meter">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- ── Résumé par moteur ──────────────────────────────────────────────── -->
+  <h2 class="section-heading">Engines tested</h2>
+  <p class="section-sub">Click an engine to filter the charts</p>
+  <div class="suites-list" id="engine-grid">
+    <!-- filled by JS -->
+  </div>
+
+  <!-- ── Graphiques ─────────────────────────────────────────────────────── -->
+  <h2 class="section-heading" style="margin-top:32px">Charts</h2>
+  <div class="charts-grid">
+
+    <div class="chart-surface">
+      <div class="chart-header">
+        <span class="chart-title">Loading time</span>
+        <span class="chart-unit">ms — lower is better</span>
+      </div>
+      <canvas id="chart-loading"></canvas>
+    </div>
+
+    <div class="chart-surface">
+      <div class="chart-header">
+        <span class="chart-title">Throughput</span>
+        <span class="chart-unit">triples/s — higher is better</span>
+      </div>
+      <canvas id="chart-throughput"></canvas>
+    </div>
+
+    <div class="chart-surface">
+      <div class="chart-header">
+        <span class="chart-title">Memory used</span>
+        <span class="chart-unit">ΔMB — lower is better</span>
+      </div>
+      <canvas id="chart-memory"></canvas>
+    </div>
+
+    <div class="chart-surface">
+      <div class="chart-header">
+        <span class="chart-title">CPU</span>
+        <span class="chart-unit">% — lower is better</span>
+      </div>
+      <canvas id="chart-cpu"></canvas>
+    </div>
+
+  </div>
+
+  <!-- ── Tableau ────────────────────────────────────────────────────────── -->
+  <h2 class="section-heading" style="margin-top:32px">Full results</h2>
+  <div class="table-surface">
+    <div class="table-scroll">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Engine</th>
+            <th>File</th>
+            <th class="text-right">Triples</th>
+            <th class="text-right">Loading (ms)</th>
+            <th class="text-right">Throughput (t/s)</th>
+            <th class="text-right">Memory ΔMB</th>
+            <th class="text-right">CPU %</th>
+            <th>Repetitions (ms)</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /.app-wrapper -->
+
+<footer class="page-footer">
+  <p>
+    <a href="https://github.com/corese-stack/corese-benchmark" target="_blank">corese-stack/corese-benchmark</a>
+    &nbsp;·&nbsp; Protocol&nbsp;: warmup + 3 repetitions + median
+    &nbsp;·&nbsp; <a href="https://project.inria.fr/corese/" target="_blank">Corese Engine</a> — Inria Wimmics
+  </p>
+</footer>
+
+<script src="data/report-data.js" onerror="void 0"></script>
+<script src="data/history-data.js" onerror="void 0"></script>
+<script src="app.js"></script>
+</body>
+</html>
