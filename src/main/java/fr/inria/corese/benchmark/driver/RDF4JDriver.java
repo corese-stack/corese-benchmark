@@ -16,6 +16,14 @@ import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Benchmark driver for Eclipse RDF4J 5.
+ *
+ * <p>Stores triples in an RDF4J in-memory {@link SailRepository} backed by a
+ * {@link MemoryStore}. N-Triples files are parsed in batches of 10 000 lines;
+ * when a batch fails due to a malformed triple the driver falls back to
+ * line-by-line parsing so that valid triples are still loaded.</p>
+ */
 public class RDF4JDriver implements TripleStoreDriver {
 
     private static final Logger log = LoggerFactory.getLogger(RDF4JDriver.class);
@@ -23,16 +31,33 @@ public class RDF4JDriver implements TripleStoreDriver {
     private final String name;
     private SailRepository repository;
 
+    /**
+     * Constructs a new driver with the given engine name.
+     *
+     * @param name human-readable engine name reported in benchmark results (e.g. {@code "rdf4j.5.1.3"})
+     */
     public RDF4JDriver(String name) {
         this.name = name;
     }
 
+    /**
+     * Initialises a fresh RDF4J in-memory {@link SailRepository}.
+     */
     @Override
     public void init() {
         this.repository = new SailRepository(new MemoryStore());
         this.repository.init();
     }
 
+    /**
+     * Loads an N-Triples file into the repository using batched parsing.
+     * Batches of up to 10 000 lines are submitted together; any batch that triggers
+     * a parse error is retried line by line so that well-formed triples are preserved.
+     * Malformed individual lines are logged as warnings and skipped.
+     *
+     * @param filePath absolute path to the {@code .nt} file to load
+     * @throws Exception if the file cannot be opened or the transaction cannot be committed
+     */
     @Override
     public void load(String filePath) throws Exception {
         // Parse in batches; on failure fall back to line-by-line to skip malformed triples.
@@ -62,6 +87,14 @@ public class RDF4JDriver implements TripleStoreDriver {
         }
     }
 
+    /**
+     * Attempts to add a block of N-Triples content to the repository in one call.
+     * If that fails, falls back to adding each line individually, logging a warning
+     * for any line that cannot be parsed.
+     *
+     * @param content N-Triples text (one or more lines, newline-terminated)
+     * @param conn    active repository connection; the caller manages its transaction
+     */
     private void flushBatch(String content, RepositoryConnection conn) {
         try {
             conn.add(new StringReader(content), "", RDFFormat.NTRIPLES);
@@ -78,6 +111,13 @@ public class RDF4JDriver implements TripleStoreDriver {
         }
     }
 
+    /**
+     * Executes a SPARQL SELECT query and fully iterates the result set.
+     * Note: only SELECT queries are currently supported by this driver.
+     *
+     * @param sparql the SPARQL SELECT query string
+     * @return execution time in milliseconds
+     */
     @Override
     public long query(String sparql) {
         long start = System.currentTimeMillis();
@@ -90,6 +130,11 @@ public class RDF4JDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /**
+     * Returns the total number of statements held in the repository.
+     *
+     * @return triple count
+     */
     @Override
     public long getGraphSize() {
         try (RepositoryConnection conn = repository.getConnection()) {
@@ -97,6 +142,12 @@ public class RDF4JDriver implements TripleStoreDriver {
         }
     }
 
+    /**
+     * Resets the repository by shutting it down and reinitialising a fresh
+     * {@link MemoryStore}. A full reinit is used instead of a simple
+     * {@code removeAll} to avoid negative memory-delta measurements caused
+     * by GC residuals from the previous repetition.
+     */
     @Override
     public void clear() {
         // Full reinit to release internal SAIL structures — avoids negative memory deltas
@@ -108,6 +159,10 @@ public class RDF4JDriver implements TripleStoreDriver {
         this.repository.init();
     }
 
+    /**
+     * Shuts down the repository and releases all resources.
+     * Safe to call even if {@link #init()} was never called.
+     */
     @Override
     public void close() {
         if (repository != null) {

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.*;
 
 /**
  * Benchmark harness: orchestrates warmup + 3 repetitions + median for each file.
@@ -28,18 +29,36 @@ public class BenchmarkHarness {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkHarness.class);
     private static final int REPETITIONS = 3;
-    private static final int QUERY_REPS  = 3;
+    private static final int QUERY_REPS = 3;
+    private static final long QUERY_TIMEOUT_S = 30; // seconds per query execution
 
     private final TripleStoreDriver driver;
     private final MetricsCollector metrics;
     private final String datasetName;
 
+    /**
+     * Constructs a harness for the given driver and dataset.
+     *
+     * @param driver      the triple-store driver to benchmark
+     * @param datasetName logical name of the dataset (recorded in result objects)
+     */
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName) {
         this.driver = driver;
         this.datasetName = datasetName;
         this.metrics = new MetricsCollector();
     }
 
+    /**
+     * Runs the load benchmark over all {@code .nt} files found in {@code datasetDir}.
+     * Files are sorted alphabetically. For each file the harness performs one warmup
+     * load followed by {@value #REPETITIONS} measured repetitions, keeping the median.
+     * The driver is initialised at the start and closed in a {@code finally} block.
+     *
+     * @param datasetDir path to the directory containing {@code .nt} files
+     * @return one {@link FileResult} per file, in sorted file order
+     * @throws IllegalArgumentException if no {@code .nt} files are found
+     * @throws Exception                if the driver or file I/O raises an error
+     */
     public List<FileResult> run(String datasetDir) throws Exception {
         File dir = new File(datasetDir);
         File[] files = dir.listFiles(f -> f.getName().endsWith(".nt"));
@@ -53,12 +72,17 @@ public class BenchmarkHarness {
         try {
             log.info("=== Benchmark: {} | Dataset: {} ===", driver.getName(), datasetName);
             for (File file : files) {
-                FileResult result = benchmarkFile(file);
-                results.add(result);
-                log.info("  {}", String.format(Locale.US,
-                    "%-45s | %6d ms | %8.1f MB | %,.0f triples/s",
-                    file.getName(), result.loadingTimeMs(),
-                    result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                try {
+                    FileResult result = benchmarkFile(file);
+                    results.add(result);
+                    log.info("  {}", String.format(Locale.US,
+                            "%-45s | %6d ms | %8.1f MB | %,.0f triples/s",
+                            file.getName(), result.loadingTimeMs(),
+                            result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                } catch (OutOfMemoryError e) {
+                    System.gc();
+                    log.error("  {} — OUT OF MEMORY, skipping file", file.getName(), e);
+                }
             }
         } finally {
             driver.close();
@@ -91,24 +115,32 @@ public class BenchmarkHarness {
             log.info("  {} triples loaded — running {} queries × {} reps",
                 driver.getGraphSize(), queries.size(), QUERY_REPS);
 
-            // Benchmark each query
-            for (int qi = 0; qi < queries.size(); qi++) {
-                String sparql = queries.get(qi).trim();
-                if (sparql.isEmpty()) continue;
-                String queryId = "query_" + (qi + 1);
+            // Benchmark each query with per-execution timeout
+            try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+                for (int qi = 0; qi < queries.size(); qi++) {
+                    String sparql = queries.get(qi).trim();
+                    if (sparql.isEmpty()) continue;
+                    String queryId = "query_" + (qi + 1);
 
-                long[] times = new long[QUERY_REPS];
-                for (int i = 0; i < QUERY_REPS; i++) {
-                    try {
-                        times[i] = driver.query(sparql);
-                    } catch (Exception e) {
-                        log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getMessage());
-                        times[i] = -1L;
+                    long[] times = new long[QUERY_REPS];
+                    for (int i = 0; i < QUERY_REPS; i++) {
+                        final String q = sparql;
+                        Future<Long> future = executor.submit(() -> driver.query(q));
+                        try {
+                            times[i] = future.get(QUERY_TIMEOUT_S, TimeUnit.SECONDS);
+                        } catch (TimeoutException e) {
+                            future.cancel(true);
+                            log.warn("  {} rep {} timed out after {}s", queryId, i + 1, QUERY_TIMEOUT_S);
+                            times[i] = -1L;
+                        } catch (ExecutionException e) {
+                            log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
+                            times[i] = -1L;
+                        }
                     }
+                    long medianMs = MetricsCollector.median(times);
+                    results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
+                    log.info("  {} | {} ms", queryId, medianMs >= 0 ? medianMs : "TIMEOUT");
                 }
-                long medianMs = MetricsCollector.median(times);
-                results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
-                log.info("  {} | {} ms", queryId, medianMs);
             }
         } finally {
             driver.close();
@@ -116,6 +148,17 @@ public class BenchmarkHarness {
         return results;
     }
 
+    /**
+     * Benchmarks a single N-Triples file: one warmup followed by
+     * {@value #REPETITIONS} measured load cycles. Memory is sampled before and
+     * after each load (with forced GC), and CPU usage is sampled immediately after.
+     * Median values are computed across the repetitions and returned as a
+     * {@link FileResult}.
+     *
+     * @param file the N-Triples file to benchmark
+     * @return the aggregated {@link FileResult} for this file
+     * @throws Exception if the driver raises an error during load or measurement
+     */
     private FileResult benchmarkFile(File file) throws Exception {
         String path = file.getAbsolutePath();
 

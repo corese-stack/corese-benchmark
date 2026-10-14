@@ -9,16 +9,6 @@ public class DriverFactory {
     private static final String CORESE_NEXT_CLASS =
             "fr.inria.corese.benchmark.driver.CoreseNextDriver";
 
-    /**
-     * Creates a driver for the given engine name with inference disabled.
-     *
-     * @param engineName engine identifier (e.g. {@code "corese.4.6.5"}, {@code "jena.5.2.0"})
-     * @return a ready-to-use {@link TripleStoreDriver} (not yet initialised)
-     * @throws IllegalArgumentException if the engine name is not recognised
-     */
-    public static TripleStoreDriver create(String engineName) {
-        return create(engineName, false);
-    }
 
     /**
      * Creates a driver for the given engine name.

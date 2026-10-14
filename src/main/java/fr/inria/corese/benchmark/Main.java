@@ -94,13 +94,16 @@ public class Main {
                     List<QueryResult> queryResults = harness.runQueryBenchmark(datasetDir, queries);
                     allQueryResults.addAll(queryResults);
                 }
+            } catch (OutOfMemoryError e) {
+                System.gc();
+                log.error("Engine {} ran out of memory — skipping to next engine", engineName, e);
             } catch (Exception e) {
                 log.error("Engine {} failed: {} — skipping to next engine", engineName, e.getMessage(), e);
             }
         }
 
         try {
-            BenchmarkReport.write(allFileResults, allQueryResults, outputFile);
+            BenchmarkReport.write(allFileResults, allQueryResults, queries, outputFile);
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
             System.exit(1);
