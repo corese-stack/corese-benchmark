@@ -44,7 +44,7 @@ public class BenchmarkReport {
      * @param outputPath   path of the JSON output file; parent directories must exist
      * @throws Exception if serialisation or file I/O fails
      */
-    public static void write(List<FileResult> results, List<QueryResult> queryResults, String outputPath) throws Exception {
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath) throws Exception {
         Map<String, Object> report = new LinkedHashMap<>();
 
         // Metadata
@@ -57,6 +57,10 @@ public class BenchmarkReport {
         metadata.put("protocol", protocol);
         metadata.put("java", System.getProperty("java.version"));
         metadata.put("os", System.getProperty("os.name"));
+        // Embed SPARQL queries so the dashboard can display them without external files
+        if (queries != null && !queries.isEmpty()) {
+            metadata.put("queries", queries);
+        }
         report.put("metadata", metadata);
 
         // Load benchmark runs
