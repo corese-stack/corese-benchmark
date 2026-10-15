@@ -19,7 +19,7 @@
       <div class="brand-group">
         <h1 class="main-title">Corese</h1>
         <span class="badge-tag">Benchmark</span>
-        <span class="badge-tag" id="hdr-dataset">—</span>
+        <span id="hdr-datasets"></span>
       </div>
 
       <div class="header-controls">
@@ -71,10 +71,8 @@
       </div>
     </div>
 
-    <p class="main-desc">
-      Corese reference benchmark dashboard —
-      Loading performance comparison&nbsp;:
-      <strong>Corese</strong> · <strong>Apache Jena</strong> · <strong> RDF4J</strong>
+    <p class="main-desc" id="main-desc">
+      Corese reference benchmark dashboard — Loading performance comparison
     </p>
   </header>
 
@@ -99,37 +97,36 @@
     </div>
   </div>
 
+  <!-- ── Datasets ─────────────────────────────────────────────────────────── -->
+  <details class="query-details" open>
+    <summary class="query-summary">
+      <h2 class="section-heading" style="margin:0;display:inline">Datasets</h2>
+      <span class="query-summary-meta" id="datasets-meta"></span>
+    </summary>
+    <div class="suites-list" id="dataset-grid" style="margin-top:12px">
+      <!-- filled by JS -->
+    </div>
+  </details>
+
   <!-- ── Résumé par moteur ──────────────────────────────────────────────── -->
-  <h2 class="section-heading">Engines tested</h2>
-  <p class="section-sub">Click an engine to filter the charts</p>
+  <div class="section-heading-row" style="margin-top:24px">
+    <h2 class="section-heading" style="margin:0">Engines tested</h2>
+    <button id="clear-engines-btn" class="btn-clear-filter" onclick="clearEngineFilter()" style="display:none">✕ Clear filter</button>
+  </div>
+  <p class="section-sub">Click one or more engines to filter the charts</p>
   <div class="suites-list" id="engine-grid">
     <!-- filled by JS -->
   </div>
 
-  <!-- ── Graphiques ─────────────────────────────────────────────────────── -->
-  <h2 class="section-heading" style="margin-top:32px">Charts</h2>
-  <div class="charts-grid">
-
-    <div class="chart-surface">
-      <div class="chart-header">
-        <span class="chart-title">Loading time</span>
-        <span class="chart-unit">ms — lower is better</span>
-      </div>
-      <canvas id="chart-loading"></canvas>
-    </div>
-
-    <div class="chart-surface">
-      <div class="chart-header">
-        <span class="chart-title">Throughput</span>
-        <span class="chart-unit">triples/s — higher is better</span>
-      </div>
-      <canvas id="chart-throughput"></canvas>
-    </div>
+  <!-- ── Resource usage charts ─────────────────────────────────────────────── -->
+  <h2 class="section-heading" style="margin-top:32px">Resource usage</h2>
+  <div class="charts-grid charts-grid--sm">
 
     <div class="chart-surface">
       <div class="chart-header">
         <span class="chart-title">Memory used</span>
         <span class="chart-unit">ΔMB — lower is better</span>
+        <button class="btn-chart-png" onclick="downloadChart('chart-memory','memory')" title="Download PNG">↓ PNG</button>
       </div>
       <canvas id="chart-memory"></canvas>
     </div>
@@ -138,33 +135,63 @@
       <div class="chart-header">
         <span class="chart-title">CPU</span>
         <span class="chart-unit">% — lower is better</span>
+        <button class="btn-chart-png" onclick="downloadChart('chart-cpu','cpu')" title="Download PNG">↓ PNG</button>
       </div>
       <canvas id="chart-cpu"></canvas>
     </div>
 
   </div>
 
-  <!-- ── Tableau ────────────────────────────────────────────────────────── -->
-  <h2 class="section-heading" style="margin-top:32px">Full results</h2>
-  <div class="table-surface">
-    <div class="table-scroll">
-      <table class="report-table">
-        <thead>
-          <tr>
-            <th>Engine</th>
-            <th>File</th>
-            <th class="text-right">Triples</th>
-            <th class="text-right">Loading (ms)</th>
-            <th class="text-right">Throughput (t/s)</th>
-            <th class="text-right">Memory ΔMB</th>
-            <th class="text-right">CPU %</th>
-            <th>Repetitions (ms)</th>
-          </tr>
-        </thead>
-        <tbody id="results-body"></tbody>
-      </table>
+  <!-- ── Performance charts ───────────────────────────────────────────────── -->
+  <h2 class="section-heading" style="margin-top:24px">Performance</h2>
+  <div class="charts-grid">
+
+    <div class="chart-surface">
+      <div class="chart-header">
+        <span class="chart-title">Throughput</span>
+        <span class="chart-unit">triples/s — higher is better</span>
+        <button class="btn-chart-png" onclick="downloadChart('chart-throughput','throughput')" title="Download PNG">↓ PNG</button>
+      </div>
+      <canvas id="chart-throughput"></canvas>
     </div>
+
+    <div class="chart-surface">
+      <div class="chart-header">
+        <span class="chart-title">Loading time</span>
+        <span class="chart-unit">ms — lower is better</span>
+        <button class="btn-chart-png" onclick="downloadChart('chart-loading','loading')" title="Download PNG">↓ PNG</button>
+      </div>
+      <canvas id="chart-loading"></canvas>
+    </div>
+
   </div>
+
+  <!-- ── Tableau ────────────────────────────────────────────────────────── -->
+  <details class="query-details">
+    <summary class="query-summary" style="margin-top:32px">
+      <h2 class="section-heading" style="margin:0;display:inline">Full results</h2>
+      <span class="query-summary-meta" id="full-results-meta"></span>
+    </summary>
+    <div class="table-surface" style="margin-top:12px">
+      <div class="table-scroll">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th data-sort="engine" class="sortable">Engine</th>
+              <th data-sort="file" class="sortable">File</th>
+              <th data-sort="triples" class="sortable text-right">Triples</th>
+              <th data-sort="loadingTimeMs" class="sortable text-right">Loading (ms)</th>
+              <th data-sort="throughputTriplesPerSec" class="sortable text-right">Throughput (t/s)</th>
+              <th data-sort="memoryDeltaMb" class="sortable text-right">Memory ΔMB</th>
+              <th data-sort="cpuPercent" class="sortable text-right">CPU %</th>
+              <th>Repetitions (ms)</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </details>
 
 </div><!-- /.app-wrapper -->
 
