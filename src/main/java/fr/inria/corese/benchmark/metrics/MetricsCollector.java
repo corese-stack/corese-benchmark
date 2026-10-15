@@ -29,14 +29,19 @@ public class MetricsCollector {
         return cpu < 0 ? 0.0 : cpu * 100.0;
     }
 
-    /** Compute median of an array of long values. */
+    /**
+     * Compute median of an array of long values, ignoring sentinel -1 values
+     * (used to mark timeouts or failed repetitions).
+     * Returns -1 if all values are -1.
+     */
     public static long median(long[] values) {
-        long[] sorted = values.clone();
-        java.util.Arrays.sort(sorted);
-        int mid = sorted.length / 2;
-        return sorted.length % 2 == 0
-            ? (sorted[mid - 1] + sorted[mid]) / 2
-            : sorted[mid];
+        long[] valid = java.util.Arrays.stream(values).filter(v -> v >= 0).toArray();
+        if (valid.length == 0) return -1L;
+        java.util.Arrays.sort(valid);
+        int mid = valid.length / 2;
+        return valid.length % 2 == 0
+            ? (valid[mid - 1] + valid[mid]) / 2
+            : valid[mid];
     }
 
     /** Compute median of an array of double values. */

@@ -70,18 +70,20 @@ public class BenchmarkHarness {
         List<FileResult> results = new ArrayList<>();
         driver.init();
         try {
-            log.info("=== Benchmark: {} | Dataset: {} ===", driver.getName(), datasetName);
-            for (File file : files) {
+            log.info("=== Benchmark: {} | Dataset: {} | {} file(s) ===", driver.getName(), datasetName, files.length);
+            for (int fi = 0; fi < files.length; fi++) {
+                File file = files[fi];
+                log.info("  [{}/{}] {}", fi + 1, files.length, file.getName());
                 try {
                     FileResult result = benchmarkFile(file);
                     results.add(result);
-                    log.info("  {}", String.format(Locale.US,
-                            "%-45s | %6d ms | %8.1f MB | %,.0f triples/s",
-                            file.getName(), result.loadingTimeMs(),
-                            result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                    log.info("  [{}/{}] {}", fi + 1, files.length,
+                            String.format(Locale.US, "%-45s | %6d ms | %8.1f MB | %,.0f triples/s",
+                                    file.getName(), result.loadingTimeMs(),
+                                    result.memoryDeltaMb(), result.throughputTriplesPerSec()));
                 } catch (OutOfMemoryError e) {
                     System.gc();
-                    log.error("  {} — OUT OF MEMORY, skipping file", file.getName(), e);
+                    log.error("  [{}/{}] {} — OUT OF MEMORY, skipping file", fi + 1, files.length, file.getName(), e);
                 }
             }
         } finally {
@@ -180,9 +182,9 @@ public class BenchmarkHarness {
             driver.clear();
             memBefore[i] = metrics.getUsedMemoryMb();
 
-            long start = System.currentTimeMillis();
+            long start = System.nanoTime();
             driver.load(path);
-            timesMs[i] = System.currentTimeMillis() - start;
+            timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
 
             cpuSamples[i] = metrics.getCpuPercent();
             memAfter[i]   = metrics.getUsedMemoryMb();

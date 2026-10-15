@@ -54,9 +54,11 @@ public class CoreseNextDriver implements TripleStoreDriver {
     }
 
     /**
-     * Loads an N-Triples file into the repository line by line.
-     * Lines with invalid IRIs are silently skipped and counted; the count is
-     * logged as a warning after the file is fully processed.
+     * Loads an N-Triples file into the repository.
+     *
+     *
+     * <p>Fallback: if the fast path throws (e.g. invalid IRIs in DBpedia {@code homepages_en.nt}),
+     * the file is re-read line by line, skipping and counting invalid lines.</p>
      *
      * @param filePath absolute path to the {@code .nt} file to load
      * @throws IOException if the file cannot be read
@@ -64,6 +66,21 @@ public class CoreseNextDriver implements TripleStoreDriver {
     @Override
     public void load(String filePath) throws IOException {
         Path path = Path.of(filePath);
+        try {
+            connection.load(path, RDFFormat.NTRIPLES);
+        } catch (Exception e) {
+            log.debug("corese.next: fast load failed for {} ({}), switching to line-by-line", path.getFileName(), e.getMessage());
+            loadLineByLine(path);
+        }
+    }
+
+    /**
+     * Fallback loader: reads the file line by line, skipping lines with invalid IRIs.
+     *
+     * @param path path to the {@code .nt} file
+     * @throws IOException if the file cannot be read
+     */
+    private void loadLineByLine(Path path) throws IOException {
         int skipped = 0;
         try (BufferedReader br = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             String line;
@@ -74,7 +91,7 @@ public class CoreseNextDriver implements TripleStoreDriver {
                     byte[] bytes = (trimmed + "\n").getBytes(StandardCharsets.UTF_8);
                     Model model = CoreseIO.read(new ByteArrayInputStream(bytes), RDFFormat.NTRIPLES);
                     connection.add(model);
-                } catch (Exception e) {
+                } catch (Exception ex) {
                     skipped++;
                 }
             }
@@ -162,12 +179,14 @@ public class CoreseNextDriver implements TripleStoreDriver {
      */
     private QueryType detectQueryType(String sparql) {
         String upper = sparql.trim().toUpperCase();
-        // Strip PREFIX and BASE declarations (one per line)
-        while (upper.startsWith("PREFIX") || upper.startsWith("BASE")) {
+        // Strip PREFIX and BASE declarations — stop if no newline to avoid infinite loop
+        int safety = 0;
+        while ((upper.startsWith("PREFIX") || upper.startsWith("BASE")) && safety++ < 50) {
             int nl = upper.indexOf('\n');
-            upper = nl >= 0 ? upper.substring(nl + 1).stripLeading() : "";
+            if (nl < 0) break;
+            upper = upper.substring(nl + 1).stripLeading();
         }
-        if (upper.startsWith("ASK"))       return QueryType.ASK;
+        if (upper.startsWith("ASK"))                                       return QueryType.ASK;
         if (upper.startsWith("CONSTRUCT") || upper.startsWith("DESCRIBE")) return QueryType.GRAPH;
         return QueryType.SELECT;
     }
