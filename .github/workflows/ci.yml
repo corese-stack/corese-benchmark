@@ -74,6 +74,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build corese-core (feature/corese-next)
+        run: |
+          rm -rf /tmp/corese-core
+          git clone --depth=1 --branch feature/corese-next \
+            https://github.com/corese-stack/corese-core.git /tmp/corese-core
+          cd /tmp/corese-core
+          ./mvnw install -DskipTests -q
+
       - name: Set up conda environment
         run: |
           CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
@@ -86,7 +94,7 @@ jobs:
           source "$CONDA_SH"
           conda activate benchmarkenv
           python python-utils/workflow.py \
-            --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
+            --engines="corese.local,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
             --datasets="dbpedia,bowlogna"
 
       - name: Check site/data output
@@ -107,6 +115,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Build corese-core (feature/corese-next)
+        run: |
+          rm -rf /tmp/corese-core
+          git clone --depth=1 --branch feature/corese-next \
+            https://github.com/corese-stack/corese-core.git /tmp/corese-core
+          cd /tmp/corese-core
+          ./mvnw install -DskipTests -q
 
       - name: Set up conda environment
         run: |
