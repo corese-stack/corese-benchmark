@@ -33,8 +33,14 @@ parser.add_argument(
 parser.add_argument(
     "--dataset",
     type=str,
-    default="dbpedia",
-    help="Dataset to benchmark: dbpedia | bsbm | lubm | bowlogna (default: dbpedia)",
+    default=None,
+    help="Single dataset to benchmark: dbpedia | bsbm | lubm | bowlogna (default: dbpedia)",
+)
+parser.add_argument(
+    "--datasets",
+    type=str,
+    default=None,
+    help="Comma-separated datasets to benchmark in one run (e.g. 'dbpedia,bowlogna,bsbm,lubm')",
 )
 parser.add_argument(
     "--scales",
@@ -67,6 +73,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_dir = os.path.dirname(current_dir)
 sys.path.insert(0, current_dir)
 
+# Resolve dataset list: --datasets takes priority over --dataset
+if args.datasets:
+    dataset_names = [d.strip().lower() for d in args.datasets.split(",")]
+elif args.dataset:
+    dataset_names = [args.dataset.strip().lower()]
+else:
+    dataset_names = ["dbpedia"]
+
 ####################################################################################
 # Auto-copy corese.local JAR if needed
 ####################################################################################
@@ -80,13 +94,11 @@ if "corese.local" in engines_str or "corese.next" in engines_str or "local" in e
     if args.coreseLocalPath:
         src = args.coreseLocalPath
         if os.path.isdir(src):
-            # Given a project dir — find the jar inside build/libs/
             candidates = glob.glob(os.path.join(src, "build", "libs", "*-jar-with-dependencies.jar"))
             if not candidates:
                 candidates = glob.glob(os.path.join(src, "build", "libs", "corese-core*.jar"))
             src = max(candidates, key=os.path.getmtime) if candidates else None
     else:
-        # Auto-detect: look in sibling corese-core directory
         sibling = os.path.join(os.path.dirname(project_dir), "corese-core", "build", "libs")
         candidates = glob.glob(os.path.join(sibling, "*-jar-with-dependencies.jar"))
         if not candidates:
@@ -108,8 +120,8 @@ else:
     input_dir = os.path.join(project_dir, "input")
     out_dir   = os.path.join(project_dir, "out")
 
-out_json_dir = os.path.join(out_dir, "json")
-out_csv_dir  = os.path.join(out_dir, "csv")
+out_json_dir  = os.path.join(out_dir, "json")
+out_csv_dir   = os.path.join(out_dir, "csv")
 site_data_dir = os.path.join(project_dir, "site", "data")
 
 os.makedirs(input_dir,    exist_ok=True)
@@ -124,37 +136,37 @@ if not os.path.exists(gradle_wrapper):
     raise FileNotFoundError(f"Gradle wrapper not found at {gradle_wrapper}")
 
 ####################################################################################
-# Step 1: Prepare dataset
+# Step 1: Prepare datasets
 ####################################################################################
 
 SUPPORTED_DATASETS = ("dbpedia", "bsbm", "lubm", "bowlogna")
-dataset_name = args.dataset.lower()
-
-if dataset_name not in SUPPORTED_DATASETS:
-    print(f"Unknown dataset '{dataset_name}'. Supported: {', '.join(SUPPORTED_DATASETS)}")
-    sys.exit(1)
-
 scales = [s.strip() for s in args.scales.split(",")]
 
-print(f"\n=== Preparing dataset: {dataset_name} (scales: {scales}) ===")
+for ds in dataset_names:
+    if ds not in SUPPORTED_DATASETS:
+        print(f"Unknown dataset '{ds}'. Supported: {', '.join(SUPPORTED_DATASETS)}")
+        sys.exit(1)
 
-if dataset_name == "dbpedia":
-    from datasets.dbpedia import prepare
-    unzip_dir = prepare(input_dir)
+def prepare_dataset(dataset_name):
+    print(f"\n=== Preparing dataset: {dataset_name} (scales: {scales}) ===")
+    if dataset_name == "dbpedia":
+        from datasets.dbpedia import prepare
+        return prepare(input_dir)
+    elif dataset_name == "bsbm":
+        from datasets.bsbm import prepare
+        return prepare(input_dir, scales=scales)
+    elif dataset_name == "lubm":
+        from datasets.lubm import prepare
+        return prepare(input_dir, scales=scales)
+    elif dataset_name == "bowlogna":
+        from datasets.bowlogna import prepare
+        return prepare(input_dir, scales=scales)
 
-elif dataset_name == "bsbm":
-    from datasets.bsbm import prepare
-    unzip_dir = prepare(input_dir, scales=scales)
-
-elif dataset_name == "lubm":
-    from datasets.lubm import prepare
-    unzip_dir = prepare(input_dir, scales=scales)
-
-elif dataset_name == "bowlogna":
-    from datasets.bowlogna import prepare
-    unzip_dir = prepare(input_dir, scales=scales)
-
-print(f"Dataset ready at: {unzip_dir}\n")
+# Pre-prepare all datasets upfront
+dataset_dirs = {}
+for ds in dataset_names:
+    dataset_dirs[ds] = prepare_dataset(ds)
+    print(f"Dataset ready at: {dataset_dirs[ds]}")
 
 ####################################################################################
 # Step 2: Build and run benchmark
@@ -174,7 +186,7 @@ QUERIES_FILES = {
 }
 
 
-def run_benchmark(engines_str, output_file, dataset_label, gradle_props=None):
+def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_props=None):
     queries_file = QUERIES_FILES.get(dataset_label, "")
     args_str = f"{unzip_dir} {output_file} {engines_str} {dataset_label}"
     if queries_file and os.path.exists(queries_file):
@@ -186,6 +198,42 @@ def run_benchmark(engines_str, output_file, dataset_label, gradle_props=None):
     cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
     print(f"Running benchmark: {' '.join(cmd)}")
     subprocess.run(cmd, cwd=project_dir, check=True)
+
+
+def merge_json_files(file_list, output_file):
+    """Merge multiple JSON reports into one, combining runs and queryRuns arrays.
+    metadata.queries is taken from whichever report contains them (queries are
+    dataset-specific, so only one report per dataset will have them).
+    """
+    merged = None
+    merged_queries = None  # SPARQL query texts from metadata
+    for path in file_list:
+        with open(path) as f:
+            r = _json_early.load(f)
+        # Collect SPARQL query texts from metadata (any report that has them)
+        q = r.get("metadata", {}).get("queries")
+        if q:
+            merged_queries = q
+        if merged is None:
+            merged = {
+                "metadata": r["metadata"],
+                "runs": list(r.get("runs", [])),
+                "queryRuns": list(r.get("queryRuns", [])),
+            }
+        else:
+            merged["runs"]      += r.get("runs", [])
+            merged["queryRuns"] += r.get("queryRuns", [])
+    if merged:
+        # Ensure metadata.queries is preserved from any contributing report
+        if merged_queries:
+            merged["metadata"]["queries"] = merged_queries
+        if not merged["queryRuns"]:
+            del merged["queryRuns"]
+    with open(output_file, "w") as f:
+        _json_early.dump(merged, f, indent=2)
+    for path in file_list:
+        os.remove(path)
+    print(f"Merged report: {output_file}")
 
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -217,48 +265,57 @@ if args.engines:
 
     local_engines = [e for e in engines_list if needs_local_jar(e)]
     other_engines = [e for e in engines_list if not needs_local_jar(e)]
-    output_file   = os.path.join(out_json_dir, f"{timestamp}_{args.engines.replace(',','_')}.json")
+    engines_tag   = args.engines.replace(',', '_')
 
-    if local_engines and other_engines:
-        # Two incompatible classpaths — run in separate passes then merge
-        tmp1 = output_file.replace(".json", "_pass1.json")
-        tmp2 = output_file.replace(".json", "_pass2.json")
+    # Collect one output file per dataset (then merge if multi-dataset)
+    dataset_output_files = []
 
-        extra1 = ["-PcoreseVersion=local"]
-        gradle_build(extra1)
-        run_benchmark(",".join(local_engines), tmp1, dataset_name, gradle_props=extra1)
+    for ds in dataset_names:
+        unzip_dir   = dataset_dirs[ds]
+        ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+        output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engines_tag}.json")
 
-        extra2 = build_gradle_props(other_engines)
-        gradle_build(extra2)
-        run_benchmark(",".join(other_engines), tmp2, dataset_name, gradle_props=extra2)
+        if local_engines and other_engines:
+            tmp1 = output_file.replace(".json", "_pass1.json")
+            tmp2 = output_file.replace(".json", "_pass2.json")
 
-        # Merge both JSON reports into one
-        with open(tmp1) as f: r1 = _json_early.load(f)
-        with open(tmp2) as f: r2 = _json_early.load(f)
-        merged = {
-            "metadata": r1["metadata"],
-            "runs": r1["runs"] + r2["runs"],
-        }
-        if r1.get("queryRuns") or r2.get("queryRuns"):
-            merged["queryRuns"] = (r1.get("queryRuns") or []) + (r2.get("queryRuns") or [])
-        with open(output_file, "w") as f:
-            _json_early.dump(merged, f, indent=2)
-        os.remove(tmp1)
-        os.remove(tmp2)
-        print(f"Merged report: {output_file}")
-    else:
-        extra = build_gradle_props(engines_list)
-        gradle_build(extra)
-        run_benchmark(args.engines, output_file, dataset_name, gradle_props=extra)
+            extra1 = ["-PcoreseVersion=local"]
+            gradle_build(extra1)
+            run_benchmark(",".join(local_engines), tmp1, ds, unzip_dir, gradle_props=extra1)
+
+            extra2 = build_gradle_props(other_engines)
+            gradle_build(extra2)
+            run_benchmark(",".join(other_engines), tmp2, ds, unzip_dir, gradle_props=extra2)
+
+            merge_json_files([tmp1, tmp2], output_file)
+        else:
+            extra = build_gradle_props(engines_list)
+            gradle_build(extra)
+            run_benchmark(args.engines, output_file, ds, unzip_dir, gradle_props=extra)
+
+        dataset_output_files.append(output_file)
+
+    # If multiple datasets, merge all into one final report
+    if len(dataset_output_files) > 1:
+        final_output = os.path.join(out_json_dir, f"{timestamp}_all_{engines_tag}.json")
+        merge_json_files(dataset_output_files, final_output)
+    # (single dataset file already at output_file)
 
 # Case B: --coreseVersions (one build per version)
 if args.coreseVersions:
     for version in args.coreseVersions.split(","):
-        version = version.strip()
-        gradle_build([f"-PcoreseVersion={version}"])
+        version     = version.strip()
         engine_name = f"corese.{version}"
-        output_file = os.path.join(out_json_dir, f"{timestamp}_{engine_name}.json")
-        run_benchmark(engine_name, output_file, dataset_name, gradle_props=[f"-PcoreseVersion={version}"])
+        ds_files    = []
+        for ds in dataset_names:
+            unzip_dir   = dataset_dirs[ds]
+            ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+            output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engine_name}.json")
+            gradle_build([f"-PcoreseVersion={version}"])
+            run_benchmark(engine_name, output_file, ds, unzip_dir, gradle_props=[f"-PcoreseVersion={version}"])
+            ds_files.append(output_file)
+        if len(ds_files) > 1:
+            merge_json_files(ds_files, os.path.join(out_json_dir, f"{timestamp}_all_{engine_name}.json"))
 
 # Case C: --coreseCommits (clone + build per commit)
 if args.coreseCommits:
@@ -291,11 +348,18 @@ if args.coreseCommits:
             print(f"Error building commit {commit_hash}: {e}")
             continue
 
-        libs_path = os.path.join(commit_dir, "corese-core", "build", "libs") + os.sep
-        gradle_build([f"-PcoreseCommit={libs_path}"])
+        libs_path   = os.path.join(commit_dir, "corese-core", "build", "libs") + os.sep
         engine_name = f"corese.commit.{commit_hash[:8]}"
-        output_file = os.path.join(out_json_dir, f"{timestamp}_{engine_name}.json")
-        run_benchmark(engine_name, output_file, dataset_name, gradle_props=[f"-PcoreseCommit={libs_path}"])
+        ds_files    = []
+        for ds in dataset_names:
+            unzip_dir   = dataset_dirs[ds]
+            ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+            output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engine_name}.json")
+            gradle_build([f"-PcoreseCommit={libs_path}"])
+            run_benchmark(engine_name, output_file, ds, unzip_dir, gradle_props=[f"-PcoreseCommit={libs_path}"])
+            ds_files.append(output_file)
+        if len(ds_files) > 1:
+            merge_json_files(ds_files, os.path.join(out_json_dir, f"{timestamp}_all_{engine_name}.json"))
 
     shutil.rmtree(commit_base, ignore_errors=True)
 
@@ -307,12 +371,10 @@ json_files = sorted(glob.glob(os.path.join(out_json_dir, "*.json")), key=os.path
 if json_files:
     latest = json_files[-1]
 
-    # Copy as current report
     dest = os.path.join(site_data_dir, "benchmark-report.json")
     shutil.copy(latest, dest)
     print(f"\nReport copied to {dest}")
 
-    # Copy CSV alongside JSON
     latest_csv = latest.replace(out_json_dir, out_csv_dir).replace(".json", ".csv")
     if os.path.exists(latest_csv):
         csv_dest = os.path.join(site_data_dir, "benchmark-report.csv")
@@ -325,13 +387,11 @@ if json_files:
         f.write(f"window.__BENCHMARK_DATA__ = {data};")
     print("Generated report-data.js")
 
-    # Historical trend — copy to site/data/history/ and update index
     history_dir = os.path.join(site_data_dir, "history")
     os.makedirs(history_dir, exist_ok=True)
     hist_filename = f"{timestamp}.json"
     shutil.copy(latest, os.path.join(history_dir, hist_filename))
 
-    # Update history index (keep last 30 entries)
     index_path = os.path.join(history_dir, "index.json")
     if os.path.exists(index_path):
         with open(index_path) as f:
@@ -340,13 +400,12 @@ if json_files:
         history_index = []
 
     history_index.append({"file": hist_filename, "date": timestamp})
-    history_index = history_index[-30:]  # keep last 30
+    history_index = history_index[-30:]
 
     with open(index_path, "w") as f:
         _json_early.dump(history_index, f, indent=2)
     print(f"History updated: {len(history_index)} entries in {index_path}")
 
-    # Generate history-data.js (inline for file:// compatibility)
     history_data = []
     for entry in history_index:
         hist_file = os.path.join(history_dir, entry["file"])

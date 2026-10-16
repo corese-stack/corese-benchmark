@@ -640,9 +640,14 @@ function updateTable(runsArg) {
     if (diffMode) {
       const peer = grouped[r.file]?.[r.engine === engA ? engB : engA];
       if (peer) {
-        const delta = ((r.throughputTriplesPerSec - peer.throughputTriplesPerSec) / peer.throughputTriplesPerSec * 100).toFixed(1);
-        const cls   = delta > 0 ? 'diff-better' : delta < 0 ? 'diff-worse' : '';
-        diffCell = `<td class="text-right ${cls}">${delta > 0 ? '+' : ''}${delta}%</td>`;
+        const peerThru = peer.throughputTriplesPerSec;
+        const delta = peerThru > 0
+          ? ((r.throughputTriplesPerSec - peerThru) / peerThru * 100).toFixed(1)
+          : null;
+        const cls   = delta == null ? '' : delta > 0 ? 'diff-better' : delta < 0 ? 'diff-worse' : '';
+        diffCell = delta == null
+          ? `<td class="text-right">—</td>`
+          : `<td class="text-right ${cls}">${delta > 0 ? '+' : ''}${delta}%</td>`;
       } else {
         diffCell = `<td class="text-right">—</td>`;
       }
