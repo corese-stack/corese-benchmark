@@ -91,7 +91,7 @@ public class CoreseDriver implements TripleStoreDriver {
     private void applyInference() throws Exception {
         if (inference) {
             RuleEngine re = RuleEngine.create(graph);
-            re.setProfile(RuleEngine.ProfileType.OWL_RL);
+            re.setProfile(RuleEngine.OWL_RL);
             re.process();
         }
     }
