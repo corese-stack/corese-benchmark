@@ -87,7 +87,7 @@ jobs:
           conda activate benchmarkenv
           python python-utils/workflow.py \
             --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
-            --dataset="dbpedia"
+            --datasets="dbpedia,bowlogna"
 
       - name: Check site/data output
         run: ls -la ./site/data/
