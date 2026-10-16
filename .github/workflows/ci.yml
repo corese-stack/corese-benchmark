@@ -1,100 +1,136 @@
-name: Run Workflow and Deploy to GitHub Pages
+name: Benchmark & Deploy to GitHub Pages
 
 permissions:
   contents: write
 
-
 on:
   push:
-    branches:
-      - main  # Run the workflow on pushes to the main branch
-      - p16-benchmark  # Run the workflow on pushes to the p16-benchmark branch
-  pull_request: 
-    branches:
-      - main  # Optionally run on pull requests to the main branch
-      - p16-benchmark  # Optionally run on pull requests to the p16-benchmark branch
-      
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dataset:
+        description: 'Dataset to benchmark'
+        required: false
+        default: 'dbpedia'
+        type: choice
+        options: [dbpedia, bowlogna, bsbm, lubm]
+      engines:
+        description: 'Comma-separated engines (e.g. corese.4.6.5,jena.6.2.0)'
+        required: false
+        default: 'corese.4.6.5,jena.6.2.0,rdf4j.5.3.2'
+      scales:
+        description: 'Dataset scales'
+        required: false
+        default: 'small,medium,large'
+      inference:
+        description: 'Enable RDFS inference (Corese only)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  #####################################
-  # using Github public runner
-  #####################################
-  public-build:
-    if: github.ref != 'refs/heads/p16-benchmark' 
-    #runs-on: p16-benchmark-corese
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+
+  # ─── Smoke test on PR (GitHub-hosted, fast) ───────────────────────────────
+  smoke-test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Checkout the repository
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # Step 2.1: Create and activate conda environment, install dependencies
-    - name: Set up conda environment
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        environment-file: python-utils/environment.yml
-        activate-environment: benchmarkenv
-        auto-activate-base: false
-      
-    # Step 2.2: Create and activate conda environment, install dependencies
-    - name: Run workflow
-      shell: bash -l {0}
-      env:
-        RUNNER_ENV: github-public
-      run: |  
-        conda info --envs
-        cd python-utils
-        python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3"
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
+      - name: Set up conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: python-utils/environment.yml
+          activate-environment: benchmarkenv
+          auto-activate-base: false
 
+      - name: Run smoke test (dbpedia small only)
+        shell: bash -l {0}
+        run: |
+          python python-utils/workflow.py \
+            --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
+            --dataset="dbpedia" \
+            --scales="small"
 
-    # Step 3 : Debugging step: Check if the public directory exists
-    - name: Check public directory is here and contains required files
-      run: ls -la ./public
+      - name: Check site/data output
+        run: ls -la ./site/data/
 
-    # Step 4: Deploy the dashboard folder to GitHub Pages
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./public  # Path to the folder containing the HTML files
-        force_orphan: true    # Overwrite the gh-pages branch
-
-
-  #####################################
-  # using P16 private runner
-  #####################################
-  private-build:
-    if: github.ref == 'refs/heads/p16-benchmark' 
-    runs-on: p16-benchmark-corese
+  # ─── Full benchmark on merge to main (P16 self-hosted) ────────────────────
+  benchmark-node:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, corese-benchmark]
 
     steps:
-    # Step 1: Checkout the repository
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    # Step 2: Create and activate conda environment, install dependencies
-    - name: Create and activate conda environment
-      env:
-        RUNNER_ENV: P16-benchmark
-      run: |
-        source ~/miniconda3/bin/activate
-        conda env update -f python-utils/environment.yml
-        source $HOME/miniconda3/etc/profile.d/conda.sh
-        conda activate benchmarkenv
-        conda info --envs
-        cd python-utils
-        python workflow.py --triplestoreNames="rdf4j.5.1.2,jena.5.4.0,corese.4.6.3" --dataDir="/media/storage/corese-benchmark/benchmark_data"
+      - name: Set up conda environment
+        run: |
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          source "$CONDA_SH"
+          conda env update -f python-utils/environment.yml --prune
 
-    # Debugging step: Check if the public directory exists
-    - name: Check public directory is here and contains required files
-      run: ls -la ./public
+      - name: Run full benchmark
+        run: |
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          source "$CONDA_SH"
+          conda activate benchmarkenv
+          python python-utils/workflow.py \
+            --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
+            --dataset="dbpedia"
 
-    # Step 3: Deploy the dashboard folder to GitHub Pages
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./public  # Path to the folder containing the HTML files
-        force_orphan: true    # Overwrite the gh-pages branch
+      - name: Check site/data output
+        run: ls -la ./site/data/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+
+  # ─── Manual run (workflow_dispatch) ───────────────────────────────────────
+  benchmark-manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, corese-benchmark]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up conda environment
+        run: |
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          source "$CONDA_SH"
+          conda env update -f python-utils/environment.yml --prune
+
+      - name: Run benchmark
+        run: |
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          source "$CONDA_SH"
+          conda activate benchmarkenv
+          python python-utils/workflow.py \
+            --engines="${{ github.event.inputs.engines }}" \
+            --dataset="${{ github.event.inputs.dataset }}" \
+            --scales="${{ github.event.inputs.scales }}" \
+            ${{ github.event.inputs.inference == 'true' && '--inference' || '' }}
+
+      - name: Check site/data output
+        run: ls -la ./site/data/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
