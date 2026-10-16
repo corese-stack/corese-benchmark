@@ -1,12 +1,29 @@
 .DS_Store
 tmp
-# Ignore Gradle project-specific cache directory
-.gradle
 
-# Ignore Gradle build output directory
+# Gradle
+.gradle
 build
-input
-out
-public
+
+# Benchmark data (downloaded datasets, generated reports)
+input/
+out/
+public/
+commit/
+
+# Local Corese JAR (copied by workflow.py)
 libs/*
-commit/*
+!libs/.gitkeep
+
+# Generated site data (rebuilt on every run)
+site/data/benchmark-report.json
+site/data/benchmark-report.csv
+site/data/report-data.js
+site/data/history-data.js
+site/data/history/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+python-utils/datasets/__pycache__/

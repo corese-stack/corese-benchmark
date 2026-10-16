@@ -1,298 +1,420 @@
 import os
 import sys
-import requests
-import zipfile
-import tarfile
-import bz2
 import shutil
 import subprocess
 import argparse
-
+import glob
+import json as _json_early
+from datetime import datetime
 
 ####################################################################################
-# Step 0 : Parse command-line arguments and prepare the directories
+# Step 0: Parse arguments
 ####################################################################################
-# Class ArgumentParser
-#############################
-# Parse command-line arguments
-parser = argparse.ArgumentParser(description="Run the benchmark workflow.")
+
+parser = argparse.ArgumentParser(description="Run the corese-benchmark workflow.")
 parser.add_argument(
-    "--triplestoreNames",
+    "--engines",
     type=str,
     default=None,
-    help="Comma-separated list of triplestore names and versions (e.g., 'rdf4j.5.1.2,jena.5.4.0,corese.4.6.3'). Each name should be in the format 'name.version'. where 'name' is one of 'rdf4j', 'corese', or 'jena' and 'version' is the version number (e.g., '5.1.2', '4.6.3', '4.10.0').",
+    help="Comma-separated list of engines (e.g. 'corese.4.6.5,jena.5.2.0,rdf4j.5.1.3')",
 )
-# coreseVersions = ["4.0.1","4.6.3","local"]
 parser.add_argument(
     "--coreseVersions",
     type=str,
     default=None,
-    help="Comma-separated list of Corese versions to benchmark (e.g., '4.0.1,4.6.3,local').",
+    help="Comma-separated Corese versions (e.g. '4.6.5,local'). One build per version.",
 )
-# coreseCommits = ["a17f3d6","b089a03","6efa666"]
 parser.add_argument(
     "--coreseCommits",
     type=str,
     default=None,
-    help="Comma-separated list of Corese commit hashes to benchmark (e.g., 'a17f3d6,b089a03,6efa666').",
+    help="Comma-separated Corese commit hashes. Clones and builds each commit.",
 )
-# input dataDir 
+parser.add_argument(
+    "--dataset",
+    type=str,
+    default=None,
+    help="Single dataset to benchmark: dbpedia | bsbm | lubm | bowlogna (default: dbpedia)",
+)
+parser.add_argument(
+    "--datasets",
+    type=str,
+    default=None,
+    help="Comma-separated datasets to benchmark in one run (e.g. 'dbpedia,bowlogna,bsbm,lubm')",
+)
+parser.add_argument(
+    "--scales",
+    type=str,
+    default="small,medium,large",
+    help="Comma-separated scale tiers for synthetic datasets: small,medium,large (default: all)",
+)
 parser.add_argument(
     "--dataDir",
     type=str,
     default=None,
-    help="Absolute path to the directory containing the data files.",
+    help="Absolute path to a custom data directory.",
+)
+parser.add_argument(
+    "--coreseLocalPath",
+    type=str,
+    default=None,
+    help="Path to corese-core project or JAR for corese.local engine. "
+         "Auto-detected from ../corese-core/build/libs/ if not specified.",
+)
+parser.add_argument(
+    "--inference",
+    action="store_true",
+    default=False,
+    help="Enable RDFS inference for Corese engines (passed to Java harness).",
 )
 args = parser.parse_args()
-triplestoreNames = args.triplestoreNames
 
-# Class DirectoryManager
-#############################
-# If  dataDir argument is provided, use it; otherwise, create an "input" 
-# directory one level above the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
+project_dir = os.path.dirname(current_dir)
+sys.path.insert(0, current_dir)
+
+# Resolve dataset list: --datasets takes priority over --dataset
+if args.datasets:
+    dataset_names = [d.strip().lower() for d in args.datasets.split(",")]
+elif args.dataset:
+    dataset_names = [args.dataset.strip().lower()]
+else:
+    dataset_names = ["dbpedia"]
+
+####################################################################################
+# Auto-copy corese.local JAR if needed
+####################################################################################
+
+engines_str = args.engines or args.coreseVersions or ""
+if "corese.local" in engines_str or "corese.next" in engines_str or "local" in engines_str.split(","):
+    libs_dir = os.path.join(project_dir, "libs")
+    os.makedirs(libs_dir, exist_ok=True)
+
+    # Resolve source path: --coreseLocalPath > sibling ../corese-core > already in libs/
+    if args.coreseLocalPath:
+        src = args.coreseLocalPath
+        if os.path.isdir(src):
+            candidates = glob.glob(os.path.join(src, "build", "libs", "*-jar-with-dependencies.jar"))
+            if not candidates:
+                candidates = glob.glob(os.path.join(src, "build", "libs", "corese-core*.jar"))
+            src = max(candidates, key=os.path.getmtime) if candidates else None
+    else:
+        sibling = os.path.join(os.path.dirname(project_dir), "corese-core", "build", "libs")
+        candidates = glob.glob(os.path.join(sibling, "*-jar-with-dependencies.jar"))
+        if not candidates:
+            candidates = glob.glob(os.path.join(sibling, "corese-core*.jar"))
+        src = max(candidates, key=os.path.getmtime) if candidates else None
+
+    if src and os.path.isfile(src):
+        dest = os.path.join(libs_dir, "corese-core-local.jar")
+        shutil.copy(src, dest)
+        print(f"corese.local: copied JAR from {src}")
+    elif not glob.glob(os.path.join(libs_dir, "*.jar")):
+        print("WARNING: corese.local requested but no JAR found in libs/ and could not auto-detect.")
+        print("  Use --coreseLocalPath /path/to/corese-core or place a JAR in libs/")
+
 if args.dataDir:
     input_dir = os.path.join(args.dataDir, "input")
-    out_dir = os.path.join(args.dataDir, "out")
-    public_dir = os.path.join(args.dataDir, "public")
+    out_dir   = os.path.join(args.dataDir, "out")
 else:
-    
-    input_dir = os.path.join(os.path.dirname(current_dir), "input")
-    out_dir = os.path.join(os.path.dirname(current_dir), "out")
-    public_dir = os.path.join(os.path.dirname(current_dir), "public")
-# Now check and create/clear the input and output directories
-os.makedirs(input_dir, exist_ok=True)
-if os.path.exists(out_dir):
-    shutil.rmtree(out_dir)
-os.makedirs(out_dir, exist_ok=True)
-print(f"Created input directory at: {input_dir}")
-print(f"Created output directory at: {out_dir}")
+    input_dir = os.path.join(project_dir, "input")
+    out_dir   = os.path.join(project_dir, "out")
 
-# *public* Create the "public" directory to store the HTML files of the benchmark minisite
-# TBD : remove this step from plot-compare.py 
+out_json_dir  = os.path.join(out_dir, "json")
+out_csv_dir   = os.path.join(out_dir, "csv")
+site_data_dir = os.path.join(project_dir, "site", "data")
 
+os.makedirs(input_dir,    exist_ok=True)
+os.makedirs(out_json_dir, exist_ok=True)
+os.makedirs(out_csv_dir,  exist_ok=True)
+os.makedirs(site_data_dir, exist_ok=True)
 
-####################################################################################
-# Step 1: Archives dowloader 
-####################################################################################
-
-# 1.1  Class ArchiveDownloader
-#############################
-# Download the archive files to the "input" directory
-# Note: The archive URLs are hardcoded, but you can modify them as needed.
-archive_urls = [
-    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/geo_coordinates_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/persondata_en.nt.bz2",
-    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/redirects_en.nt.bz2",
-    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/images_en.nt.bz2",
-    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/skos_categories_en.nt.bz2",
-    #"https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/instance_types_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/disambiguations_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/category_labels_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/specific_mappingbased_properties_en.nt.bz2",
-    "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/homepages_en.nt.bz2"
- ]
-archive_paths = []
-
-for archive_url in archive_urls:
-    archive_name = os.path.basename(archive_url)
-    archive_path = os.path.join(input_dir, archive_name)
-    archive_paths.append(archive_path)
-
-    if not os.path.exists(archive_path):
-        print(f"Downloading archive file from {archive_url} to {archive_path}...")
-        response = requests.get(archive_url, stream=True)
-        response.raise_for_status()  # Raise an error if the download fails
-        with open(archive_path, "wb") as archive_file:
-            for chunk in response.iter_content(chunk_size=8192):
-                archive_file.write(chunk)
-        print(f"Download completed for {archive_name}.")
-    else:
-        print(f"Archive file already exists at {archive_path}. Skipping download.")
-
-# 1.2  Class ArchiveExtractor:
-#############################
-#  Extract all archive files into a directory named "unzip"
-
-unzip_dir = os.path.join(input_dir, "unzip")
-os.makedirs(unzip_dir, exist_ok=True)
-print(f"Extracting content to {unzip_dir}...")
-
-for archive_path in archive_paths:
-    print(f"Extracting {archive_path}...")
-    try:
-        if archive_path.endswith(".zip"):
-            with zipfile.ZipFile(archive_path, "r") as zip_ref:
-                zip_ref.extractall(unzip_dir)
-        elif archive_path.endswith(".bz2"):
-            extracted_file_path = os.path.join(unzip_dir, os.path.splitext(os.path.basename(archive_path))[0])
-            with bz2.BZ2File(archive_path, "rb") as bz2_file, open(extracted_file_path, "wb") as extracted_file:
-                shutil.copyfileobj(bz2_file, extracted_file)
-        elif archive_path.endswith(".tar") or archive_path.endswith(".tar.gz") or archive_path.endswith(".tgz"):
-            with tarfile.open(archive_path, "r:*") as tar_ref:
-                tar_ref.extractall(unzip_dir)
-        else:
-            print(f"Unsupported archive format for {archive_path}. Skipping.")
-    except Exception as e:
-        print(f"Error extracting {archive_path}: {e}")
-    else:
-        print(f"Extracted {os.path.basename(archive_path)}.")
-
-print("Extraction completed.")
-
-
-####################################################################################
-# Step 2: benchmark builder and runner  
-####################################################################################
-
-# Case A : triplestoreNames argument is provided, we build and run the benchmark.groovy script once with the provided triplestore names and versions
-# Class Benchmark
-########################
-gradle_wrapper_name = "gradlew.bat" if sys.platform == "win32" else "gradlew"
-gradle_wrapper = os.path.join(os.path.dirname(current_dir), gradle_wrapper_name)
+gradle_wrapper = os.path.join(
+    project_dir, "gradlew.bat" if sys.platform == "win32" else "gradlew"
+)
 if not os.path.exists(gradle_wrapper):
     raise FileNotFoundError(f"Gradle wrapper not found at {gradle_wrapper}")
 
-if args.triplestoreNames:
+####################################################################################
+# Step 1: Prepare datasets
+####################################################################################
 
-    print("Running Gradle build using versions number provided in the tripleStoreNames parameter ...")
-    # create a dictionary with the triplestore names as keys and the version numbers as values
-    triplestore_names_list = triplestoreNames.split(",")
-    triplestore_versions_dict = {
-        name.split(".", 1)[0]: name.split(".", 1)[1] for name in triplestore_names_list
-    }
-    # Example: {'rdf4j': '5.1.2', 'jena': '4.10.0', 'corese': '4.6.3'}
-    gradle_version_arg = f"-PjenaVersion={triplestore_versions_dict.get('jena', '4.10.0')} " \
-                        f"-Prdf4jVersion={triplestore_versions_dict.get('rdf4j', '5.1.2')} " \
-                        f"-PcoreseVersion={triplestore_versions_dict.get('corese', '4.6.3')}"
-    print("Running Gradle clean and build...")
-    print(gradle_version_arg)
-    # run the Gradle clean and build command    
-    command = [gradle_wrapper, "clean", "build"] + gradle_version_arg.split()
-    print(f"Executing command: {' '.join(command)}")
-    subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
+SUPPORTED_DATASETS = ("dbpedia", "bsbm", "lubm", "bowlogna")
+scales = [s.strip() for s in args.scales.split(",")]
 
-    # Class BenchmarkRunner
-    ########################
-    print("Executing the benchmark.groovy script and save results in the 'out' folder...")
-    command = [gradle_wrapper, "runGroovyScript", "--args="+unzip_dir+" "+out_dir+" "+triplestoreNames]
-    print(f"Executing command: {' '.join(command)}")
-    subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
+for ds in dataset_names:
+    if ds not in SUPPORTED_DATASETS:
+        print(f"Unknown dataset '{ds}'. Supported: {', '.join(SUPPORTED_DATASETS)}")
+        sys.exit(1)
+
+def prepare_dataset(dataset_name):
+    print(f"\n=== Preparing dataset: {dataset_name} (scales: {scales}) ===")
+    if dataset_name == "dbpedia":
+        from datasets.dbpedia import prepare
+        return prepare(input_dir)
+    elif dataset_name == "bsbm":
+        from datasets.bsbm import prepare
+        return prepare(input_dir, scales=scales)
+    elif dataset_name == "lubm":
+        from datasets.lubm import prepare
+        return prepare(input_dir, scales=scales)
+    elif dataset_name == "bowlogna":
+        from datasets.bowlogna import prepare
+        return prepare(input_dir, scales=scales)
+
+# Pre-prepare all datasets upfront
+dataset_dirs = {}
+for ds in dataset_names:
+    dataset_dirs[ds] = prepare_dataset(ds)
+    print(f"Dataset ready at: {dataset_dirs[ds]}")
+
+####################################################################################
+# Step 2: Build and run benchmark
+####################################################################################
+
+def gradle_build(extra_args=None):
+    cmd = [gradle_wrapper, "clean", "build"] + (extra_args or [])
+    print(f"Building: {' '.join(cmd)}")
+    subprocess.run(cmd, cwd=project_dir, check=True)
 
 
-if args.coreseVersions :
-# Case B.1 : argument coreseVersions is provided, we build and run the benchmark.groovy script for each Corese version provided 
-    coreseVersionsList = args.coreseVersions.split(",")
-    for coreseVersion in  coreseVersionsList:
-        print(f"Running Gradle build with Corese version {coreseVersion}...")
-        gradle_version_arg = "-PcoreseVersion=local" if coreseVersion == "local" else f"-PcoreseVersion={coreseVersion}"
-        command = [gradle_wrapper, "clean", "build", gradle_version_arg]
-        print(f"Executing command: {' '.join(command)}")
-        subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
+QUERIES_FILES = {
+    "bowlogna": os.path.join(project_dir, "src", "main", "resources",
+                             "Bowlogna_bench_data", "bowlogna-queries.txt"),
+    "lubm":     os.path.join(project_dir, "src", "main", "resources",
+                             "lubm", "lubm-queries.txt"),
+}
 
-        # Set the triplestore name for the output CSV
-        triplestore_name = f"corese.{coreseVersion}"
 
-        print(f"Executing the benchmark.groovy script with corese version {coreseVersion}...")
-        # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
-        command = [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name]
-        print(f"Executing command: {' '.join(command)}")
-        subprocess.run(
-            command,
-            cwd=os.path.dirname(current_dir), check=True
-        )
+def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_props=None):
+    queries_file = QUERIES_FILES.get(dataset_label, "")
+    args_str = f"{unzip_dir} {output_file} {engines_str} {dataset_label}"
+    if queries_file and os.path.exists(queries_file):
+        args_str += f" {queries_file}"
+        print(f"  Using queries file: {queries_file}")
+    if args.inference:
+        args_str += " --inference"
+        print("  Inference: enabled")
+    cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
+    print(f"Running benchmark: {' '.join(cmd)}")
+    subprocess.run(cmd, cwd=project_dir, check=True)
 
-# Case B.2 : argument coreseCommits is provided, we download, build, and run the benchmark.groovy script for each Corese commit version provided
-if args.coreseCommits:
-    coreseCommitsList = args.coreseCommits.split(",")
 
-    for coreseCommit in coreseCommitsList:
-        # 1. create OR clear "commit", one level above current_dir
-        # if dataDir argument is provided, create the "commit" directory inside dataDir
-        if args.dataDir:
-            commit_dir = os.path.join(args.dataDir, "commit")
+def merge_json_files(file_list, output_file):
+    """Merge multiple JSON reports into one, combining runs and queryRuns arrays.
+    metadata.queries is taken from whichever report contains them (queries are
+    dataset-specific, so only one report per dataset will have them).
+    """
+    merged = None
+    merged_queries = None  # SPARQL query texts from metadata
+    for path in file_list:
+        with open(path) as f:
+            r = _json_early.load(f)
+        # Collect SPARQL query texts from metadata (any report that has them)
+        q = r.get("metadata", {}).get("queries")
+        if q:
+            merged_queries = q
+        if merged is None:
+            merged = {
+                "metadata": r["metadata"],
+                "runs": list(r.get("runs", [])),
+                "queryRuns": list(r.get("queryRuns", [])),
+            }
         else:
-            commit_dir = os.path.join(os.path.dirname(current_dir), "commit")
+            merged["runs"]      += r.get("runs", [])
+            merged["queryRuns"] += r.get("queryRuns", [])
+    if merged:
+        # Ensure metadata.queries is preserved from any contributing report
+        if merged_queries:
+            merged["metadata"]["queries"] = merged_queries
+        if not merged["queryRuns"]:
+            del merged["queryRuns"]
+    with open(output_file, "w") as f:
+        _json_early.dump(merged, f, indent=2)
+    for path in file_list:
+        os.remove(path)
+    print(f"Merged report: {output_file}")
+
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# Case A: --engines (single build, all engines)
+if args.engines:
+    engines_list = [e.strip() for e in args.engines.split(",")]
+
+    def needs_local_jar(e):
+        return e in ('corese.next', 'corese.local') or e.startswith('corese.commit.')
+
+    def build_gradle_props(engine_sublist):
+        versions = {}
+        for e in engine_sublist:
+            parts = e.split(".", 1)
+            if len(parts) == 2:
+                versions[parts[0]] = parts[1]
+        extra = []
+        if "corese" in versions:
+            corese_ver = versions['corese']
+            if corese_ver in ('next', 'local'):
+                corese_ver = 'local'
+            extra += [f"-PcoreseVersion={corese_ver}"]
+        if "jena" in versions:
+            extra += [f"-PjenaVersion={versions['jena']}"]
+        if "rdf4j" in versions:
+            extra += [f"-Prdf4jVersion={versions['rdf4j']}"]
+        return extra
+
+    local_engines = [e for e in engines_list if needs_local_jar(e)]
+    other_engines = [e for e in engines_list if not needs_local_jar(e)]
+    engines_tag   = args.engines.replace(',', '_')
+
+    # Collect one output file per dataset (then merge if multi-dataset)
+    dataset_output_files = []
+
+    for ds in dataset_names:
+        unzip_dir   = dataset_dirs[ds]
+        ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+        output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engines_tag}.json")
+
+        if local_engines and other_engines:
+            tmp1 = output_file.replace(".json", "_pass1.json")
+            tmp2 = output_file.replace(".json", "_pass2.json")
+
+            extra1 = ["-PcoreseVersion=local"]
+            gradle_build(extra1)
+            run_benchmark(",".join(local_engines), tmp1, ds, unzip_dir, gradle_props=extra1)
+
+            extra2 = build_gradle_props(other_engines)
+            gradle_build(extra2)
+            run_benchmark(",".join(other_engines), tmp2, ds, unzip_dir, gradle_props=extra2)
+
+            merge_json_files([tmp1, tmp2], output_file)
+        else:
+            extra = build_gradle_props(engines_list)
+            gradle_build(extra)
+            run_benchmark(args.engines, output_file, ds, unzip_dir, gradle_props=extra)
+
+        dataset_output_files.append(output_file)
+
+    # If multiple datasets, merge all into one final report
+    if len(dataset_output_files) > 1:
+        final_output = os.path.join(out_json_dir, f"{timestamp}_all_{engines_tag}.json")
+        merge_json_files(dataset_output_files, final_output)
+    # (single dataset file already at output_file)
+
+# Case B: --coreseVersions (one build per version)
+if args.coreseVersions:
+    for version in args.coreseVersions.split(","):
+        version     = version.strip()
+        engine_name = f"corese.{version}"
+        ds_files    = []
+        for ds in dataset_names:
+            unzip_dir   = dataset_dirs[ds]
+            ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+            output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engine_name}.json")
+            gradle_build([f"-PcoreseVersion={version}"])
+            run_benchmark(engine_name, output_file, ds, unzip_dir, gradle_props=[f"-PcoreseVersion={version}"])
+            ds_files.append(output_file)
+        if len(ds_files) > 1:
+            merge_json_files(ds_files, os.path.join(out_json_dir, f"{timestamp}_all_{engine_name}.json"))
+
+# Case C: --coreseCommits (clone + build per commit)
+if args.coreseCommits:
+    commit_base = os.path.join(args.dataDir or project_dir, "commit")
+    for commit_hash in args.coreseCommits.split(","):
+        commit_hash = commit_hash.strip()
+        commit_dir  = os.path.join(commit_base, commit_hash)
         if os.path.exists(commit_dir):
             shutil.rmtree(commit_dir)
-            print(f"Cleared commit directory at: {commit_dir}")
-        os.makedirs(commit_dir, exist_ok=True)
-        print(f"Created commit directory at: {commit_dir}")
-        # 2. Clone the Corese repository and checkout the specific commit
-        print(f"Downloading Corese commit {coreseCommit}...")
+        os.makedirs(commit_dir)
+
         try:
-            # cd to the commit directory
-            os.chdir(commit_dir)
-            # clone the Corese repository
-            command = ["git", "clone", "https://github.com/corese-stack/corese-core"]
-            print(f"Executing command: {' '.join(command)}")
-            subprocess.run(command)
-            # cd to the Corese repository
-            os.chdir(os.path.join(commit_dir, "corese-core"))
-            # checkout the specific commit
-            command = ["git", "checkout", coreseCommit]
-            print(f"Executing command: {' '.join(command)}")
-            subprocess.run(command, check=True)
-       
-            # 3. Build the Corese project using Gradlew
-            #   $ ./gradlew assemble
-            print(f"Building Corese commit {coreseCommit}...")
-            print(f"Executing the command .\gradlew  shadowJar ...")
-            corese_gradle_wrapper = os.path.join(commit_dir,"corese-core", "gradlew")
-            if not os.path.exists(corese_gradle_wrapper):
-                print(f"Gradle wrapper not found at {corese_gradle_wrapper}. Skipping this commit.\n* * *\n ")
-                continue  # Skip this commit if the Gradle wrapper is not found
-            command = [corese_gradle_wrapper, "shadowJar"]
-            print(f"Executing command: {' '.join(command)}")
-            subprocess.run(command, cwd=os.path.join(commit_dir, "corese-core"), check=True)
-         
-        except subprocess.CalledProcessError as e:
-            print(f"Error building Corese commit {coreseCommit}: {e}")
-            continue
-        except subprocess.FileNotFoundError as e:
-            (f"Gradle wrapper not found at {corese_gradle_wrapper}")
-            continue
-    
-        # 4. Build the benchmark.groovy script using the local Corese version
-        print(f"Running Gradle build with Corese commit {coreseCommit}...")
-        gradle_version_arg = f"-PcoreseCommit={commit_dir}/corese-core/build/libs/"
-        try:    
-            command = [gradle_wrapper, "clean", "build", gradle_version_arg]
-            print(f"Executing command: {' '.join(command)}")
-            subprocess.run(command, cwd=os.path.dirname(current_dir), check=True)
-           
-            # 5. Set the triplestore name for the output CSV
-            triplestore_name = f"corese.commit.{coreseCommit}"# Set the triplestore name for the output CSV
-            print(f"Executing the benchmark.groovy script with corese commit {coreseCommit}...")
-            # Usage: groovy benchmark.groovy <directory> <outDir> <triplestore1,triplestore2,...>
-            command = [gradle_wrapper, "runGroovyScript", "--args=" + unzip_dir + " " + out_dir + " " + triplestore_name]
-            print(f"Executing command: {' '.join(command)}")
             subprocess.run(
-                command,
-                cwd=os.path.dirname(current_dir), check=True
-            )            
-            print(f"Benchmark execution completed with corese commit {coreseCommit}...")
+                ["git", "clone", "https://github.com/corese-stack/corese-core"],
+                cwd=commit_dir, check=True
+            )
+            subprocess.run(
+                ["git", "checkout", commit_hash],
+                cwd=os.path.join(commit_dir, "corese-core"), check=True
+            )
+            corese_gradlew = os.path.join(
+                commit_dir, "corese-core",
+                "gradlew.bat" if sys.platform == "win32" else "gradlew"
+            )
+            subprocess.run(
+                [corese_gradlew, "shadowJar"],
+                cwd=os.path.join(commit_dir, "corese-core"), check=True
+            )
         except subprocess.CalledProcessError as e:
-            print(f"Error running Gradle build with Corese commit {coreseCommit}: {e}")
+            print(f"Error building commit {commit_hash}: {e}")
             continue
-    # 6. Clear the commit directory
-    os.chdir(current_dir)  # or any directory outside commit_dir
-    shutil.rmtree(commit_dir)
-    print(f"Cleared commit directory at: {commit_dir}")
-    
 
+        libs_path   = os.path.join(commit_dir, "corese-core", "build", "libs") + os.sep
+        engine_name = f"corese.commit.{commit_hash[:8]}"
+        ds_files    = []
+        for ds in dataset_names:
+            unzip_dir   = dataset_dirs[ds]
+            ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+            output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engine_name}.json")
+            gradle_build([f"-PcoreseCommit={libs_path}"])
+            run_benchmark(engine_name, output_file, ds, unzip_dir, gradle_props=[f"-PcoreseCommit={libs_path}"])
+            ds_files.append(output_file)
+        if len(ds_files) > 1:
+            merge_json_files(ds_files, os.path.join(out_json_dir, f"{timestamp}_all_{engine_name}.json"))
+
+    shutil.rmtree(commit_base, ignore_errors=True)
 
 ####################################################################################
-# Step 3: Results plotting
+# Step 3: Copy latest report to site/data/
 ####################################################################################
 
-# Class PlotGenerator
-########################
-python_script = os.path.join(current_dir, "plot-compare.py")
-if not os.path.exists(python_script):
-    raise FileNotFoundError(f"Python script not found at {python_script}")
-print(f"Running Python script to generate plots... at {python_script}")
-command = ["python", python_script, out_dir]
-print(f"Executing command: {' '.join(command)}")
-subprocess.run(command, check=True)
-print(f"Succesfully run Python script to generate plots!")
+json_files = sorted(glob.glob(os.path.join(out_json_dir, "*.json")), key=os.path.getmtime)
+if json_files:
+    latest = json_files[-1]
+
+    dest = os.path.join(site_data_dir, "benchmark-report.json")
+    shutil.copy(latest, dest)
+    print(f"\nReport copied to {dest}")
+
+    latest_csv = latest.replace(out_json_dir, out_csv_dir).replace(".json", ".csv")
+    if os.path.exists(latest_csv):
+        csv_dest = os.path.join(site_data_dir, "benchmark-report.csv")
+        shutil.copy(latest_csv, csv_dest)
+        print(f"CSV copied to {csv_dest}")
+
+    with open(latest) as f:
+        data = f.read()
+    with open(os.path.join(site_data_dir, "report-data.js"), "w") as f:
+        f.write(f"window.__BENCHMARK_DATA__ = {data};")
+    print("Generated report-data.js")
+
+    history_dir = os.path.join(site_data_dir, "history")
+    os.makedirs(history_dir, exist_ok=True)
+    hist_filename = f"{timestamp}.json"
+    shutil.copy(latest, os.path.join(history_dir, hist_filename))
+
+    index_path = os.path.join(history_dir, "index.json")
+    if os.path.exists(index_path):
+        with open(index_path) as f:
+            history_index = _json_early.load(f)
+    else:
+        history_index = []
+
+    history_index.append({"file": hist_filename, "date": timestamp})
+    history_index = history_index[-30:]
+
+    with open(index_path, "w") as f:
+        _json_early.dump(history_index, f, indent=2)
+    print(f"History updated: {len(history_index)} entries in {index_path}")
+
+    history_data = []
+    for entry in history_index:
+        hist_file = os.path.join(history_dir, entry["file"])
+        if os.path.exists(hist_file):
+            with open(hist_file) as hf:
+                history_data.append({"date": entry["date"], "data": _json_early.load(hf)})
+    hist_js = os.path.join(site_data_dir, "history-data.js")
+    with open(hist_js, "w") as f:
+        f.write(f"window.__HISTORY_DATA__ = {_json_early.dumps(history_data)};")
+    print(f"Generated history-data.js ({len(history_data)} entries)")
+else:
+    print("No JSON report found in out/")
