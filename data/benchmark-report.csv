@@ -1,0 +1,17 @@
+# LOAD BENCHMARK
+engine,dataset,file,triples,loadingTimeMs,throughputTriplesPerSec,memoryBeforeMb,memoryAfterMb,memoryDeltaMb,cpuPercent,rep1Ms,rep2Ms,rep3Ms
+corese.4.6.5,dbpedia,category_labels_en.nt,565108,16430,34394.89,7.02,229.86,222.80,7.03,16430,16472,15933
+corese.4.6.5,dbpedia,disambiguations_en.nt,768924,17834,43115.62,7.22,190.95,183.73,6.95,20086,17004,17834
+corese.4.6.5,dbpedia,homepages_en.nt,394897,8626,45779.85,7.22,152.89,145.67,7.13,8547,8788,8626
+corese.4.6.5,dbpedia,persondata_en.nt,356996,8477,42113.48,7.26,60.02,52.76,6.88,8421,8477,8643
+corese.4.6.5,dbpedia,specific_mappingbased_properties_en.nt,184083,5259,35003.42,7.26,48.16,40.90,6.89,5200,5259,5353
+jena.6.2.0,dbpedia,category_labels_en.nt,565108,1786,316409.85,40.43,334.87,294.44,13.59,1784,1786,1811
+jena.6.2.0,dbpedia,disambiguations_en.nt,765124,1736,440739.63,56.44,243.68,187.25,12.22,1726,1736,1742
+jena.6.2.0,dbpedia,homepages_en.nt,394897,1008,391762.90,56.44,193.25,136.81,14.66,1028,1008,1008
+jena.6.2.0,dbpedia,persondata_en.nt,356914,830,430016.87,56.62,150.81,94.20,13.56,833,830,830
+jena.6.2.0,dbpedia,specific_mappingbased_properties_en.nt,182530,483,377908.90,56.62,117.82,61.20,14.77,483,475,484
+rdf4j.5.3.2,dbpedia,category_labels_en.nt,565108,1708,330859.48,9.08,534.05,524.97,17.53,1692,1708,1714
+rdf4j.5.3.2,dbpedia,disambiguations_en.nt,765124,2086,366790.03,9.08,538.50,529.42,15.51,2086,2081,2106
+rdf4j.5.3.2,dbpedia,homepages_en.nt,394590,2692,146578.75,9.11,451.45,442.34,15.10,2747,2603,2692
+rdf4j.5.3.2,dbpedia,persondata_en.nt,356914,863,413573.58,9.14,101.14,92.00,12.23,863,862,863
+rdf4j.5.3.2,dbpedia,specific_mappingbased_properties_en.nt,182530,512,356503.91,9.14,119.04,109.90,15.89,501,512,513
