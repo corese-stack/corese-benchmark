@@ -76,13 +76,13 @@ jobs:
 
       - name: Set up conda environment
         run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
           conda env update -f python-utils/environment.yml --prune
 
       - name: Run full benchmark
         run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
           conda activate benchmarkenv
           python python-utils/workflow.py \
@@ -110,13 +110,13 @@ jobs:
 
       - name: Set up conda environment
         run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
           conda env update -f python-utils/environment.yml --prune
 
       - name: Run benchmark
         run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" 2>/dev/null | head -1)
+          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
           conda activate benchmarkenv
           python python-utils/workflow.py \
