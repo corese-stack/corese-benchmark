@@ -83,7 +83,7 @@ jobs:
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
-          ./gradlew assemble -x test -q
+          ./gradlew shadowJar -x test -q
           cp build/libs/corese-core-jar-with-dependencies.jar "$LIBS_DIR/corese-core-local.jar"
 
       - name: Set up conda environment
@@ -141,7 +141,7 @@ jobs:
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
-          ./gradlew assemble -x test -q
+          ./gradlew shadowJar -x test -q
           cp build/libs/corese-core-jar-with-dependencies.jar "$LIBS_DIR/corese-core-local.jar"
 
       - name: Set up conda environment
