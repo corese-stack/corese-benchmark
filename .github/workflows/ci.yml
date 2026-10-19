@@ -77,13 +77,14 @@ jobs:
       - name: Build corese-core (feature/corese-next)
         run: |
           which javac || sudo apt-get install -y openjdk-21-jdk -q
+          LIBS_DIR="$(pwd)/libs"
+          mkdir -p "$LIBS_DIR"
           rm -rf /tmp/corese-core
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
           ./gradlew assemble -x test -q
-          mkdir -p "$GITHUB_WORKSPACE/libs"
-          cp build/libs/corese-core-*.jar "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
+          cp build/libs/corese-core-*.jar "$LIBS_DIR/corese-core-local.jar"
 
       - name: Set up conda environment
         run: |
@@ -134,13 +135,14 @@ jobs:
       - name: Build corese-core (feature/corese-next)
         run: |
           which javac || sudo apt-get install -y openjdk-21-jdk -q
+          LIBS_DIR="$(pwd)/libs"
+          mkdir -p "$LIBS_DIR"
           rm -rf /tmp/corese-core
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
           ./gradlew assemble -x test -q
-          mkdir -p "$GITHUB_WORKSPACE/libs"
-          cp build/libs/corese-core-*.jar "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
+          cp build/libs/corese-core-*.jar "$LIBS_DIR/corese-core-local.jar"
 
       - name: Set up conda environment
         run: |
