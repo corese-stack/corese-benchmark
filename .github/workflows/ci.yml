@@ -81,7 +81,8 @@ jobs:
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
-          ./gradlew publishToMavenLocal -x test -q
+          ./gradlew assemble -x test -q
+          cp build/libs/corese-core-*.jar "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
 
       - name: Set up conda environment
         run: |
@@ -124,7 +125,8 @@ jobs:
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
-          ./gradlew publishToMavenLocal -x test -q
+          ./gradlew assemble -x test -q
+          cp build/libs/corese-core-*.jar "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
 
       - name: Set up conda environment
         run: |
