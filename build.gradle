@@ -20,11 +20,16 @@ repositories {
 // CoreseNextDriver → Corese 5 API from libs/*.jar
 // The two drivers use incompatible RuleEngine classes — compile only the one that matches the build.
 def localJars = fileTree(dir: 'libs', include: ['*.jar'])
-def useLocalCorese = project.hasProperty('coreseVersion') && project.coreseVersion == 'local'
-if (useLocalCorese && !localJars.isEmpty()) {
+def useLocalCorese = (project.hasProperty('coreseVersion') && project.coreseVersion == 'local')
+        || project.hasProperty('coreseJar')
+if (useLocalCorese && (!localJars.isEmpty() || project.hasProperty('coreseJar'))) {
     // corese-next build: exclude 4.x driver (incompatible RuleEngine API)
     sourceSets.main.java.exclude '**/CoreseDriver.java'
-    dependencies { compileOnly localJars }
+    if (project.hasProperty('coreseJar')) {
+        dependencies { compileOnly files(project.coreseJar) }
+    } else {
+        dependencies { compileOnly localJars }
+    }
 } else {
     // corese 4.x build: exclude 5.x driver (requires corese-next JAR)
     sourceSets.main.java.exclude '**/CoreseNextDriver.java'
@@ -32,7 +37,9 @@ if (useLocalCorese && !localJars.isEmpty()) {
 
 dependencies {
     // Corese
-    if (project.hasProperty('coreseVersion') && project.coreseVersion == 'local') {
+    if (project.hasProperty('coreseJar')) {
+        implementation files(project.coreseJar)
+    } else if (project.hasProperty('coreseVersion') && project.coreseVersion == 'local') {
         implementation fileTree(dir: 'libs', include: ['*.jar'])
     } else if (project.hasProperty('coreseVersion')) {
         implementation "fr.inria.corese:corese-core:${project.coreseVersion}"
