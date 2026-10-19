@@ -76,6 +76,7 @@ jobs:
 
       - name: Build corese-core (feature/corese-next)
         run: |
+          which mvn || sudo apt-get install -y maven -q
           rm -rf /tmp/corese-core
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
@@ -118,6 +119,7 @@ jobs:
 
       - name: Build corese-core (feature/corese-next)
         run: |
+          which mvn || sudo apt-get install -y maven -q
           rm -rf /tmp/corese-core
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core

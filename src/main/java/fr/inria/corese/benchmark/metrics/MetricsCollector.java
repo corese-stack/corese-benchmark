@@ -46,6 +46,7 @@ public class MetricsCollector {
 
     /** Compute median of an array of double values. */
     public static double medianDouble(double[] values) {
+        if (values == null || values.length == 0) return 0.0;
         double[] sorted = values.clone();
         java.util.Arrays.sort(sorted);
         int mid = sorted.length / 2;

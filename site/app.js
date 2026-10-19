@@ -361,8 +361,8 @@ function renderEngineCards(runs) {
       }
       scoreDisplay = `${score} / 100`;
     } else {
-      const ratio   = (refThru / avgThru).toFixed(1);
-      relativeLabel = ratio > 1 ? `${ratio}× slower` : `${(1/ratio).toFixed(1)}× faster`;
+      const ratio   = avgThru > 0 ? (refThru / avgThru).toFixed(1) : null;
+      relativeLabel = ratio === null ? '' : ratio > 1 ? `${ratio}× slower` : `${(1/ratio).toFixed(1)}× faster`;
       tooltip       = `Compared to ${refEngine}`;
       scoreDisplay  = `${score} / 100`;
     }
@@ -836,7 +836,7 @@ function renderQuerySection(queryRuns) {
               const ms = rowData[i];
               if (ms === null) return `<td class="text-right query-fail">—</td>`;
               const isBest  = ms === minMs;
-              const r       = minMs ? ms / minMs : 1;
+              const r       = minMs > 0 ? ms / minMs : 1;
               const isRed   = !isBest && r >= 20;
               const isOrange= !isBest && r >= 5 && r < 20;
               const ratio   = !isBest && r >= 2 ? ` <span class="query-ratio">×${r.toFixed(1)}</span>` : '';

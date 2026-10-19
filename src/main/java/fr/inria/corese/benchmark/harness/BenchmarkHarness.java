@@ -73,7 +73,6 @@ public class BenchmarkHarness {
             log.info("=== Benchmark: {} | Dataset: {} | {} file(s) ===", driver.getName(), datasetName, files.length);
             for (int fi = 0; fi < files.length; fi++) {
                 File file = files[fi];
-                log.info("  [{}/{}] {}", fi + 1, files.length, file.getName());
                 try {
                     FileResult result = benchmarkFile(file);
                     results.add(result);
