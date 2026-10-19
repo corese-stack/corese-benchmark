@@ -82,6 +82,7 @@ jobs:
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
           ./gradlew assemble -x test -q
+          mkdir -p "$GITHUB_WORKSPACE/libs"
           cp build/libs/corese-core-*.jar "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
 
       - name: Set up conda environment
@@ -126,6 +127,7 @@ jobs:
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
           ./gradlew assemble -x test -q
+          mkdir -p "$GITHUB_WORKSPACE/libs"
           cp build/libs/corese-core-*.jar "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
 
       - name: Set up conda environment
