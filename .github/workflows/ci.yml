@@ -110,6 +110,18 @@ jobs:
           publish_dir: ./site
           force_orphan: true
 
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/corese-core
+          rm -f libs/corese-core-local.jar
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/corese-core
+          rm -f libs/corese-core-local.jar
+
   # ─── Manual run (workflow_dispatch) ───────────────────────────────────────
   benchmark-manual:
     if: github.event_name == 'workflow_dispatch'
