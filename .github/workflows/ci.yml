@@ -80,7 +80,7 @@ jobs:
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
-          ./mvnw install -DskipTests -q
+          mvn install -DskipTests -q
 
       - name: Set up conda environment
         run: |
@@ -122,7 +122,7 @@ jobs:
           git clone --depth=1 --branch feature/corese-next \
             https://github.com/corese-stack/corese-core.git /tmp/corese-core
           cd /tmp/corese-core
-          ./mvnw install -DskipTests -q
+          mvn install -DskipTests -q
 
       - name: Set up conda environment
         run: |
