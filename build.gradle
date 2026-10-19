@@ -16,16 +16,18 @@ repositories {
     }
 }
 
-// CoreseNextDriver requires the Corese 5 API from libs/*.jar.
-// When libs/ is empty (e.g. CI without a local build), exclude it from compilation.
+// CoreseDriver   → Corese 4.x API (RuleEngine.OWL_RL int constant)
+// CoreseNextDriver → Corese 5 API from libs/*.jar
+// The two drivers use incompatible RuleEngine classes — compile only the one that matches the build.
 def localJars = fileTree(dir: 'libs', include: ['*.jar'])
-if (localJars.isEmpty()) {
-    sourceSets.main.java.exclude '**/CoreseNextDriver.java'
+def useLocalCorese = project.hasProperty('coreseVersion') && project.coreseVersion == 'local'
+if (useLocalCorese && !localJars.isEmpty()) {
+    // corese-next build: exclude 4.x driver (incompatible RuleEngine API)
+    sourceSets.main.java.exclude '**/CoreseDriver.java'
+    dependencies { compileOnly localJars }
 } else {
-    // Provide Corese 5 API for compilation (runtime is covered by coreseVersion=local)
-    dependencies {
-        compileOnly localJars
-    }
+    // corese 4.x build: exclude 5.x driver (requires corese-next JAR)
+    sourceSets.main.java.exclude '**/CoreseNextDriver.java'
 }
 
 dependencies {

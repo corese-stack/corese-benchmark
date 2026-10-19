@@ -1,6 +1,9 @@
 .DS_Store
 tmp
 
+.idea/
+.claude/
+
 # Gradle
 .gradle
 build

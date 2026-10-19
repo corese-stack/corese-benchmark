@@ -9,6 +9,9 @@ public class DriverFactory {
     private static final String CORESE_NEXT_CLASS =
             "fr.inria.corese.benchmark.driver.CoreseNextDriver";
 
+    private static final String CORESE_DRIVER_CLASS =
+            "fr.inria.corese.benchmark.driver.CoreseDriver";
+
 
     /**
      * Creates a driver for the given engine name.
@@ -28,10 +31,10 @@ public class DriverFactory {
      *         {@code corese.next} is requested but the Corese 5 JAR is absent
      */
     public static TripleStoreDriver create(String engineName, boolean inference) {
-        if ("corese.next".equals(engineName)) {
+        if ("corese.next".equals(engineName) || "corese.local".equals(engineName)) {
             return createCoreseNext(engineName);
         } else if (engineName.startsWith("corese.")) {
-            return new CoreseDriver(engineName, inference);
+            return createCoreseDriver(engineName, inference);
         } else if (engineName.startsWith("jena.")) {
             return new JenaDriver(engineName);
         } else if (engineName.startsWith("rdf4j.")) {
@@ -63,6 +66,21 @@ public class DriverFactory {
                 + "— place the JAR in libs/ and rebuild with -PcoreseVersion=local", e);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to instantiate CoreseNextDriver", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TripleStoreDriver createCoreseDriver(String engineName, boolean inference) {
+        try {
+            Class<? extends TripleStoreDriver> cls =
+                    (Class<? extends TripleStoreDriver>) Class.forName(CORESE_DRIVER_CLASS);
+            return cls.getDeclaredConstructor(String.class, boolean.class)
+                      .newInstance(engineName, inference);
+        } catch (ClassNotFoundException | NoClassDefFoundError e) {
+            throw new IllegalArgumentException(
+                "CoreseDriver not available in this build (corese-next build excludes it)", e);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to instantiate CoreseDriver", e);
         }
     }
 }
