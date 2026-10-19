@@ -74,17 +74,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build corese-core (feature/corese-next)
+      - name: Clean old artifacts (>30 days)
         run: |
-          which javac || sudo apt-get install -y openjdk-21-jdk -q
-          LIBS_DIR="$(pwd)/libs"
-          mkdir -p "$LIBS_DIR"
-          rm -rf /tmp/corese-core
-          git clone --depth=1 --branch feature/corese-next \
-            https://github.com/corese-stack/corese-core.git /tmp/corese-core
-          cd /tmp/corese-core
-          ./gradlew shadowJar -x test -q
-          cp build/libs/corese-core-jar-with-dependencies.jar "$LIBS_DIR/corese-core-local.jar"
+          find out/ -name "*.json" -mtime +30 -delete 2>/dev/null || true
+          rm -rf build/ input/
 
       - name: Set up conda environment
         run: |
@@ -98,7 +91,7 @@ jobs:
           source "$CONDA_SH"
           conda activate benchmarkenv
           python python-utils/workflow.py \
-            --engines="corese.local,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
+            --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
             --datasets="dbpedia,bowlogna"
 
       - name: Check site/data output
@@ -111,18 +104,6 @@ jobs:
           publish_dir: ./site
           force_orphan: true
 
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -rf /tmp/corese-core
-          rm -f libs/corese-core-local.jar
-
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -rf /tmp/corese-core
-          rm -f libs/corese-core-local.jar
-
   # ─── Manual run (workflow_dispatch) ───────────────────────────────────────
   benchmark-manual:
     if: github.event_name == 'workflow_dispatch'
@@ -131,18 +112,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Build corese-core (feature/corese-next)
-        run: |
-          which javac || sudo apt-get install -y openjdk-21-jdk -q
-          LIBS_DIR="$(pwd)/libs"
-          mkdir -p "$LIBS_DIR"
-          rm -rf /tmp/corese-core
-          git clone --depth=1 --branch feature/corese-next \
-            https://github.com/corese-stack/corese-core.git /tmp/corese-core
-          cd /tmp/corese-core
-          ./gradlew shadowJar -x test -q
-          cp build/libs/corese-core-jar-with-dependencies.jar "$LIBS_DIR/corese-core-local.jar"
 
       - name: Set up conda environment
         run: |
