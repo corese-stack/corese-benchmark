@@ -11,11 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       dataset:
-        description: 'Dataset to benchmark'
+        description: 'Datasets à benchmarker (séparés par virgule : dbpedia,bowlogna,bsbm,lubm)'
         required: false
         default: 'dbpedia'
-        type: choice
-        options: [dbpedia, bowlogna, bsbm, lubm]
       engines:
         description: 'Comma-separated engines (e.g. corese.4.6.5,jena.6.2.0)'
         required: false
@@ -24,6 +22,10 @@ on:
         description: 'Dataset scales'
         required: false
         default: 'small,medium,large'
+      corese_commit:
+        description: 'Commit Corese à benchmarker (ex: b8dbc158). Laisse vide pour ignorer.'
+        required: false
+        default: ''
       inference:
         description: 'Enable RDFS inference (Corese only)'
         required: false
@@ -123,6 +125,22 @@ jobs:
           source "$CONDA_SH"
           conda env update -f python-utils/environment.yml --prune
 
+      - name: Build corese.next JAR
+        if: contains(github.event.inputs.engines, 'corese.next')
+        run: |
+          CORESE_DIR="$HOME/corese-next-build"
+          if [ ! -d "$CORESE_DIR/.git" ]; then
+            git clone https://github.com/corese-stack/corese-core.git "$CORESE_DIR"
+          fi
+          cd "$CORESE_DIR"
+          git fetch origin feature/corese-next
+          git checkout b8dbc158
+          ./gradlew shadowJar --no-daemon -q
+          JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
+          mkdir -p "$GITHUB_WORKSPACE/libs"
+          cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
+          echo "corese.next JAR built from b8dbc158 → libs/corese-core-local.jar"
+
       - name: Run benchmark
         run: |
           CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
@@ -130,8 +148,9 @@ jobs:
           conda activate benchmarkenv
           python python-utils/workflow.py \
             --engines="${{ github.event.inputs.engines }}" \
-            --dataset="${{ github.event.inputs.dataset }}" \
+            --datasets="${{ github.event.inputs.dataset }}" \
             --scales="${{ github.event.inputs.scales }}" \
+            ${{ github.event.inputs.corese_commit != '' && format('--coreseCommits={0}', github.event.inputs.corese_commit) || '' }} \
             ${{ github.event.inputs.inference == 'true' && '--inference' || '' }}
 
       - name: Check site/data output

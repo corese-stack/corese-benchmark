@@ -41,7 +41,7 @@ compare:
 	$(PYTHON) $(WORKFLOW) --engines $(ENGINES) --dataset $(DATASET)
 
 next:
-	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5 --dataset $(DATASET)
+	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 --datasets dbpedia,bowlogna --scales $(SCALES)
 
 bowlogna:
 	$(PYTHON) $(WORKFLOW) --engines corese.local,corese.4.6.5 --dataset bowlogna --scales $(SCALES)
