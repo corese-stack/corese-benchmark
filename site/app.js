@@ -813,7 +813,7 @@ function renderQuerySection(queryRuns) {
     </div>
     <div class="table-surface" style="margin-top:16px">
       <div class="table-scroll">
-      <table class="report-table">
+      <table class="report-table" translate="no">
         <thead><tr>
           <th>Requête</th>
           ${engines.map(e => `<th class="text-right" data-engine="${e}"><span class="engine-dot" style="background:${pal(e).hex}"></span> ${e}</th>`).join('')}

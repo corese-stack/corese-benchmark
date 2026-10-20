@@ -76,10 +76,12 @@ public class BenchmarkHarness {
                 try {
                     FileResult result = benchmarkFile(file);
                     results.add(result);
+                    long[] reps = result.repetitionsMs();
+                    String repStr = String.format("[%d, %d, %d]", reps[0], reps[1], reps[2]);
                     log.info("  [{}/{}] {}", fi + 1, files.length,
-                            String.format(Locale.US, "%-45s | %6d ms | %8.1f MB | %,.0f triples/s",
-                                    file.getName(), result.loadingTimeMs(),
-                                    result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                            String.format(Locale.US, "%-45s | %6d ms %s | %,9d triples | %8.1f MB | %,.0f triples/s",
+                                    file.getName(), result.loadingTimeMs(), repStr,
+                                    result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
                 } catch (OutOfMemoryError e) {
                     System.gc();
                     log.error("  [{}/{}] {} — OUT OF MEMORY, skipping file", fi + 1, files.length, file.getName(), e);
