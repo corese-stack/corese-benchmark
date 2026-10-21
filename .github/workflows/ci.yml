@@ -127,6 +127,8 @@ jobs:
 
       - name: Build corese.next JAR
         if: contains(github.event.inputs.engines, 'corese.next')
+        env:
+          CORESE_COMMIT: b8dbc158
         run: |
           CORESE_DIR="$HOME/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then
@@ -134,24 +136,37 @@ jobs:
           fi
           cd "$CORESE_DIR"
           git fetch origin feature/corese-next
-          git checkout b8dbc158
+          git checkout "$CORESE_COMMIT"
+          chmod +x gradlew
           ./gradlew shadowJar --no-daemon -q
           JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
           mkdir -p "$GITHUB_WORKSPACE/libs"
           cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
-          echo "corese.next JAR built from b8dbc158 → libs/corese-core-local.jar"
+          echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
 
       - name: Run benchmark
+        env:
+          ENGINES: ${{ github.event.inputs.engines }}
+          DATASETS: ${{ github.event.inputs.dataset }}
+          SCALES: ${{ github.event.inputs.scales }}
+          CORESE_COMMIT: ${{ github.event.inputs.corese_commit }}
+          DO_INFERENCE: ${{ github.event.inputs.inference }}
         run: |
           CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
           conda activate benchmarkenv
+          EXTRA=""
+          [ -n "$CORESE_COMMIT" ] && EXTRA="$EXTRA --coreseCommits=$CORESE_COMMIT"
+          [ "$DO_INFERENCE" = "true" ] && EXTRA="$EXTRA --inference"
+          # Si corese.next est dans la liste, pointer directement sur le JAR pré-compilé
+          if echo "$ENGINES" | grep -q "corese\.next"; then
+            EXTRA="$EXTRA --coreseLocalPath=$GITHUB_WORKSPACE/libs/corese-core-local.jar"
+          fi
           python python-utils/workflow.py \
-            --engines="${{ github.event.inputs.engines }}" \
-            --datasets="${{ github.event.inputs.dataset }}" \
-            --scales="${{ github.event.inputs.scales }}" \
-            ${{ github.event.inputs.corese_commit != '' && format('--coreseCommits={0}', github.event.inputs.corese_commit) || '' }} \
-            ${{ github.event.inputs.inference == 'true' && '--inference' || '' }}
+            --engines="$ENGINES" \
+            --datasets="$DATASETS" \
+            --scales="$SCALES" \
+            $EXTRA
 
       - name: Check site/data output
         run: ls -la ./site/data/
