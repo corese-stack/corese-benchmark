@@ -375,10 +375,10 @@ if json_files:
     shutil.copy(latest, dest)
     print(f"\nReport copied to {dest}")
 
-    latest_csv = latest.replace(out_json_dir, out_csv_dir).replace(".json", ".csv")
-    if os.path.exists(latest_csv):
+    csv_files = sorted(glob.glob(os.path.join(out_csv_dir, "*.csv")), key=os.path.getmtime)
+    if csv_files:
         csv_dest = os.path.join(site_data_dir, "benchmark-report.csv")
-        shutil.copy(latest_csv, csv_dest)
+        shutil.copy(csv_files[-1], csv_dest)
         print(f"CSV copied to {csv_dest}")
 
     with open(latest) as f:
