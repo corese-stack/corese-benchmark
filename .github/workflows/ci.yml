@@ -158,10 +158,6 @@ jobs:
           EXTRA=""
           [ -n "$CORESE_COMMIT" ] && EXTRA="$EXTRA --coreseCommits=$CORESE_COMMIT"
           [ "$DO_INFERENCE" = "true" ] && EXTRA="$EXTRA --inference"
-          # Si corese.next est dans la liste, pointer directement sur le JAR pré-compilé
-          if echo "$ENGINES" | grep -q "corese\.next"; then
-            EXTRA="$EXTRA --coreseLocalPath=$GITHUB_WORKSPACE/libs/corese-core-local.jar"
-          fi
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \
