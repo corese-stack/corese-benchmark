@@ -28,7 +28,8 @@ import java.util.concurrent.*;
 public class BenchmarkHarness {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkHarness.class);
-    private static final int REPETITIONS = 3;
+    private static final int DEFAULT_REPETITIONS = 3;
+    private final int repetitions;
     private static final int QUERY_REPS = 3;
     private static final long QUERY_TIMEOUT_S = 30; // seconds per query execution
 
@@ -43,8 +44,13 @@ public class BenchmarkHarness {
      * @param datasetName logical name of the dataset (recorded in result objects)
      */
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName) {
+        this(driver, datasetName, DEFAULT_REPETITIONS);
+    }
+
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
         this.driver = driver;
         this.datasetName = datasetName;
+        this.repetitions = repetitions;
         this.metrics = new MetricsCollector();
     }
 
@@ -77,7 +83,10 @@ public class BenchmarkHarness {
                     FileResult result = benchmarkFile(file);
                     results.add(result);
                     long[] reps = result.repetitionsMs();
-                    String repStr = String.format("[%d, %d, %d]", reps[0], reps[1], reps[2]);
+                    StringBuilder sb = new StringBuilder("[");
+                    for (int r = 0; r < reps.length; r++) { if (r > 0) sb.append(", "); sb.append(reps[r]); }
+                    sb.append("]");
+                    String repStr = sb.toString();
                     log.info("  [{}/{}] {}", fi + 1, files.length,
                             String.format(Locale.US, "%-45s | %6d ms %s | %,9d triples | %8.1f MB | %,.0f triples/s",
                                     file.getName(), result.loadingTimeMs(), repStr,
@@ -173,13 +182,13 @@ public class BenchmarkHarness {
         System.gc();
 
         // --- 3 repetitions ---
-        long[] timesMs   = new long[REPETITIONS];
-        double[] memBefore  = new double[REPETITIONS];
-        double[] memAfter   = new double[REPETITIONS];
-        double[] cpuSamples = new double[REPETITIONS];
+        long[] timesMs   = new long[repetitions];
+        double[] memBefore  = new double[repetitions];
+        double[] memAfter   = new double[repetitions];
+        double[] cpuSamples = new double[repetitions];
         long triples = 0;
 
-        for (int i = 0; i < REPETITIONS; i++) {
+        for (int i = 0; i < repetitions; i++) {
             driver.clear();
             memBefore[i] = metrics.getUsedMemoryMb();
 
@@ -195,8 +204,8 @@ public class BenchmarkHarness {
         // --- Compute medians ---
         long medianTimeMs = MetricsCollector.median(timesMs);
 
-        double[] deltas = new double[REPETITIONS];
-        for (int i = 0; i < REPETITIONS; i++) deltas[i] = memAfter[i] - memBefore[i];
+        double[] deltas = new double[repetitions];
+        for (int i = 0; i < repetitions; i++) deltas[i] = memAfter[i] - memBefore[i];
 
         return new FileResult(
             driver.getName(),

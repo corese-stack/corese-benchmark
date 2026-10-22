@@ -52,12 +52,15 @@ public class Main {
         String[] engines   = args[2].split(",");
         String datasetName = args.length > 3 ? args[3] : "dataset";
 
-        // Parse remaining args: optional queries file and --inference flag
+        // Parse remaining args: optional queries file and flags
         String queriesFile = null;
         boolean inference  = false;
+        boolean quick      = false;
         for (int i = 4; i < args.length; i++) {
             if ("--inference".equals(args[i])) {
                 inference = true;
+            } else if ("--quick".equals(args[i])) {
+                quick = true;
             } else if (queriesFile == null) {
                 queriesFile = args[i];
             }
@@ -83,7 +86,8 @@ public class Main {
             log.info("Starting engine: {}", engineName);
             try {
                 TripleStoreDriver driver = DriverFactory.create(engineName, inference);
-                BenchmarkHarness harness = new BenchmarkHarness(driver, datasetName);
+                int reps = quick ? 1 : 3;
+                BenchmarkHarness harness = new BenchmarkHarness(driver, datasetName, reps);
 
                 // Load benchmark
                 List<FileResult> fileResults = harness.run(datasetDir);

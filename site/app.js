@@ -86,7 +86,7 @@ async function loadData() {
     return await res.json();
   } catch (_) {
     if (typeof window.__BENCHMARK_DATA__ !== 'undefined') return window.__BENCHMARK_DATA__;
-    throw new Error('Aucune donnée. Lancez le benchmark d\'abord.');
+    throw new Error('No data. Run the benchmark first.');
   }
 }
 
@@ -169,9 +169,6 @@ function renderDatasetCards(runs, queries) {
   if (!grid) return;
   const meta = document.getElementById('datasets-meta');
   if (meta) meta.textContent = `${datasets.length} dataset${datasets.length > 1 ? 's' : ''}`;
-  // Collapse by default when more than one dataset (keeps the page compact)
-  const details = grid.closest('details');
-  if (details && datasets.length > 1) details.removeAttribute('open');
 
   grid.innerHTML = datasets.map(ds => {
     const meta      = DATASET_META[ds.toLowerCase()] ?? { label: ds, description: '', url: null };
@@ -211,7 +208,7 @@ function renderDatasetCards(runs, queries) {
     }
 
     return `
-      <div class="suite-item dataset-card" onclick="openDatasetModal('${ds}')">
+      <div class="suite-item dataset-card" data-ds="${ds}" onclick="toggleDataset('${ds}')">
         <div class="suite-item-header">
           <span class="suite-name">${meta.label}</span>
           ${linkHtml}
@@ -315,6 +312,7 @@ function initTableSort() {
 // ── Engine filter state ───────────────────────────────────────────────────────
 // activeEngines: Set of selected engine names. Empty = all engines shown.
 let activeEngines  = new Set();
+let hiddenEngines  = new Set(); // engines removed from comparator bar via ×
 let allCharts      = {};
 let activeDatasets    = new Set();
 let userRefEngine     = null;
@@ -327,45 +325,54 @@ function renderHeader(meta, runs) {
   const datasets = [...new Set(runs.map(r => r.dataset))];
   const engines  = [...new Set(runs.map(r => r.engine))];
 
-  document.getElementById('hdr-date').textContent = formatDate(meta.generatedAt);
-  document.getElementById('hdr-java').textContent = `Java ${meta.java}`;
 
   const enginePills = document.getElementById('engine-pills');
   if (enginePills) {
-    // Sort engines by known order, unknown engines go at the end
     const sorted = [
       ...KNOWN_ENGINE_ORDER.filter(e => engines.includes(e)),
       ...engines.filter(e => !KNOWN_ENGINE_ORDER.includes(e)),
     ];
-    // Group by family (prefix before first dot)
-    const families = {};
-    const familyOrder = [];
-    for (const e of sorted) {
-      const dot = e.indexOf('.');
-      const family = dot >= 0 ? e.slice(0, dot) : e;
-      if (!families[family]) { families[family] = []; familyOrder.push(family); }
-      families[family].push(e);
-    }
-    enginePills.innerHTML = familyOrder.map(family => {
-      const vers = families[family];
-      const p = pal(vers[0]);
-      const btns = vers.map(e => {
-        const label = e.includes('.') ? e.slice(e.indexOf('.') + 1) : e;
-        return `<button class="engine-pill" data-engine="${e}" onclick="toggleEngine('${e}')" title="${e}">${label}<span class="pill-sign"></span></button>`;
-      }).join('');
-      return `<div class="engine-family-group">
-        <span class="engine-family-label" style="color:${p.hex}">${family}</span>
-        ${btns}
+    enginePills.innerHTML = sorted.map(engine => {
+      const dot    = engine.indexOf('.');
+      const family = dot >= 0 ? engine.slice(0, dot) : engine;
+      const version = dot >= 0 ? engine.slice(dot + 1) : engine;
+      const p = pal(engine);
+      return `<div class="engine-pill family-${family}" data-engine="${engine}"
+                draggable="true"
+                onclick="toggleEngine('${engine}')" title="${engine}" style="cursor:grab">
+        <span>${family}</span>
+        <span class="pill-version">${version}</span>
+        <button class="pill-remove-btn" onclick="event.stopPropagation();hidePillEngine('${engine}')" title="Remove">&times;</button>
       </div>`;
     }).join('');
+    // Attach drag handlers to newly created pills
+    enginePills.querySelectorAll('.engine-pill[data-engine]').forEach(attachPillDragHandlers);
   }
+}
 
-  const dsPills = document.getElementById('dataset-filter-pills');
-  if (dsPills) {
-    dsPills.innerHTML = datasets.map(d => {
-      const m = DATASET_META[d.toLowerCase()] ?? { label: d };
-      return `<button class="dataset-pill" data-ds="${d}" onclick="toggleDataset('${d}')">${m.label}</button>`;
-    }).join('');
+function renderSidebarMeta(meta, engines, runs, queryRuns) {
+  // Badges
+  const datasets = [...new Set(runs.map(r => r.dataset))];
+  const el = id => document.getElementById(id);
+  if (el('sidebar-badge-datasets')) el('sidebar-badge-datasets').textContent = datasets.length;
+  if (el('sidebar-badge-engines'))  el('sidebar-badge-engines').textContent  = engines.length;
+  if (el('sidebar-badge-results'))  el('sidebar-badge-results').textContent  = runs.length;
+  if (queryRuns && queryRuns.length > 0) {
+    const queryIds = [...new Set(queryRuns.map(r => r.queryId))];
+    if (el('sidebar-badge-sparql')) el('sidebar-badge-sparql').textContent = queryIds.length + ' q';
+    const sparqlNav = document.getElementById('sidebar-sparql-nav');
+    if (sparqlNav) sparqlNav.style.display = '';
+  }
+  // Footer meta
+  const box = document.getElementById('sidebar-meta');
+  if (box) {
+    box.innerHTML = `
+      <strong>Run context</strong>
+      <span><b>Date :</b> ${formatDate(meta.generatedAt)}</span>
+      <span><b>Java :</b> <code>${meta.java ?? '—'}</code></span>
+      ${meta.os ? `<span><b>OS :</b> ${meta.os}</span>` : ''}
+      ${meta.protocol ? `<span><b>Protocol :</b> ${meta.protocol.repetitions} reps + warmup</span>` : ''}
+    `;
   }
 }
 
@@ -379,27 +386,180 @@ function renderRunInfo(meta) {
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
+let _overviewBarChart   = null;
+let _overviewRadarChart = null;
+
 function renderKPI(runs) {
+  if (!runs || runs.length === 0) return;
   const engines = [...new Set(runs.map(r => r.engine))];
-  const files   = [...new Set(runs.map(r => r.file))];
-  const totalTrip = runs.reduce((s, r) => s + r.triples, 0);
-  const bestR     = runs.reduce((best, r) =>
-    r.throughputTriplesPerSec > best.throughputTriplesPerSec ? r : best, runs[0]);
+
+  // Per-engine aggregates
+  const byEngine = {};
+  engines.forEach(e => {
+    const er = runs.filter(r => r.engine === e);
+    byEngine[e] = {
+      avgThru : er.reduce((s,r) => s + r.throughputTriplesPerSec, 0) / er.length,
+      avgTime : er.reduce((s,r) => s + r.loadingTimeMs,           0) / er.length,
+      avgMem  : er.reduce((s,r) => s + r.memoryDeltaMb,           0) / er.length,
+    };
+  });
+
+  const maxThru = Math.max(...engines.map(e => byEngine[e].avgThru));
+  const minTime = Math.min(...engines.map(e => byEngine[e].avgTime));
+  const minMem  = Math.min(...engines.map(e => byEngine[e].avgMem));
+
+  function breakdownRows(engines, valFn, fmtFn, bestFn) {
+    return engines.map(e => {
+      const val    = valFn(e);
+      const isBest = bestFn(val);
+      const p      = pal(e);
+      return `<div class="kpi-breakdown-row">
+        <span class="kpi-breakdown-name">
+          <span class="engine-dot" style="background:${p.hex}"></span>${e}
+        </span>
+        <span class="kpi-breakdown-val${isBest ? ' kpi-best' : ''}">${fmtFn(val)}</span>
+      </div>`;
+    }).join('');
+  }
 
   const kpis = [
-    { label: 'Engines tested',  num: engines.length,       note: engines.join(' · ') },
-    { label: 'Files tested',    num: files.length,          note: '.nt (N-Triples) files' },
-    { label: 'Total triples',   num: fmt(totalTrip),        note: 'loaded in total' },
-    { label: 'Best throughput', num: fmt(bestR.throughputTriplesPerSec, 0), note: bestR.engine },
+    {
+      label: 'Avg. throughput',
+      sub: 'triples/s — higher is better',
+      rows: breakdownRows(engines,
+        e => byEngine[e].avgThru,
+        v => fmt(v, 0) + ' t/s',
+        v => v === maxThru),
+    },
+    {
+      label: 'Avg. load time',
+      sub: 'ms — lower is better',
+      rows: breakdownRows(engines,
+        e => byEngine[e].avgTime,
+        v => fmt(v, 0) + ' ms',
+        v => v === minTime),
+    },
+    {
+      label: 'Avg. memory Δ',
+      sub: 'MB — lower is better',
+      rows: breakdownRows(engines,
+        e => byEngine[e].avgMem,
+        v => fmt(v, 1) + ' MB',
+        v => v === minMem),
+    },
+    {
+      label: 'Files benchmarked',
+      sub: [...new Set(runs.map(r => r.dataset))].join(' · '),
+      rows: `<div class="kpi-breakdown-row kpi-single">
+        <span class="kpi-big">${[...new Set(runs.map(r => r.file))].length}</span>
+        <span class="kpi-breakdown-name" style="margin-left:8px">files · ${fmt(runs.reduce((s,r)=>s+r.triples,0)/engines.length, 0)} triples avg</span>
+      </div>`,
+    },
   ];
 
   document.getElementById('metrics-grid').innerHTML = kpis.map(k => `
     <div class="metric-block">
       <div class="metric-label">${k.label}</div>
-      <div class="metric-num">${k.num}</div>
-      <div class="metric-note">${k.note}</div>
+      <div class="metric-sub-label">${k.sub}</div>
+      <div class="kpi-breakdown">${k.rows}</div>
     </div>
   `).join('');
+
+  const meta = document.getElementById('overview-meta');
+  if (meta) meta.textContent = `${engines.length} engines · ${[...new Set(runs.map(r=>r.dataset))].length} datasets`;
+
+  _renderOverviewCharts(engines, byEngine);
+}
+
+function _renderOverviewCharts(engines, byEngine) {
+  const isDark  = document.documentElement.getAttribute('data-theme') !== 'light';
+  const gridCol = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const textCol = isDark ? '#8b949e' : '#57606a';
+
+  // ── Bar: avg throughput ───────────────────────────────────────────────
+  const barCtx = document.getElementById('chart-overview-bar')?.getContext('2d');
+  if (barCtx) {
+    if (_overviewBarChart) _overviewBarChart.destroy();
+    _overviewBarChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: engines,
+        datasets: [{
+          label: 'Avg. throughput (t/s)',
+          data: engines.map(e => Math.round(byEngine[e].avgThru)),
+          backgroundColor: engines.map(e => pal(e).bg),
+          borderColor:     engines.map(e => pal(e).hex),
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw, 0)} t/s` } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textCol, font: { size: 10 } } },
+          y: { beginAtZero: true, grid: { color: gridCol }, ticks: { color: textCol, font: { size: 10 }, callback: v => fmt(v,0) } },
+        },
+      },
+    });
+  }
+
+  // ── Radar: normalized scores ──────────────────────────────────────────
+  const radarCtx = document.getElementById('chart-overview-radar')?.getContext('2d');
+  if (radarCtx) {
+    if (_overviewRadarChart) _overviewRadarChart.destroy();
+
+    const maxThru = Math.max(...engines.map(e => byEngine[e].avgThru));
+    const maxTime = Math.max(...engines.map(e => byEngine[e].avgTime));
+    const maxMem  = Math.max(...engines.map(e => byEngine[e].avgMem));
+
+    const radarDatasets = engines.map(e => {
+      const p = pal(e);
+      // Throughput: higher = better → normalize directly
+      // Load time: lower = better → invert
+      // Memory: lower = better → invert
+      const scoreThru = maxThru > 0 ? Math.round(byEngine[e].avgThru / maxThru * 100) : 0;
+      const scoreTime = maxTime > 0 ? Math.round((1 - (byEngine[e].avgTime - Math.min(...engines.map(x=>byEngine[x].avgTime))) / maxTime) * 100) : 100;
+      const scoreMem  = maxMem  > 0 ? Math.round((1 - (byEngine[e].avgMem  - Math.min(...engines.map(x=>byEngine[x].avgMem)))  / maxMem)  * 100) : 100;
+      return {
+        label: e,
+        data: [scoreThru, scoreTime, scoreMem],
+        borderColor:     p.hex,
+        backgroundColor: p.hex + '22',
+        pointBackgroundColor: p.hex,
+        borderWidth: 1.8,
+        pointRadius: 3,
+      };
+    });
+
+    _overviewRadarChart = new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: ['Throughput', 'Load speed', 'Memory efficiency'],
+        datasets: radarDatasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10, font: { size: 10 }, color: textCol } },
+        },
+        scales: {
+          r: {
+            min: 0, max: 100,
+            ticks: { display: false, stepSize: 25 },
+            grid:       { color: gridCol },
+            angleLines: { color: gridCol },
+            pointLabels: { font: { size: 11 }, color: textCol },
+          },
+        },
+      },
+    });
+  }
 }
 
 // ── Global meter (proportion bars per engine) ─────────────────────────────────
@@ -484,7 +644,7 @@ function renderEngineCards(runs) {
           <span style="display:flex;align-items:center;gap:6px">
             <span class="suite-pct" title="${tooltip}" style="cursor:help">${scoreDisplay}</span>
             <button class="btn-set-ref ${engine === refEngine ? 'is-ref' : ''}"
-              title="${engine === refEngine ? 'Référence actuelle — cliquer pour retirer' : 'Définir comme référence'}"
+              title="${engine === refEngine ? 'Current reference — click to remove' : 'Set as reference'}"
               onclick="event.stopPropagation(); setRefEngine('${engine}')">
               ${engine === refEngine ? '★' : '☆'}
             </button>
@@ -517,22 +677,28 @@ function renderEngineCards(runs) {
 }
 
 function syncEnginePills() {
-  document.querySelectorAll('.engine-pill[data-engine]').forEach(el => {
-    const e    = el.dataset.engine;
-    const sign = el.querySelector('.pill-sign');
-    if (activeEngines.size === 0) {
-      el.classList.remove('ep-active', 'ep-dimmed');
-      if (sign) sign.textContent = '';
-    } else if (activeEngines.has(e)) {
-      el.classList.add('ep-active');
-      el.classList.remove('ep-dimmed');
-      if (sign) sign.textContent = '−';
-    } else {
-      el.classList.add('ep-dimmed');
-      el.classList.remove('ep-active');
-      if (sign) sign.textContent = '+';
+  document.querySelectorAll('.engine-pills-wrap .engine-pill[data-engine]').forEach(el => {
+    const e = el.dataset.engine;
+    el.classList.remove('ep-active', 'ep-dimmed');
+    if (activeEngines.size > 0) {
+      if (activeEngines.has(e)) el.classList.add('ep-active');
+      else el.classList.add('ep-dimmed');
     }
   });
+  // also sync engine cards in engine-grid
+  document.querySelectorAll('#engine-grid .suite-item[data-engine]').forEach(el => {
+    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
+  });
+  const btn = document.getElementById('clear-engines-btn');
+  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+}
+
+function getDatasetFilteredRuns() {
+  // Runs filtered only by dataset (not by engine) — used to keep all engine cards visible
+  return allRuns.filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
 }
 
 function toggleEngine(engine) {
@@ -543,8 +709,9 @@ function toggleEngine(engine) {
   }
   const filtered = getFilteredRuns(allRuns);
   renderKPI(filtered);
-  renderEngineCards(filtered);
+  renderEngineCards(getDatasetFilteredRuns()); // toujours toutes les cartes
   syncEnginePills();
+  renderModalEngineList();
   updateCharts();
   updateTable();
   // Sync SPARQL section
@@ -558,9 +725,9 @@ function toggleEngine(engine) {
 
 function clearEngineFilter() {
   activeEngines.clear();
-  document.querySelectorAll('.suite-item[data-engine]').forEach(el => el.classList.remove('active'));
   const btn = document.getElementById('clear-engines-btn');
   if (btn) btn.style.display = 'none';
+  renderEngineCards(getDatasetFilteredRuns());
   syncEnginePills();
   updateCharts();
   updateTable();
@@ -568,21 +735,38 @@ function clearEngineFilter() {
 
 function getFilteredRuns(runs) {
   return runs.filter(r =>
+    !hiddenEngines.has(r.engine) &&
     (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
     (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
   );
 }
 
+function hidePillEngine(engine) {
+  hiddenEngines.add(engine);
+  activeEngines.delete(engine);
+  // Hide the pill immediately
+  document.querySelectorAll(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`).forEach(el => el.remove());
+  const filtered = getFilteredRuns(allRuns);
+  renderKPI(filtered);
+  renderEngineCards(getDatasetFilteredRuns());
+  syncEnginePills();
+  updateCharts();
+  updateTable();
+  document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => {
+    el.style.display = hiddenEngines.has(el.dataset.engine) ? 'none' : '';
+  });
+  updateQueryChart();
+  updateQueryTable();
+  updatePillsScrollBtns();
+}
+
 function clearDatasetFilter() {
   activeDatasets.clear();
-  document.querySelectorAll('.dataset-pill').forEach(el => el.classList.remove('active'));
+  syncDatasetPills();
   updateCharts();
   updateTable();
   renderKPI(getFilteredRuns(allRuns));
-  renderEngineCards(getFilteredRuns(allRuns));
-  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
-    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
-  });
+  renderEngineCards(getDatasetFilteredRuns());
   const btn = document.getElementById('clear-engines-btn');
   if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
   updateQuerySectionVisibility();
@@ -590,40 +774,173 @@ function clearDatasetFilter() {
 
 function updateQuerySectionVisibility() {
   const section = document.querySelector('.query-section');
+  const sparqlNav = document.getElementById('sidebar-sparql-nav');
   if (!section) return;
-  if (activeDatasets.size === 0) { section.style.display = ''; return; }
+  // Hidden in All mode — only shown when a specific dataset with SPARQL is selected
+  if (activeDatasets.size === 0) {
+    section.style.display = 'none';
+    if (sparqlNav) sparqlNav.style.display = 'none';
+    return;
+  }
   const hasSparql = [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
   section.style.display = hasSparql ? '' : 'none';
+  if (sparqlNav) sparqlNav.style.display = hasSparql ? '' : 'none';
+}
+
+function renderDatasetPills(runs) {
+  const wrap = document.getElementById('dataset-pills');
+  if (!wrap) return;
+  const datasets = [...new Set(runs.map(r => r.dataset))];
+  wrap.innerHTML =
+    `<button class="dataset-pill dataset-pill-all active" data-ds="" onclick="clearDatasetFilter()">All</button>` +
+    datasets.map(ds => {
+      const meta  = DATASET_META[ds.toLowerCase()] ?? { label: ds };
+      const label = meta.label ?? ds;
+      return `<button class="dataset-pill" data-ds="${ds}" onclick="toggleDataset('${ds}')">${label}</button>`;
+    }).join('');
+}
+
+function syncDatasetPills() {
+  document.querySelectorAll('.dataset-pill[data-ds]').forEach(el => {
+    const ds = el.dataset.ds;
+    el.classList.toggle('active', ds === '' ? activeDatasets.size === 0 : activeDatasets.has(ds));
+  });
+  // Dataset cards: show only selected one (or all in All mode)
+  document.querySelectorAll('.dataset-card[data-ds]').forEach(el => {
+    const ds = el.dataset.ds;
+    el.classList.toggle('active', activeDatasets.has(ds));
+    el.style.display = (activeDatasets.size === 0 || activeDatasets.has(ds)) ? '' : 'none';
+  });
+  _syncDatasetSections();
+}
+
+function _syncDatasetSections() {
+  const isAll = activeDatasets.size === 0;
+
+  // All mode: show Overview + Datasets, hide detail sections
+  // Dataset selected: hide Overview, show detail sections
+  const overviewSection = document.getElementById('section-kpi');
+  if (overviewSection) overviewSection.style.display = isAll ? '' : 'none';
+
+  const detailSections = ['section-engines', 'section-charts', 'section-results'];
+  detailSections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isAll ? 'none' : '';
+  });
+
+  // Sidebar: Overview nav visible in All, hidden in dataset mode
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-kpi"]').forEach(el => {
+    el.closest('li').style.display = isAll ? '' : 'none';
+  });
+  // Sidebar: detail navs
+  ['section-engines', 'section-charts', 'section-results'].forEach(id => {
+    document.querySelectorAll(`.sidebar-nav-item[data-target="${id}"]`).forEach(el => {
+      el.closest('li').style.display = isAll ? 'none' : '';
+    });
+  });
+  // Results group heading in sidebar
+  const resultsGroup = document.querySelector('.sidebar-group:last-of-type');
+  if (resultsGroup) resultsGroup.style.display = isAll ? 'none' : '';
 }
 
 function toggleDataset(ds) {
-  if (activeDatasets.has(ds)) activeDatasets.delete(ds);
-  else activeDatasets.add(ds);
-  document.querySelectorAll('.dataset-pill').forEach(el => {
-    el.classList.toggle('active', activeDatasets.has(el.dataset.ds));
-  });
+  if (activeDatasets.has(ds)) {
+    activeDatasets.clear(); // re-clic → tout afficher
+  } else {
+    activeDatasets.clear();
+    activeDatasets.add(ds); // sélection exclusive
+  }
+  syncDatasetPills();
   updateCharts();
   updateTable();
   renderKPI(getFilteredRuns(allRuns));
-  renderEngineCards(getFilteredRuns(allRuns));
-  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
-    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
-  });
-  const btn = document.getElementById('clear-engines-btn');
-  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+  renderEngineCards(getDatasetFilteredRuns());
   updateQuerySectionVisibility();
 }
 
 function setRefEngine(engine) {
   userRefEngine = userRefEngine === engine ? null : engine;
-  renderEngineCards(getFilteredRuns(allRuns));
+  renderEngineCards(getDatasetFilteredRuns());
   document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
     el.classList.toggle('active', activeEngines.has(el.dataset.engine));
   });
 }
 
 // ── Engine card drag & drop ───────────────────────────────────────────────────
-let dragSrc = null;
+let dragSrc     = null;
+let pillDragSrc = null;
+
+// ── Pill drag-to-reorder ──────────────────────────────────────────────────────
+function pillDragStart(e) {
+  pillDragSrc = e.currentTarget;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', pillDragSrc.dataset.engine);
+  pillDragSrc.classList.add('pill-dragging');
+}
+
+function pillDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.currentTarget;
+  if (target !== pillDragSrc) target.classList.add('pill-drag-over');
+}
+
+function pillDragLeave(e) {
+  e.currentTarget.classList.remove('pill-drag-over');
+}
+
+function pillDrop(e) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.classList.remove('pill-drag-over');
+  if (!pillDragSrc || pillDragSrc === target) return;
+  const wrap = document.getElementById('engine-pills');
+  if (!wrap || !wrap.contains(pillDragSrc) || !wrap.contains(target)) return;
+
+  const pills  = [...wrap.querySelectorAll('.engine-pill[data-engine]')];
+  const srcIdx = pills.indexOf(pillDragSrc);
+  const tgtIdx = pills.indexOf(target);
+
+  if (srcIdx < tgtIdx) wrap.insertBefore(pillDragSrc, target.nextSibling);
+  else                  wrap.insertBefore(pillDragSrc, target);
+
+  // Sync engine cards order to match pills
+  const newOrder = [...wrap.querySelectorAll('.engine-pill[data-engine]')].map(el => el.dataset.engine);
+  syncCardsToOrder(newOrder);
+}
+
+function pillDragEnd(e) {
+  e.currentTarget.classList.remove('pill-dragging');
+  document.querySelectorAll('.engine-pill').forEach(el => el.classList.remove('pill-drag-over'));
+  pillDragSrc = null;
+  updatePillsScrollBtns();
+}
+
+function syncCardsToOrder(order) {
+  const grid = document.getElementById('engine-grid');
+  if (!grid) return;
+  order.forEach(engine => {
+    const card = grid.querySelector(`.suite-item[data-engine="${engine}"]`);
+    if (card) grid.appendChild(card);
+  });
+}
+
+function syncPillsToOrder(order) {
+  const wrap = document.getElementById('engine-pills');
+  if (!wrap) return;
+  order.forEach(engine => {
+    const pill = wrap.querySelector(`.engine-pill[data-engine="${engine}"]`);
+    if (pill) wrap.appendChild(pill);
+  });
+}
+
+function attachPillDragHandlers(pill) {
+  pill.addEventListener('dragstart', pillDragStart);
+  pill.addEventListener('dragover',  pillDragOver);
+  pill.addEventListener('drop',      pillDrop);
+  pill.addEventListener('dragend',   pillDragEnd);
+  pill.addEventListener('dragleave', pillDragLeave);
+}
 
 function dragStart(e) {
   dragSrc = e.currentTarget;
@@ -662,6 +979,7 @@ function dragDrop(e) {
 
   const order = [...grid.querySelectorAll('.suite-item[data-engine]')].map(el => el.dataset.engine);
   localStorage.setItem('engineOrder', JSON.stringify(order));
+  syncPillsToOrder(order);
   updateCharts();
 }
 
@@ -739,12 +1057,13 @@ function buildDatasets(field) {
     const visible = activeEngines.size === 0 || activeEngines.has(engine);
     return {
       label: engine,
+      hidden: !visible,
       data: files.map(f => {
         const r = dsRuns.find(x => x.engine === engine && x.file === f);
         return r ? +r[field].toFixed(1) : null;
       }),
-      backgroundColor: visible ? p.bg  : 'rgba(100,100,100,0.15)',
-      borderColor:     visible ? p.hex : 'rgba(100,100,100,0.3)',
+      backgroundColor: p.bg,
+      borderColor:     p.hex,
       borderWidth: 1,
       borderRadius: 3,
     };
@@ -766,16 +1085,15 @@ function buildCombinedDatasets() {
   engines.forEach(engine => {
     const p       = pal(engine);
     const visible = activeEngines.size === 0 || activeEngines.has(engine);
-    const col     = visible ? p.hex : 'rgba(100,100,100,0.3)';
-    const bgCol   = visible ? p.bg  : 'rgba(100,100,100,0.15)';
     // Barres : Loading time (axe gauche)
     datasets.push({
       label: `${engine}`,
       type: 'bar',
       yAxisID: 'yLeft',
+      hidden: !visible,
       data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.loadingTimeMs.toFixed(0) : null; }),
-      backgroundColor: bgCol,
-      borderColor: col,
+      backgroundColor: p.bg,
+      borderColor: p.hex,
       borderWidth: 1,
       borderRadius: 3,
     });
@@ -784,8 +1102,9 @@ function buildCombinedDatasets() {
       label: `${engine} (MB)`,
       type: 'line',
       yAxisID: 'yRight',
+      hidden: !visible,
       data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.memoryDeltaMb.toFixed(1) : null; }),
-      borderColor: col,
+      borderColor: p.hex,
       backgroundColor: 'transparent',
       borderWidth: 2,
       borderDash: [5, 3],
@@ -827,6 +1146,9 @@ function updateCharts() {
     chart.data.datasets = buildDatasets(chart._field);
     chart.update();
   }
+  // Refresh overview charts (theme change or engine filter)
+  const filtered = getFilteredRuns(allRuns);
+  if (filtered.length > 0) renderKPI(filtered);
 }
 
 // ── Tableau ────────────────────────────────────────────────────────────────────
@@ -1122,7 +1444,14 @@ function renderQuerySection(queryRuns) {
     </div>
     </details>
   `;
-  document.querySelector('.app-wrapper').appendChild(section);
+  const sparqlSection = document.getElementById('section-sparql');
+  if (sparqlSection) {
+    // Show only if a specific dataset is selected (not in All mode)
+    sparqlSection.style.display = activeDatasets.size > 0 ? '' : 'none';
+    sparqlSection.appendChild(section);
+  } else {
+    (document.querySelector('.app-content') || document.querySelector('.app-wrapper')).appendChild(section);
+  }
 
   // Stocker les datasets originaux pour pouvoir restaurer après filtre
   queryChartDatasetsBase = {};
@@ -1259,8 +1588,8 @@ async function renderTrend() {
         <span class="query-summary-meta">${valid.length} runs · heatmap avg débit</span>
       </summary>
       <p class="section-note" style="margin-top:8px">
-        <span class="hm-legend hm-legend-good">▮ amélioration &gt;5%</span>
-        <span class="hm-legend hm-legend-bad">▮ régression &gt;5%</span>
+        <span class="hm-legend hm-legend-good">▮ improvement &gt;5%</span>
+        <span class="hm-legend hm-legend-bad">▮ regression &gt;5%</span>
         <span class="hm-legend hm-legend-neutral">▮ stable</span>
       </p>
       <div class="hm-scroll">
@@ -1274,7 +1603,15 @@ async function renderTrend() {
       </div>
     </details>
   `;
-  document.querySelector('.app-wrapper').appendChild(section);
+  const trendSection = document.getElementById('section-trend');
+  if (trendSection) {
+    trendSection.style.display = '';
+    const trendNav = document.getElementById('sidebar-trend-nav');
+    if (trendNav) trendNav.style.display = '';
+    trendSection.appendChild(section);
+  } else {
+    (document.querySelector('.app-content') || document.querySelector('.app-wrapper')).appendChild(section);
+  }
 
   renderSparklines(valid);
 }
@@ -1339,6 +1676,108 @@ function downloadChart(canvasId, name) {
   a.click();
 }
 
+// ── Pills scroll arrows ───────────────────────────────────────────────────────
+function scrollPills(dir) {
+  const wrap = document.getElementById('engine-pills');
+  if (!wrap) return;
+  wrap.scrollBy({ left: dir * 180, behavior: 'smooth' });
+}
+
+function updatePillsScrollBtns() {
+  const wrap = document.getElementById('engine-pills');
+  const btnL = document.getElementById('pills-scroll-left');
+  const btnR = document.getElementById('pills-scroll-right');
+  if (!wrap || !btnL || !btnR) return;
+  const canScrollL = wrap.scrollLeft > 4;
+  const canScrollR = wrap.scrollLeft < wrap.scrollWidth - wrap.clientWidth - 4;
+  btnL.style.opacity = canScrollL ? '1' : '0.25';
+  btnL.style.pointerEvents = canScrollL ? '' : 'none';
+  btnR.style.opacity = canScrollR ? '1' : '0.25';
+  btnR.style.pointerEvents = canScrollR ? '' : 'none';
+  // hide both if no overflow
+  const hasOverflow = wrap.scrollWidth > wrap.clientWidth + 4;
+  btnL.style.display = hasOverflow ? '' : 'none';
+  btnR.style.display = hasOverflow ? '' : 'none';
+}
+
+// ── Sidebar scroll-spy ────────────────────────────────────────────────────────
+function initSidebar() {
+  // Click → smooth scroll
+  document.querySelectorAll('.sidebar-nav-item[data-target]').forEach(item => {
+    item.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(item.dataset.target);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Search filter
+  document.getElementById('sidebar-search-input')?.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.closest('li').style.display = text.includes(q) ? '' : 'none';
+    });
+  });
+
+  // Scroll-spy via IntersectionObserver
+  const sections = document.querySelectorAll('.page-section[id]');
+  const navItems = document.querySelectorAll('.sidebar-nav-item[data-target]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navItems.forEach(item => item.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-nav-item[data-target="${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+}
+
+// ── Add engine modal ──────────────────────────────────────────────────────────
+// Famille → préfixe avant le premier "."
+function _engineFamily(e) { const d = e.indexOf('.'); return d >= 0 ? e.slice(0, d) : e; }
+
+function _populateVersionSelect(family, subset) {
+  const engines = subset ?? [...new Set(allRuns.map(r => r.engine))];
+  const versions = engines
+    .filter(e => _engineFamily(e) === family)
+    .map(e => { const d = e.indexOf('.'); return d >= 0 ? e.slice(d + 1) : e; });
+  const sel = document.getElementById('modal-select-version');
+  if (!sel) return;
+  sel.innerHTML = versions.map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+function openAddEngineModal() {
+  const overlay = document.getElementById('modal-add-engine');
+  if (!overlay) return;
+
+  // Familles disponibles dans les données (uniquement moteurs cachés)
+  const allEngines = [...new Set(allRuns.map(r => r.engine))];
+  const available  = hiddenEngines.size > 0
+    ? allEngines.filter(e => hiddenEngines.has(e))
+    : allEngines;
+  const families   = [...new Set(available.map(_engineFamily))];
+
+  const triplesel = document.getElementById('modal-select-triplestore');
+  if (triplesel) {
+    const labels = { corese: 'Corese', jena: 'Apache Jena', rdf4j: 'Eclipse RDF4J' };
+    triplesel.innerHTML = families.map(f =>
+      `<option value="${f}">${labels[f] ?? f}</option>`
+    ).join('');
+    _populateVersionSelect(triplesel.value, available);
+    triplesel.onchange = () => _populateVersionSelect(triplesel.value, available);
+  }
+
+  overlay.classList.add('active');
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeAddEngineModal(); }, { once: true });
+}
+
+function closeAddEngineModal() {
+  document.getElementById('modal-add-engine')?.classList.remove('active');
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   let data;
@@ -1366,9 +1805,21 @@ async function main() {
   buildColorMap(engines);
 
   renderHeader(data.metadata, allRuns);
+  // Pills scroll arrows — listen once after pills are rendered
+  const pillsWrap = document.getElementById('engine-pills');
+  if (pillsWrap) {
+    pillsWrap.addEventListener('scroll', updatePillsScrollBtns, { passive: true });
+    new ResizeObserver(updatePillsScrollBtns).observe(pillsWrap);
+  }
+  updatePillsScrollBtns();
+  renderDatasetPills(allRuns);
+  _syncDatasetSections();
+  updateQuerySectionVisibility();
   renderKPI(allRuns);
   renderDatasetCards(allRuns, metadataQueries);
   renderEngineCards(allRuns);
+  renderSidebarMeta(data.metadata, engines, allRuns, data.queryRuns);
+  initSidebar();
   applyStoredEngineOrder();
   initCharts();
   initTableSort();
@@ -1380,6 +1831,47 @@ async function main() {
   if (data.queryRuns && data.queryRuns.length > 0) {
     renderQuerySection(data.queryRuns);
   }
+
+  document.getElementById('btn-open-add-engine')?.addEventListener('click', openAddEngineModal);
+  document.getElementById('btn-modal-cancel')?.addEventListener('click', closeAddEngineModal);
+  document.getElementById('btn-modal-submit')?.addEventListener('click', () => {
+    const family  = document.getElementById('modal-select-triplestore')?.value;
+    const version = document.getElementById('modal-select-version')?.value;
+    if (!family || !version) return;
+    const engineId = `${family}.${version}`;
+    if (hiddenEngines.has(engineId)) {
+      hiddenEngines.delete(engineId);
+      // Re-add pill to comparator bar
+      const wrap = document.getElementById('engine-pills');
+      if (wrap && !wrap.querySelector(`[data-engine="${engineId}"]`)) {
+        const dot    = engineId.indexOf('.');
+        const fam    = dot >= 0 ? engineId.slice(0, dot) : engineId;
+        const ver    = dot >= 0 ? engineId.slice(dot + 1) : engineId;
+        const pill   = document.createElement('div');
+        pill.className = `engine-pill family-${fam}`;
+        pill.dataset.engine = engineId;
+        pill.title = engineId;
+        pill.draggable = true;
+        pill.style.cursor = 'grab';
+        pill.onclick = () => toggleEngine(engineId);
+        pill.addEventListener('dragstart', pillDragStart);
+        pill.addEventListener('dragover',  pillDragOver);
+        pill.addEventListener('drop',      pillDrop);
+        pill.addEventListener('dragend',   pillDragEnd);
+        pill.addEventListener('dragleave', pillDragLeave);
+        pill.innerHTML = `<span>${fam}</span><span class="pill-version">${ver}</span>
+          <button class="pill-remove-btn" onclick="event.stopPropagation();hidePillEngine('${engineId}')" title="Remove">&times;</button>`;
+        wrap.appendChild(pill);
+      }
+      syncEnginePills();
+      const filtered = getFilteredRuns(allRuns);
+      renderKPI(filtered);
+      renderEngineCards(getDatasetFilteredRuns());
+      updateCharts();
+      updateTable();
+    }
+    closeAddEngineModal();
+  });
 
 }
 
