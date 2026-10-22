@@ -1,0 +1,1361 @@
+window.__BENCHMARK_DATA__ = {
+  "metadata": {
+    "generatedAt": "2026-10-22T10:11:11.973056018Z",
+    "protocol": {
+      "warmup": true,
+      "repetitions": 3,
+      "queryRepetitions": 3
+    },
+    "java": "21.0.12.1",
+    "os": "Linux",
+    "queries": [
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?MasterTheses)  WHERE {  ?X rdf:type bb:Master_Thesis }    ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?MasterThesesWithMention)     WHERE { ?X rdf:type bb:Master_Thesis .  ?Y rdf:type bb:Mention .  ?Y bb:mentionGivenTo ?X }      ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?studentsWithBachelorDegree)  WHERE {  ?X rdf:type bb:Student .  ?X bb:endsBachelorStudiesOn ?end .  Filter (xsd:dateTime(?end) < NOW()) }  ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?Y) as ?studentsEnrolledAtMaster)  WHERE {  ?Y rdf:type bb:Student .  ?Y bb:enrolledForMasterStudiesOn ?start . Filter (xsd:dateTime(?start) < NOW()) }  ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (SUM(?credits) as ?ECTSCredits)  WHERE {  ?X rdf:type bb:Student .    ?Y rdf:type bb:Evaluation .    ?Z rdf:type bb:Teaching_Unit .    ?X bb:hasFamilyName \"Department0StudentFamilyName0\"^^<http://www.w3.org/2001/XMLSchema#string> .     ?X bb:hasFirstName \"Department0StudentFirstName0\"^^<http://www.w3.org/2001/XMLSchema#string>  .    ?Y bb:performedByStudent ?X .    ?Y bb:evaluatesTeachingUnit ?Z .    ?Y bb:hasMark ?M  .    ?Z bb:hasNumberOfECTS ?credits }     ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?S  WHERE{  ?S rdf:type bb:Student .  ?S bb:hasFamilyName ?ln   FILTER (regex(?ln, \"^D\")) }        ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?P1 ?O1 ?P2 ?O2  WHERE {  ?S rdf:type bb:Student .  ?S bb:hasFamilyName \"Department0StudentFamilyName0\"^^<http://www.w3.org/2001/XMLSchema#string> .  ?S bb:hasFirstName \"Department0StudentFirstName0\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?S ?P1 ?O1 .  ?O1 ?P2 ?O2 }  ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT DISTINCT ?X (count(?E) as ?FailuresForTeachingUnit) WHERE {  ?X rdf:type bb:Teaching_Unit .  ?E rdf:type bb:Evaluation .\t  ?E bb:evaluatesTeachingUnit ?X .  ?E bb:hasMark ?Y . FILTER (?Y < 3) }  GROUP BY ?X    ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X (count(?E) as ?EvaluationsForTeachingUnit)  WHERE {  ?X rdf:type bb:Teaching_Unit .  ?E rdf:type bb:Evaluation .\t  ?E bb:evaluatesTeachingUnit ?X }  GROUP BY ?X      ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X (COUNT(?Y) as ?numOfThesisSupervised)  WHERE {   ?X rdf:type bb:Professor .   ?Y rdf:type ?tType .   ?Y bb:supervisedBy ?X .  FILTER REGEX (?tType, 'Thesis', 'i')  }  ORDER BY DESC(?numOfThesisSupervised)  LIMIT 1     ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X (AVG(?M) as ?avgMark)  WHERE {  ?X rdf:type bb:Student .   ?Y rdf:type bb:Evaluation .  ?T rdf:type bb:Study_Track .  ?S rdf:type bb:Semester .  ?T bb:hasName \"Department6Study_Track0\"^^<http://www.w3.org/2001/XMLSchema#string> .  ?S bb:hasName \"Semester0\"^^<http://www.w3.org/2001/XMLSchema#string> .  ?X bb:isInStudyTrack ?T.  ?Y bb:isForSemester ?S .  ?Y bb:performedByStudent ?X .  ?Y bb:hasMark ?M  }  GROUP BY ?X  ORDER BY DESC(?avgMark)  LIMIT 5   ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?T  (AVG(year(xsd:dateTime(?end))-year(xsd:dateTime(?start))) as ?CompletionTime)  WHERE {  ?T rdf:type bb:Study_Track .  ?X rdf:type bb:Student .  ?X bb:enrolledForBachelorStudiesOn ?start .  ?X bb:endsBachelorStudiesOn ?end .  ?X bb:isInStudyTrack ?T }  GROUP BY ?T ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (AVG(?mark) as ?AverageSemester1)  WHERE {  ?X rdf:type bb:Evaluation .  ?Y rdf:type bb:Teaching_Unit .  ?Z rdf:type bb:Semester .  ?X bb:evaluatesTeachingUnit ?Y .  ?X bb:isForSemester ?Z .  ?Z bb:hasName \"Semester1\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?X bb:hasMark ?mark }      ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?FamName ?FirstName  WHERE {  ?X rdf:type bb:Student .  ?Y rdf:type bb:Professor .  ?Z rdf:type bb:Evaluation .  ?D rdf:type bb:Department .  ?Z bb:performedByStudent ?X .  ?Z bb:evaluatedByProfessor ?Y .  ?Y bb:isAffiliatedWithDepartment ?D .  ?X bb:hasFamilyName ?FamName .  ?X bb:hasFirstName ?FirstName .  ?D bb:hasName \"Department0\"^^<http://www.w3.org/2001/XMLSchema#string>  }      ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X  WHERE{  \t?X rdf:type bb:Teaching_Unit .  \t?X bb:isTaughtInLang \"EN\"^^<http://www.w3.org/2001/XMLSchema#string> .  \t?X bb:hasName \"Department0Teaching_Unit0\"^^<http://www.w3.org/2001/XMLSchema#string> }      ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?BachelorStudentsSemester0)  WHERE {  ?X rdf:type bb:Student .  ?S rdf:type bb:Semester .  ?S bb:hasName \"Semester0\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?S bb:beginsOnDate ?start .  ?S bb:endsOnDate ?end .  ?X bb:enrolledForBachelorStudiesOn ?Y .  FILTER (xsd:dateTime(?Y) <= xsd:dateTime(?end)  && xsd:dateTime(?Y) >= xsd:dateTime(?start)) }  ",
+      "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?MasterStudentsSemester0)  WHERE {  ?X rdf:type bb:Student .  ?S rdf:type bb:Semester .  ?S bb:hasName \"Semester0\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?S bb:beginsOnDate ?start .  ?S bb:endsOnDate ?end .  ?X bb:enrolledForMasterStudiesOn ?Y .  FILTER (xsd:dateTime(?Y) <= xsd:dateTime(?end)  && xsd:dateTime(?Y) >= xsd:dateTime(?start)) }    "
+    ]
+  },
+  "runs": [
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "category_labels_en.nt",
+      "triples": 565108,
+      "loadingTimeMs": 15506,
+      "throughputTriplesPerSec": 36444.47310718431,
+      "memoryBeforeMb": 7.038612365722656,
+      "memoryAfterMb": 229.85668182373047,
+      "memoryDeltaMb": 222.8060073852539,
+      "cpuPercent": 6.820887231172129,
+      "repetitionsMs": [
+        15530,
+        15506,
+        15294
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "disambiguations_en.nt",
+      "triples": 768924,
+      "loadingTimeMs": 17743,
+      "throughputTriplesPerSec": 43336.7525221214,
+      "memoryBeforeMb": 7.240180969238281,
+      "memoryAfterMb": 190.87715911865234,
+      "memoryDeltaMb": 183.63697814941406,
+      "cpuPercent": 6.814968097947922,
+      "repetitionsMs": [
+        17743,
+        17965,
+        17601
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "homepages_en.nt",
+      "triples": 394897,
+      "loadingTimeMs": 8504,
+      "throughputTriplesPerSec": 46436.61806208843,
+      "memoryBeforeMb": 7.2403717041015625,
+      "memoryAfterMb": 152.91055297851562,
+      "memoryDeltaMb": 145.67018127441406,
+      "cpuPercent": 7.133935787230916,
+      "repetitionsMs": [
+        8504,
+        8537,
+        8382
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "persondata_en.nt",
+      "triples": 356996,
+      "loadingTimeMs": 8411,
+      "throughputTriplesPerSec": 42443.94245630722,
+      "memoryBeforeMb": 7.274925231933594,
+      "memoryAfterMb": 60.03778839111328,
+      "memoryDeltaMb": 52.76286315917969,
+      "cpuPercent": 6.827596057706042,
+      "repetitionsMs": [
+        8367,
+        8560,
+        8411
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "specific_mappingbased_properties_en.nt",
+      "triples": 184083,
+      "loadingTimeMs": 5346,
+      "throughputTriplesPerSec": 34433.7822671156,
+      "memoryBeforeMb": 7.278755187988281,
+      "memoryAfterMb": 48.17723083496094,
+      "memoryDeltaMb": 40.898475646972656,
+      "cpuPercent": 6.855628528632331,
+      "repetitionsMs": [
+        5317,
+        5353,
+        5346
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "category_labels_en.nt",
+      "triples": 565108,
+      "loadingTimeMs": 1653,
+      "throughputTriplesPerSec": 341868.1185722928,
+      "memoryBeforeMb": 40.44984436035156,
+      "memoryAfterMb": 334.89002990722656,
+      "memoryDeltaMb": 294.440185546875,
+      "cpuPercent": 14.285714285714288,
+      "repetitionsMs": [
+        1911,
+        1653,
+        1647
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "disambiguations_en.nt",
+      "triples": 765124,
+      "loadingTimeMs": 1882,
+      "throughputTriplesPerSec": 406548.352816153,
+      "memoryBeforeMb": 56.45038604736328,
+      "memoryAfterMb": 243.6976547241211,
+      "memoryDeltaMb": 187.2472686767578,
+      "cpuPercent": 12.144549763033176,
+      "repetitionsMs": [
+        1882,
+        1878,
+        1884
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "homepages_en.nt",
+      "triples": 394897,
+      "loadingTimeMs": 1094,
+      "throughputTriplesPerSec": 360966.17915904935,
+      "memoryBeforeMb": 56.46038818359375,
+      "memoryAfterMb": 193.26881408691406,
+      "memoryDeltaMb": 136.8084259033203,
+      "cpuPercent": 14.622414622414622,
+      "repetitionsMs": [
+        1094,
+        1097,
+        1094
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "persondata_en.nt",
+      "triples": 356914,
+      "loadingTimeMs": 885,
+      "throughputTriplesPerSec": 403292.65536723164,
+      "memoryBeforeMb": 56.619544982910156,
+      "memoryAfterMb": 150.81470489501953,
+      "memoryDeltaMb": 94.19515991210938,
+      "cpuPercent": 13.456937799043061,
+      "repetitionsMs": [
+        897,
+        884,
+        885
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "specific_mappingbased_properties_en.nt",
+      "triples": 182530,
+      "loadingTimeMs": 488,
+      "throughputTriplesPerSec": 374036.88524590165,
+      "memoryBeforeMb": 56.62525939941406,
+      "memoryAfterMb": 117.82056427001953,
+      "memoryDeltaMb": 61.19530487060547,
+      "cpuPercent": 14.51776649746193,
+      "repetitionsMs": [
+        488,
+        493,
+        487
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "category_labels_en.nt",
+      "triples": 565108,
+      "loadingTimeMs": 1922,
+      "throughputTriplesPerSec": 294020.81165452657,
+      "memoryBeforeMb": 9.081123352050781,
+      "memoryAfterMb": 534.0510025024414,
+      "memoryDeltaMb": 524.9708557128906,
+      "cpuPercent": 16.430594900849858,
+      "repetitionsMs": [
+        1922,
+        1957,
+        1698
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "disambiguations_en.nt",
+      "triples": 765124,
+      "loadingTimeMs": 1949,
+      "throughputTriplesPerSec": 392572.6013340174,
+      "memoryBeforeMb": 9.084274291992188,
+      "memoryAfterMb": 538.8653869628906,
+      "memoryDeltaMb": 529.7811126708984,
+      "cpuPercent": 16.19221728910943,
+      "repetitionsMs": [
+        1953,
+        1933,
+        1949
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "homepages_en.nt",
+      "triples": 394590,
+      "loadingTimeMs": 2605,
+      "throughputTriplesPerSec": 151474.08829174665,
+      "memoryBeforeMb": 9.114036560058594,
+      "memoryAfterMb": 451.36798095703125,
+      "memoryDeltaMb": 442.2540740966797,
+      "cpuPercent": 15.03706318390399,
+      "repetitionsMs": [
+        2605,
+        4130,
+        2589
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "persondata_en.nt",
+      "triples": 356914,
+      "loadingTimeMs": 812,
+      "throughputTriplesPerSec": 439549.2610837438,
+      "memoryBeforeMb": 9.143020629882812,
+      "memoryAfterMb": 101.14533233642578,
+      "memoryDeltaMb": 92.00231170654297,
+      "cpuPercent": 12.326043737574553,
+      "repetitionsMs": [
+        812,
+        806,
+        816
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "specific_mappingbased_properties_en.nt",
+      "triples": 182530,
+      "loadingTimeMs": 465,
+      "throughputTriplesPerSec": 392537.63440860214,
+      "memoryBeforeMb": 9.143196105957031,
+      "memoryAfterMb": 119.04185485839844,
+      "memoryDeltaMb": 109.8986587524414,
+      "cpuPercent": 16.526315789473685,
+      "repetitionsMs": [
+        462,
+        469,
+        465
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department0.nt",
+      "triples": 1233512,
+      "loadingTimeMs": 44528,
+      "throughputTriplesPerSec": 27701.940352137983,
+      "memoryBeforeMb": 7.065216064453125,
+      "memoryAfterMb": 98.885986328125,
+      "memoryDeltaMb": 91.78825378417969,
+      "cpuPercent": 6.44632651655994,
+      "repetitionsMs": [
+        44528,
+        45310,
+        43481
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department1.nt",
+      "triples": 1241828,
+      "loadingTimeMs": 44927,
+      "throughputTriplesPerSec": 27641.017650855832,
+      "memoryBeforeMb": 7.266777038574219,
+      "memoryAfterMb": 99.89978790283203,
+      "memoryDeltaMb": 92.63301086425781,
+      "cpuPercent": 6.415653593367413,
+      "repetitionsMs": [
+        44274,
+        45588,
+        44927
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department2.nt",
+      "triples": 1253055,
+      "loadingTimeMs": 45033,
+      "throughputTriplesPerSec": 27825.261474918392,
+      "memoryBeforeMb": 7.2669525146484375,
+      "memoryAfterMb": 100.37879180908203,
+      "memoryDeltaMb": 93.1118392944336,
+      "cpuPercent": 6.440759094492623,
+      "repetitionsMs": [
+        44456,
+        45988,
+        45033
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department3.nt",
+      "triples": 1254024,
+      "loadingTimeMs": 44163,
+      "throughputTriplesPerSec": 28395.353576523336,
+      "memoryBeforeMb": 7.267127990722656,
+      "memoryAfterMb": 100.62012481689453,
+      "memoryDeltaMb": 93.35299682617188,
+      "cpuPercent": 6.425138840864025,
+      "repetitionsMs": [
+        44163,
+        46025,
+        42636
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department4.nt",
+      "triples": 1233164,
+      "loadingTimeMs": 43594,
+      "throughputTriplesPerSec": 28287.470752855897,
+      "memoryBeforeMb": 7.267303466796875,
+      "memoryAfterMb": 99.38471984863281,
+      "memoryDeltaMb": 92.11741638183594,
+      "cpuPercent": 6.454260940947104,
+      "repetitionsMs": [
+        42809,
+        45033,
+        43594
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department5.nt",
+      "triples": 1252595,
+      "loadingTimeMs": 44087,
+      "throughputTriplesPerSec": 28411.890126341095,
+      "memoryBeforeMb": 7.267478942871094,
+      "memoryAfterMb": 100.40057373046875,
+      "memoryDeltaMb": 93.13309478759766,
+      "cpuPercent": 6.418809508387849,
+      "repetitionsMs": [
+        44087,
+        45376,
+        43030
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department6.nt",
+      "triples": 1257900,
+      "loadingTimeMs": 43415,
+      "throughputTriplesPerSec": 28973.856961879534,
+      "memoryBeforeMb": 7.2676544189453125,
+      "memoryAfterMb": 101.0426025390625,
+      "memoryDeltaMb": 93.77494812011719,
+      "cpuPercent": 6.413668569107932,
+      "repetitionsMs": [
+        43415,
+        45442,
+        43396
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department7.nt",
+      "triples": 1246553,
+      "loadingTimeMs": 43584,
+      "throughputTriplesPerSec": 28601.160976505136,
+      "memoryBeforeMb": 7.267829895019531,
+      "memoryAfterMb": 100.28753662109375,
+      "memoryDeltaMb": 93.01970672607422,
+      "cpuPercent": 6.428581868139899,
+      "repetitionsMs": [
+        43584,
+        45805,
+        43372
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department8.nt",
+      "triples": 1249997,
+      "loadingTimeMs": 43708,
+      "throughputTriplesPerSec": 28598.814862267776,
+      "memoryBeforeMb": 7.26800537109375,
+      "memoryAfterMb": 100.39089965820312,
+      "memoryDeltaMb": 93.12289428710938,
+      "cpuPercent": 6.384070238697243,
+      "repetitionsMs": [
+        42658,
+        43967,
+        43708
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department9.nt",
+      "triples": 1264762,
+      "loadingTimeMs": 44796,
+      "throughputTriplesPerSec": 28233.81551924279,
+      "memoryBeforeMb": 7.268180847167969,
+      "memoryAfterMb": 101.18174743652344,
+      "memoryDeltaMb": 93.91356658935547,
+      "cpuPercent": 6.412609229639878,
+      "repetitionsMs": [
+        44616,
+        45750,
+        44796
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department0.nt",
+      "triples": 1233512,
+      "loadingTimeMs": 4236,
+      "throughputTriplesPerSec": 291197.3559962229,
+      "memoryBeforeMb": 14.460479736328125,
+      "memoryAfterMb": 154.21166229248047,
+      "memoryDeltaMb": 139.75079345703125,
+      "cpuPercent": 8.684436801375753,
+      "repetitionsMs": [
+        4236,
+        4325,
+        4198
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department1.nt",
+      "triples": 1241828,
+      "loadingTimeMs": 4217,
+      "throughputTriplesPerSec": 294481.38487076125,
+      "memoryBeforeMb": 14.461387634277344,
+      "memoryAfterMb": 154.31521606445312,
+      "memoryDeltaMb": 139.85382843017578,
+      "cpuPercent": 8.640388460439876,
+      "repetitionsMs": [
+        4217,
+        4213,
+        4220
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department2.nt",
+      "triples": 1253055,
+      "loadingTimeMs": 4277,
+      "throughputTriplesPerSec": 292975.2162730886,
+      "memoryBeforeMb": 14.461563110351562,
+      "memoryAfterMb": 155.71773529052734,
+      "memoryDeltaMb": 141.25617218017578,
+      "cpuPercent": 8.604421912406703,
+      "repetitionsMs": [
+        4278,
+        4277,
+        4277
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department3.nt",
+      "triples": 1254024,
+      "loadingTimeMs": 4252,
+      "throughputTriplesPerSec": 294925.68203198496,
+      "memoryBeforeMb": 14.462471008300781,
+      "memoryAfterMb": 155.92825317382812,
+      "memoryDeltaMb": 141.46578216552734,
+      "cpuPercent": 8.695652173913043,
+      "repetitionsMs": [
+        4251,
+        4262,
+        4252
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department4.nt",
+      "triples": 1233164,
+      "loadingTimeMs": 4248,
+      "throughputTriplesPerSec": 290292.84369114874,
+      "memoryBeforeMb": 14.462646484375,
+      "memoryAfterMb": 154.38127899169922,
+      "memoryDeltaMb": 139.91854095458984,
+      "cpuPercent": 8.614285714285714,
+      "repetitionsMs": [
+        4257,
+        4214,
+        4248
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department5.nt",
+      "triples": 1252595,
+      "loadingTimeMs": 4274,
+      "throughputTriplesPerSec": 293073.23350491346,
+      "memoryBeforeMb": 14.463005065917969,
+      "memoryAfterMb": 156.41188049316406,
+      "memoryDeltaMb": 141.9488754272461,
+      "cpuPercent": 8.576233183856502,
+      "repetitionsMs": [
+        4274,
+        4271,
+        4296
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department6.nt",
+      "triples": 1257900,
+      "loadingTimeMs": 4304,
+      "throughputTriplesPerSec": 292263.01115241635,
+      "memoryBeforeMb": 14.463180541992188,
+      "memoryAfterMb": 156.4615936279297,
+      "memoryDeltaMb": 141.9984130859375,
+      "cpuPercent": 8.652502096729101,
+      "repetitionsMs": [
+        4319,
+        4301,
+        4304
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department7.nt",
+      "triples": 1246553,
+      "loadingTimeMs": 4253,
+      "throughputTriplesPerSec": 293099.6943334117,
+      "memoryBeforeMb": 14.463691711425781,
+      "memoryAfterMb": 155.7333984375,
+      "memoryDeltaMb": 141.26970672607422,
+      "cpuPercent": 8.605803255484783,
+      "repetitionsMs": [
+        4252,
+        4262,
+        4253
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department8.nt",
+      "triples": 1249997,
+      "loadingTimeMs": 4281,
+      "throughputTriplesPerSec": 291987.1525344546,
+      "memoryBeforeMb": 14.4638671875,
+      "memoryAfterMb": 159.14591217041016,
+      "memoryDeltaMb": 144.68204498291016,
+      "cpuPercent": 8.561788274989455,
+      "repetitionsMs": [
+        4273,
+        4312,
+        4281
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department9.nt",
+      "triples": 1264762,
+      "loadingTimeMs": 4302,
+      "throughputTriplesPerSec": 293993.95629939565,
+      "memoryBeforeMb": 14.464042663574219,
+      "memoryAfterMb": 158.15921783447266,
+      "memoryDeltaMb": 143.69517517089844,
+      "cpuPercent": 8.667691877533903,
+      "repetitionsMs": [
+        4301,
+        4303,
+        4302
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department0.nt",
+      "triples": 1233512,
+      "loadingTimeMs": 3481,
+      "throughputTriplesPerSec": 354355.64492961793,
+      "memoryBeforeMb": 12.674072265625,
+      "memoryAfterMb": 225.52577209472656,
+      "memoryDeltaMb": 212.85616302490234,
+      "cpuPercent": 12.570668440305951,
+      "repetitionsMs": [
+        3288,
+        3481,
+        3591
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department1.nt",
+      "triples": 1241828,
+      "loadingTimeMs": 3404,
+      "throughputTriplesPerSec": 364814.33607520565,
+      "memoryBeforeMb": 12.675315856933594,
+      "memoryAfterMb": 226.71592712402344,
+      "memoryDeltaMb": 214.04061126708984,
+      "cpuPercent": 9.5998595998596,
+      "repetitionsMs": [
+        3404,
+        3404,
+        3406
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department2.nt",
+      "triples": 1253055,
+      "loadingTimeMs": 3443,
+      "throughputTriplesPerSec": 363942.7824571594,
+      "memoryBeforeMb": 12.675491333007812,
+      "memoryAfterMb": 228.1732406616211,
+      "memoryDeltaMb": 215.49774932861328,
+      "cpuPercent": 9.524638690579836,
+      "repetitionsMs": [
+        3446,
+        3436,
+        3443
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department3.nt",
+      "triples": 1254024,
+      "loadingTimeMs": 3434,
+      "throughputTriplesPerSec": 365178.80023296445,
+      "memoryBeforeMb": 12.675743103027344,
+      "memoryAfterMb": 227.8556900024414,
+      "memoryDeltaMb": 215.17994689941406,
+      "cpuPercent": 9.512964260686754,
+      "repetitionsMs": [
+        3444,
+        3421,
+        3434
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department4.nt",
+      "triples": 1233164,
+      "loadingTimeMs": 3414,
+      "throughputTriplesPerSec": 361207.9671939074,
+      "memoryBeforeMb": 12.675918579101562,
+      "memoryAfterMb": 224.70127868652344,
+      "memoryDeltaMb": 212.02536010742188,
+      "cpuPercent": 9.089313914721881,
+      "repetitionsMs": [
+        3414,
+        3424,
+        3411
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department5.nt",
+      "triples": 1252595,
+      "loadingTimeMs": 3451,
+      "throughputTriplesPerSec": 362965.80701246014,
+      "memoryBeforeMb": 12.680679321289062,
+      "memoryAfterMb": 227.61461639404297,
+      "memoryDeltaMb": 214.9339370727539,
+      "cpuPercent": 9.938208032955716,
+      "repetitionsMs": [
+        3456,
+        3451,
+        3450
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department6.nt",
+      "triples": 1257900,
+      "loadingTimeMs": 3449,
+      "throughputTriplesPerSec": 364714.4099739055,
+      "memoryBeforeMb": 12.681243896484375,
+      "memoryAfterMb": 228.33815002441406,
+      "memoryDeltaMb": 215.6569061279297,
+      "cpuPercent": 9.599303135888501,
+      "repetitionsMs": [
+        3474,
+        3449,
+        3441
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department7.nt",
+      "triples": 1246553,
+      "loadingTimeMs": 3483,
+      "throughputTriplesPerSec": 357896.35371805914,
+      "memoryBeforeMb": 12.681419372558594,
+      "memoryAfterMb": 226.96607971191406,
+      "memoryDeltaMb": 214.28466033935547,
+      "cpuPercent": 9.510823248679051,
+      "repetitionsMs": [
+        3429,
+        3516,
+        3483
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department8.nt",
+      "triples": 1249997,
+      "loadingTimeMs": 3497,
+      "throughputTriplesPerSec": 357448.38432942523,
+      "memoryBeforeMb": 12.681594848632812,
+      "memoryAfterMb": 227.16641235351562,
+      "memoryDeltaMb": 214.4848175048828,
+      "cpuPercent": 9.670254570305827,
+      "repetitionsMs": [
+        3491,
+        3498,
+        3497
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department9.nt",
+      "triples": 1264762,
+      "loadingTimeMs": 3546,
+      "throughputTriplesPerSec": 356672.8708403836,
+      "memoryBeforeMb": 12.681770324707031,
+      "memoryAfterMb": 229.6417465209961,
+      "memoryDeltaMb": 216.95997619628906,
+      "cpuPercent": 9.440027068177974,
+      "repetitionsMs": [
+        3546,
+        3538,
+        3551
+      ]
+    }
+  ],
+  "queryRuns": [
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "medianMs": 43,
+      "repetitionsMs": [
+        3921,
+        43,
+        34
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_2",
+      "medianMs": 63,
+      "repetitionsMs": [
+        94,
+        63,
+        59
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_3",
+      "medianMs": 221,
+      "repetitionsMs": [
+        669,
+        221,
+        218
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_4",
+      "medianMs": 97,
+      "repetitionsMs": [
+        98,
+        97,
+        95
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_5",
+      "medianMs": 112,
+      "repetitionsMs": [
+        780,
+        112,
+        111
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_6",
+      "medianMs": 229,
+      "repetitionsMs": [
+        332,
+        227,
+        229
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_7",
+      "medianMs": 111,
+      "repetitionsMs": [
+        131,
+        111,
+        108
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "medianMs": 5814,
+      "repetitionsMs": [
+        6628,
+        5814,
+        5814
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_9",
+      "medianMs": 9690,
+      "repetitionsMs": [
+        9495,
+        9705,
+        9690
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "medianMs": 248,
+      "repetitionsMs": [
+        313,
+        236,
+        248
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_11",
+      "medianMs": 323,
+      "repetitionsMs": [
+        324,
+        323,
+        316
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_12",
+      "medianMs": 349,
+      "repetitionsMs": [
+        467,
+        349,
+        347
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_13",
+      "medianMs": 6076,
+      "repetitionsMs": [
+        6076,
+        6000,
+        6148
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_14",
+      "medianMs": 9527,
+      "repetitionsMs": [
+        9551,
+        9527,
+        9436
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_15",
+      "medianMs": 8,
+      "repetitionsMs": [
+        8,
+        10,
+        6
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_16",
+      "medianMs": 1354,
+      "repetitionsMs": [
+        1354,
+        1351,
+        1366
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_17",
+      "medianMs": 243,
+      "repetitionsMs": [
+        247,
+        243,
+        223
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "medianMs": 23,
+      "repetitionsMs": [
+        131,
+        23,
+        13
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_2",
+      "medianMs": 42,
+      "repetitionsMs": [
+        55,
+        42,
+        26
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_3",
+      "medianMs": 376,
+      "repetitionsMs": [
+        545,
+        287,
+        376
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_4",
+      "medianMs": 141,
+      "repetitionsMs": [
+        142,
+        139,
+        141
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_5",
+      "medianMs": 2,
+      "repetitionsMs": [
+        4,
+        2,
+        2
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_6",
+      "medianMs": 138,
+      "repetitionsMs": [
+        173,
+        138,
+        132
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_7",
+      "medianMs": 1,
+      "repetitionsMs": [
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "medianMs": 3264,
+      "repetitionsMs": [
+        3264,
+        3244,
+        3339
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_9",
+      "medianMs": 3048,
+      "repetitionsMs": [
+        3016,
+        3048,
+        3094
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "medianMs": -1,
+      "repetitionsMs": [
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_11",
+      "medianMs": -1,
+      "repetitionsMs": [
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_12",
+      "medianMs": 359,
+      "repetitionsMs": [
+        369,
+        359,
+        356
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_13",
+      "medianMs": 109,
+      "repetitionsMs": [
+        115,
+        109,
+        108
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_14",
+      "medianMs": 526,
+      "repetitionsMs": [
+        526,
+        521,
+        527
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_15",
+      "medianMs": 2,
+      "repetitionsMs": [
+        5,
+        2,
+        2
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_16",
+      "medianMs": 519,
+      "repetitionsMs": [
+        519,
+        522,
+        519
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_17",
+      "medianMs": 140,
+      "repetitionsMs": [
+        140,
+        140,
+        139
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "medianMs": 7,
+      "repetitionsMs": [
+        94,
+        7,
+        5
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_2",
+      "medianMs": 50,
+      "repetitionsMs": [
+        50,
+        79,
+        21
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_3",
+      "medianMs": 85,
+      "repetitionsMs": [
+        154,
+        85,
+        80
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_4",
+      "medianMs": 20,
+      "repetitionsMs": [
+        22,
+        20,
+        20
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_5",
+      "medianMs": 2,
+      "repetitionsMs": [
+        5,
+        2,
+        2
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_6",
+      "medianMs": 61,
+      "repetitionsMs": [
+        117,
+        61,
+        60
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_7",
+      "medianMs": 2,
+      "repetitionsMs": [
+        4,
+        2,
+        1
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "medianMs": 1530,
+      "repetitionsMs": [
+        1530,
+        1488,
+        1559
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_9",
+      "medianMs": 1059,
+      "repetitionsMs": [
+        1078,
+        1059,
+        1025
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "medianMs": -1,
+      "repetitionsMs": [
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_11",
+      "medianMs": 26,
+      "repetitionsMs": [
+        39,
+        26,
+        25
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_12",
+      "medianMs": 144,
+      "repetitionsMs": [
+        145,
+        144,
+        138
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_13",
+      "medianMs": 53,
+      "repetitionsMs": [
+        53,
+        53,
+        50
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_14",
+      "medianMs": 220,
+      "repetitionsMs": [
+        226,
+        218,
+        220
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_15",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_16",
+      "medianMs": 208,
+      "repetitionsMs": [
+        208,
+        207,
+        237
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_17",
+      "medianMs": 28,
+      "repetitionsMs": [
+        29,
+        28,
+        27
+      ]
+    }
+  ]
+};
