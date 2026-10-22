@@ -18,8 +18,7 @@
     <div class="header-top-row">
       <div class="brand-group">
         <h1 class="main-title">Corese</h1>
-        <span class="badge-tag">Benchmark</span>
-        <span id="hdr-datasets"></span>
+        <div class="engine-pills" id="engine-pills"></div>
       </div>
 
       <div class="header-controls">
@@ -49,6 +48,13 @@
             </svg>
             <span>CSV</span>
           </a>
+          <a class="btn-download" href="https://corese-stack.github.io/corese-w3c/" target="_blank" title="Résultats W3C SPARQL conformance tests">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <polyline points="9 11 12 14 22 4"></polyline>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            </svg>
+            <span>W3C Tests</span>
+          </a>
         </div>
 
         <button id="theme-toggle" class="theme-btn" title="Thème : Auto (Système)" aria-label="Changer le thème (Auto, Clair, Sombre)">
@@ -71,31 +77,15 @@
       </div>
     </div>
 
-    <p class="main-desc" id="main-desc">
-      Corese reference benchmark dashboard — Loading performance comparison
-    </p>
+    <div class="header-pills-row">
+      <div class="dataset-filter-pills" id="dataset-filter-pills"></div>
+    </div>
   </header>
-
-  <!-- ── Infos exécution ────────────────────────────────────────────────── -->
-  <section class="run-info-bar" id="run-info-bar">
-    <span class="run-info-label">Run info</span>
-    <span class="run-info-item"><span class="run-info-key">Generated</span><span id="info-date">—</span></span>
-    <span class="run-info-item"><span class="run-info-key">Java</span><span id="info-java" class="font-mono">—</span></span>
-    <span class="run-info-item"><span class="run-info-key">OS</span><span id="info-os">—</span></span>
-    <span class="run-info-item"><span class="run-info-key">Protocol</span><span id="info-protocol">—</span></span>
-  </section>
 
   <!-- ── KPI ────────────────────────────────────────────────────────────── -->
   <section class="metrics-grid" id="metrics-grid">
     <!-- filled by JS -->
   </section>
-
-  <!-- ── Global meter ───────────────────────────────────────────────────── -->
-  <div class="global-meter-wrap">
-    <div class="global-meter" id="global-meter">
-      <!-- filled by JS -->
-    </div>
-  </div>
 
   <!-- ── Datasets ─────────────────────────────────────────────────────────── -->
   <details class="query-details" open>
@@ -118,50 +108,48 @@
     <!-- filled by JS -->
   </div>
 
-  <!-- ── Resource usage charts ─────────────────────────────────────────────── -->
-  <h2 class="section-heading" style="margin-top:32px">Resource usage</h2>
-  <div class="charts-grid charts-grid--sm">
-
-    <div class="chart-surface">
-      <div class="chart-header">
-        <span class="chart-title">Memory used</span>
-        <span class="chart-unit">ΔMB — lower is better</span>
-        <button class="btn-chart-png" onclick="downloadChart('chart-memory','memory')" title="Download PNG">↓ PNG</button>
-      </div>
-      <canvas id="chart-memory"></canvas>
-    </div>
-
-    <div class="chart-surface">
-      <div class="chart-header">
-        <span class="chart-title">CPU</span>
-        <span class="chart-unit">% — lower is better</span>
-        <button class="btn-chart-png" onclick="downloadChart('chart-cpu','cpu')" title="Download PNG">↓ PNG</button>
-      </div>
-      <canvas id="chart-cpu"></canvas>
-    </div>
-
-  </div>
-
-  <!-- ── Performance charts ───────────────────────────────────────────────── -->
-  <h2 class="section-heading" style="margin-top:24px">Performance</h2>
+  <!-- ── Charts ───────────────────────────────────────────────────────────── -->
+  <h2 class="section-heading" style="margin-top:32px">Performance</h2>
   <div class="charts-grid">
 
-    <div class="chart-surface">
+    <div class="chart-surface" onclick="openChartZoom('chart-loading')" style="cursor:pointer">
+      <div class="chart-header">
+        <span class="chart-title">Loading time</span>
+        <span class="chart-unit">ms — lower is better</span>
+        <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-loading','loading')" title="Download PNG">↓ PNG</button>
+        <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-loading')" title="Agrandir">⤢</button>
+      </div>
+      <canvas id="chart-loading"></canvas>
+    </div>
+
+    <div class="chart-surface" onclick="openChartZoom('chart-throughput')" style="cursor:pointer">
       <div class="chart-header">
         <span class="chart-title">Throughput</span>
         <span class="chart-unit">triples/s — higher is better</span>
-        <button class="btn-chart-png" onclick="downloadChart('chart-throughput','throughput')" title="Download PNG">↓ PNG</button>
+        <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-throughput','throughput')" title="Download PNG">↓ PNG</button>
+        <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-throughput')" title="Agrandir">⤢</button>
       </div>
       <canvas id="chart-throughput"></canvas>
     </div>
 
-    <div class="chart-surface">
+    <div class="chart-surface" onclick="openChartZoom('chart-memory')" style="cursor:pointer">
       <div class="chart-header">
-        <span class="chart-title">Loading time</span>
-        <span class="chart-unit">ms — lower is better</span>
-        <button class="btn-chart-png" onclick="downloadChart('chart-loading','loading')" title="Download PNG">↓ PNG</button>
+        <span class="chart-title">Memory</span>
+        <span class="chart-unit">ΔMB — lower is better</span>
+        <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-memory','memory')" title="Download PNG">↓ PNG</button>
+        <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-memory')" title="Agrandir">⤢</button>
       </div>
-      <canvas id="chart-loading"></canvas>
+      <canvas id="chart-memory"></canvas>
+    </div>
+
+    <div class="chart-surface" onclick="openChartZoom('chart-cpu')" style="cursor:pointer">
+      <div class="chart-header">
+        <span class="chart-title">CPU</span>
+        <span class="chart-unit">% — lower is better</span>
+        <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-cpu','cpu')" title="Download PNG">↓ PNG</button>
+        <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-cpu')" title="Agrandir">⤢</button>
+      </div>
+      <canvas id="chart-cpu"></canvas>
     </div>
 
   </div>
@@ -192,6 +180,29 @@
       </div>
     </div>
   </details>
+
+  <dialog id="chart-zoom-modal" class="chart-zoom-dialog" onclick="if(event.target===this)closeChartZoom()">
+    <div class="chart-zoom-inner">
+      <div class="chart-zoom-header">
+        <span class="chart-zoom-title" id="chart-zoom-title"></span>
+        <div class="chart-zoom-actions">
+          <button class="btn-chart-png" id="chart-zoom-png" title="Download PNG">↓ PNG</button>
+          <button class="modal-close" onclick="closeChartZoom()">✕</button>
+        </div>
+      </div>
+      <canvas id="chart-zoom-canvas"></canvas>
+    </div>
+  </dialog>
+
+  <dialog id="dataset-modal" class="dataset-modal-dialog">
+    <div class="modal-inner">
+      <div class="modal-top">
+        <span class="modal-title" id="modal-ds-title"></span>
+        <button class="modal-close" onclick="closeDatasetModal()">✕</button>
+      </div>
+      <div id="modal-ds-body"></div>
+    </div>
+  </dialog>
 
 </div><!-- /.app-wrapper -->
 

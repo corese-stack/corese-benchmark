@@ -79,6 +79,18 @@ parser.add_argument(
     default=False,
     help="Enable RDFS inference for Corese engines (passed to Java harness).",
 )
+parser.add_argument(
+    "--resume",
+    action="store_true",
+    default=False,
+    help="Resume mode: run one engine×dataset at a time, skip if output already exists.",
+)
+parser.add_argument(
+    "--quick",
+    action="store_true",
+    default=False,
+    help="Quick mode: 1 repetition instead of 3 (faster, less accurate).",
+)
 args = parser.parse_args()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -219,6 +231,9 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
     if args.inference:
         args_str += " --inference"
         print("  Inference: enabled")
+    if args.quick:
+        args_str += " --quick"
+        print("  Quick mode: 1 repetition")
     cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
     print(f"Running benchmark: {' '.join(cmd)}")
     subprocess.run(cmd, cwd=project_dir, check=True)
@@ -261,6 +276,53 @@ def merge_json_files(file_list, output_file):
 
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# ── Resume mode: one engine × one dataset at a time, skips existing results ──
+if args.engines and args.resume:
+    engines_list = [e.strip() for e in args.engines.split(",")]
+
+    def needs_local_jar_r(e):
+        return e in ('corese.next', 'corese.local') or e.startswith('corese.commit.')
+
+    def build_gradle_props_r(engine):
+        parts = engine.split(".", 1)
+        family, ver = (parts[0], parts[1]) if len(parts) == 2 else (engine, None)
+        extra = []
+        if family == 'corese':
+            extra += [f"-PcoreseVersion={'local' if ver in ('next','local') else ver}"]
+        elif family == 'jena' and ver:
+            extra += [f"-PjenaVersion={ver}"]
+        elif family == 'rdf4j' and ver:
+            extra += [f"-Prdf4jVersion={ver}"]
+        return extra
+
+    resume_dir = os.path.join(out_json_dir, "resume")
+    os.makedirs(resume_dir, exist_ok=True)
+    collected = []
+    last_build_props = None
+
+    for engine in engines_list:
+        gradle_props = build_gradle_props_r(engine)
+        for ds in dataset_names:
+            safe_engine = engine.replace('.', '_')
+            out_file = os.path.join(resume_dir, f"{safe_engine}_{ds}.json")
+            if os.path.exists(out_file):
+                print(f"[resume] SKIP {engine} × {ds} — already done ({out_file})")
+                collected.append(out_file)
+                continue
+            print(f"[resume] RUN  {engine} × {ds}")
+            if gradle_props != last_build_props:
+                gradle_build(gradle_props)
+                last_build_props = gradle_props
+            run_benchmark(engine, out_file, ds, dataset_dirs[ds], gradle_props=gradle_props)
+            collected.append(out_file)
+
+    if collected:
+        engines_tag  = args.engines.replace(',', '_')
+        final_output = os.path.join(out_json_dir, f"{timestamp}_resume_{engines_tag}.json")
+        merge_json_files(list(collected), final_output)
+        print(f"\n[resume] Rapport final : {final_output}")
+    import sys; sys.exit(0)
 
 # Case A: --engines (single build, all engines)
 if args.engines:

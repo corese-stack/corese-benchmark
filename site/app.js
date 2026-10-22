@@ -38,6 +38,13 @@ const AUTO_COLORS = [
   { hex: '#FF5722', bg: 'rgba(255,87,34,0.75)'   },
 ];
 
+// Known engine versions (order preserved in pills, filtered to what's in data)
+const KNOWN_ENGINE_ORDER = [
+  'corese.next', 'corese.local', 'corese.4.6.5', 'corese.4.6.4', 'corese.4.6.3',
+  'jena.6.2.0', 'jena.6.1.0', 'jena.6.0.0',
+  'rdf4j.5.3.2', 'rdf4j.5.3.1', 'rdf4j.5.3.0',
+];
+
 // Dynamic resolution: builds engine → color map from data
 let ENGINE_COLOR_MAP = {};
 
@@ -130,21 +137,29 @@ const DATASET_META = {
     label:       'DBpedia',
     description: 'Real-world RDF dump — 5 N-Triples files from DBpedia 3.5.1',
     url:         'https://downloads.dbpedia.org/3.5.1/en/',
+    fileBaseUrl: 'https://downloads.dbpedia.org/3.5.1/en/',
+    hasSparql:   false,
   },
   bowlogna: {
     label:       'Bowlogna',
     description: 'Synthetic university dataset with SPARQL queries (HOBBIT benchmark)',
     url:         'https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip',
+    fileBaseUrl: null,
+    hasSparql:   true,
   },
   bsbm: {
     label:       'BSBM',
     description: 'Berlin SPARQL Benchmark — synthetic e-commerce dataset',
     url:         'https://sourceforge.net/projects/bsbmtools/',
+    fileBaseUrl: null,
+    hasSparql:   true,
   },
   lubm: {
     label:       'LUBM',
     description: 'Lehigh University Benchmark — university domain with RDFS reasoning',
     url:         'https://swat.cse.lehigh.edu/projects/lubm/',
+    fileBaseUrl: null,
+    hasSparql:   true,
   },
 };
 
@@ -177,9 +192,9 @@ function renderDatasetCards(runs, queries) {
       `<span class="file-tag">${shortFile(f)}</span>`
     ).join('');
 
-    // SPARQL queries collapsible (only if queries embedded in JSON)
+    // SPARQL queries collapsible (only if queries embedded in JSON et dataset hasSparql)
     let queriesHtml = '';
-    if (queries && queries.length > 0) {
+    if (queries && queries.length > 0 && (DATASET_META[ds.toLowerCase()]?.hasSparql ?? false)) {
       const queryItems = queries.map((q, i) => `
         <div class="query-item">
           <span class="query-item-id">Q${i + 1}</span>
@@ -196,7 +211,7 @@ function renderDatasetCards(runs, queries) {
     }
 
     return `
-      <div class="suite-item dataset-card">
+      <div class="suite-item dataset-card" onclick="openDatasetModal('${ds}')">
         <div class="suite-item-header">
           <span class="suite-name">${meta.label}</span>
           ${linkHtml}
@@ -220,6 +235,56 @@ function renderDatasetCards(runs, queries) {
         ${queriesHtml}
       </div>`;
   }).join('');
+}
+
+function openDatasetModal(ds) {
+  const m       = DATASET_META[ds.toLowerCase()] ?? { label: ds, description: '', url: null };
+  const dsRuns  = allRuns.filter(r => r.dataset === ds);
+  const files   = [...new Set(dsRuns.map(r => r.file))];
+  const engines = [...new Set(dsRuns.map(r => r.engine))];
+  const totalTrip = engines.length ? dsRuns.reduce((s, r) => s + r.triples, 0) / engines.length : 0;
+
+  document.getElementById('modal-ds-title').textContent = m.label;
+  const queriesHtml = metadataQueries && metadataQueries.length > 0 && m.hasSparql ? `
+    <details class="modal-queries-details">
+      <summary class="modal-queries-summary">
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        ${metadataQueries.length} SPARQL queries
+      </summary>
+      <div class="modal-queries-list">
+        ${metadataQueries.map((q, i) => `
+          <div class="query-item">
+            <span class="query-item-id">Q${i + 1}</span>
+            <pre class="query-item-text">${q.trim().replace(/</g, '&lt;')}</pre>
+          </div>`).join('')}
+      </div>
+    </details>` : '';
+
+  document.getElementById('modal-ds-body').innerHTML = `
+    <div class="modal-info-grid">
+      ${m.description ? `<div class="info-row"><span class="info-label">Description</span><span>${m.description}</span></div>` : ''}
+      <div class="info-row"><span class="info-label">Files</span><span>${files.length}</span></div>
+      <div class="info-row"><span class="info-label">Triples</span><span class="info-code">${fmt(totalTrip, 0)}</span></div>
+      <div class="info-row"><span class="info-label">Format</span><span class="info-code">N-Triples (.nt)</span></div>
+      ${m.url ? `<div class="info-row"><span class="info-label">Source</span><a href="${m.url}" target="_blank" rel="noopener" class="modal-link">${m.url}</a></div>` : ''}
+    </div>
+    <div class="modal-files-list">${files.map(f => {
+      const label = shortFile(f);
+      const href = m.fileBaseUrl ? `${m.fileBaseUrl}${f}.bz2` : m.url ?? null;
+      return href
+        ? `<a class="modal-file-link" href="${href}" target="_blank" rel="noopener">
+             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+             ${label}
+           </a>`
+        : `<span class="modal-file-link modal-file-link--plain">${label}</span>`;
+    }).join('')}</div>
+    ${queriesHtml}
+  `;
+  document.getElementById('dataset-modal').showModal();
+}
+
+function closeDatasetModal() {
+  document.getElementById('dataset-modal').close();
 }
 
 // ── Table sort state ─────────────────────────────────────────────────────────
@@ -249,25 +314,59 @@ function initTableSort() {
 
 // ── Engine filter state ───────────────────────────────────────────────────────
 // activeEngines: Set of selected engine names. Empty = all engines shown.
-let activeEngines = new Set();
-let allCharts     = {};
+let activeEngines  = new Set();
+let allCharts      = {};
+let activeDatasets    = new Set();
+let userRefEngine     = null;
+let historyData       = [];
+let metadataQueries   = null;
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
 function renderHeader(meta, runs) {
   const datasets = [...new Set(runs.map(r => r.dataset))];
-  const badgeContainer = document.getElementById('hdr-datasets');
-  if (badgeContainer) {
-    badgeContainer.innerHTML = datasets.map(d => `<span class="badge-tag">${d}</span>`).join('');
-  }
+  const engines  = [...new Set(runs.map(r => r.engine))];
+
   document.getElementById('hdr-date').textContent = formatDate(meta.generatedAt);
   document.getElementById('hdr-java').textContent = `Java ${meta.java}`;
 
-  const engines = [...new Set(runs.map(r => r.engine))];
-  const engineHtml = engines.map(e => `<strong>${e}</strong>`).join(' · ');
-  const desc = document.getElementById('main-desc');
-  if (desc) desc.innerHTML =
-    `Corese reference benchmark dashboard — Loading performance comparison&nbsp;: ${engineHtml}`;
+  const enginePills = document.getElementById('engine-pills');
+  if (enginePills) {
+    // Sort engines by known order, unknown engines go at the end
+    const sorted = [
+      ...KNOWN_ENGINE_ORDER.filter(e => engines.includes(e)),
+      ...engines.filter(e => !KNOWN_ENGINE_ORDER.includes(e)),
+    ];
+    // Group by family (prefix before first dot)
+    const families = {};
+    const familyOrder = [];
+    for (const e of sorted) {
+      const dot = e.indexOf('.');
+      const family = dot >= 0 ? e.slice(0, dot) : e;
+      if (!families[family]) { families[family] = []; familyOrder.push(family); }
+      families[family].push(e);
+    }
+    enginePills.innerHTML = familyOrder.map(family => {
+      const vers = families[family];
+      const p = pal(vers[0]);
+      const btns = vers.map(e => {
+        const label = e.includes('.') ? e.slice(e.indexOf('.') + 1) : e;
+        return `<button class="engine-pill" data-engine="${e}" onclick="toggleEngine('${e}')" title="${e}">${label}<span class="pill-sign"></span></button>`;
+      }).join('');
+      return `<div class="engine-family-group">
+        <span class="engine-family-label" style="color:${p.hex}">${family}</span>
+        ${btns}
+      </div>`;
+    }).join('');
+  }
+
+  const dsPills = document.getElementById('dataset-filter-pills');
+  if (dsPills) {
+    dsPills.innerHTML = datasets.map(d => {
+      const m = DATASET_META[d.toLowerCase()] ?? { label: d };
+      return `<button class="dataset-pill" data-ds="${d}" onclick="toggleDataset('${d}')">${m.label}</button>`;
+    }).join('');
+  }
 }
 
 // ── Run info bar ──────────────────────────────────────────────────────────────
@@ -333,7 +432,9 @@ function renderEngineCards(runs) {
   // Reference: stable Corese version if present, otherwise the best engine
   const stableCorese = engines.find(isStableCorese);
   const maxAvgThru   = Math.max(...Object.values(avgThruMap));
-  const refEngine    = stableCorese ?? engines.find(e => avgThruMap[e] === maxAvgThru);
+  const refEngine    = userRefEngine && engines.includes(userRefEngine)
+    ? userRefEngine
+    : (stableCorese ?? engines.find(e => avgThruMap[e] === maxAvgThru));
   const refThru      = avgThruMap[refEngine];
 
   document.getElementById('engine-grid').innerHTML = engines.map(engine => {
@@ -380,7 +481,14 @@ function renderEngineCards(runs) {
             <span class="engine-dot" style="background:${p.hex}"></span>
             ${engine}
           </span>
-          <span class="suite-pct" title="${tooltip}" style="cursor:help">${scoreDisplay}</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span class="suite-pct" title="${tooltip}" style="cursor:help">${scoreDisplay}</span>
+            <button class="btn-set-ref ${engine === refEngine ? 'is-ref' : ''}"
+              title="${engine === refEngine ? 'Référence actuelle — cliquer pour retirer' : 'Définir comme référence'}"
+              onclick="event.stopPropagation(); setRefEngine('${engine}')">
+              ${engine === refEngine ? '★' : '☆'}
+            </button>
+          </span>
         </div>
         <div class="suite-stats">
           <div class="stat-item">
@@ -408,20 +516,44 @@ function renderEngineCards(runs) {
   }).join('');
 }
 
+function syncEnginePills() {
+  document.querySelectorAll('.engine-pill[data-engine]').forEach(el => {
+    const e    = el.dataset.engine;
+    const sign = el.querySelector('.pill-sign');
+    if (activeEngines.size === 0) {
+      el.classList.remove('ep-active', 'ep-dimmed');
+      if (sign) sign.textContent = '';
+    } else if (activeEngines.has(e)) {
+      el.classList.add('ep-active');
+      el.classList.remove('ep-dimmed');
+      if (sign) sign.textContent = '−';
+    } else {
+      el.classList.add('ep-dimmed');
+      el.classList.remove('ep-active');
+      if (sign) sign.textContent = '+';
+    }
+  });
+}
+
 function toggleEngine(engine) {
   if (activeEngines.has(engine)) {
     activeEngines.delete(engine);
   } else {
     activeEngines.add(engine);
   }
-  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
-    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
-  });
-  // Show/hide clear button
-  const btn = document.getElementById('clear-engines-btn');
-  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+  const filtered = getFilteredRuns(allRuns);
+  renderKPI(filtered);
+  renderEngineCards(filtered);
+  syncEnginePills();
   updateCharts();
   updateTable();
+  // Sync SPARQL section
+  document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => {
+    const e = el.dataset.engine;
+    el.style.display = (activeEngines.size === 0 || activeEngines.has(e)) ? '' : 'none';
+  });
+  updateQueryChart();
+  updateQueryTable();
 }
 
 function clearEngineFilter() {
@@ -429,8 +561,65 @@ function clearEngineFilter() {
   document.querySelectorAll('.suite-item[data-engine]').forEach(el => el.classList.remove('active'));
   const btn = document.getElementById('clear-engines-btn');
   if (btn) btn.style.display = 'none';
+  syncEnginePills();
   updateCharts();
   updateTable();
+}
+
+function getFilteredRuns(runs) {
+  return runs.filter(r =>
+    (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+}
+
+function clearDatasetFilter() {
+  activeDatasets.clear();
+  document.querySelectorAll('.dataset-pill').forEach(el => el.classList.remove('active'));
+  updateCharts();
+  updateTable();
+  renderKPI(getFilteredRuns(allRuns));
+  renderEngineCards(getFilteredRuns(allRuns));
+  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
+    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
+  });
+  const btn = document.getElementById('clear-engines-btn');
+  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+  updateQuerySectionVisibility();
+}
+
+function updateQuerySectionVisibility() {
+  const section = document.querySelector('.query-section');
+  if (!section) return;
+  if (activeDatasets.size === 0) { section.style.display = ''; return; }
+  const hasSparql = [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
+  section.style.display = hasSparql ? '' : 'none';
+}
+
+function toggleDataset(ds) {
+  if (activeDatasets.has(ds)) activeDatasets.delete(ds);
+  else activeDatasets.add(ds);
+  document.querySelectorAll('.dataset-pill').forEach(el => {
+    el.classList.toggle('active', activeDatasets.has(el.dataset.ds));
+  });
+  updateCharts();
+  updateTable();
+  renderKPI(getFilteredRuns(allRuns));
+  renderEngineCards(getFilteredRuns(allRuns));
+  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
+    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
+  });
+  const btn = document.getElementById('clear-engines-btn');
+  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+  updateQuerySectionVisibility();
+}
+
+function setRefEngine(engine) {
+  userRefEngine = userRefEngine === engine ? null : engine;
+  renderEngineCards(getFilteredRuns(allRuns));
+  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
+    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
+  });
 }
 
 // ── Engine card drag & drop ───────────────────────────────────────────────────
@@ -473,6 +662,7 @@ function dragDrop(e) {
 
   const order = [...grid.querySelectorAll('.suite-item[data-engine]')].map(el => el.dataset.engine);
   localStorage.setItem('engineOrder', JSON.stringify(order));
+  updateCharts();
 }
 
 function dragQueryDrop(e) {
@@ -491,6 +681,7 @@ function dragQueryDrop(e) {
 
   if (srcIdx < tgtIdx) grid.insertBefore(dragSrc, target.nextSibling);
   else                  grid.insertBefore(dragSrc, target);
+  updateQueryChart();
 }
 
 function dragEnd(e) {
@@ -540,18 +731,19 @@ const CHART_OPT = (yLabel) => ({
 });
 
 function buildDatasets(field) {
-  const engines = [...new Set(allRuns.map(r => r.engine))];
-  const files   = [...new Set(allRuns.map(r => r.file))];
+  const dsRuns  = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const engines = getEngineOrder();
+  const files   = [...new Set(dsRuns.map(r => r.file))];
   return engines.map(engine => {
     const p = pal(engine);
     const visible = activeEngines.size === 0 || activeEngines.has(engine);
     return {
       label: engine,
       data: files.map(f => {
-        const r = allRuns.find(x => x.engine === engine && x.file === f);
+        const r = dsRuns.find(x => x.engine === engine && x.file === f);
         return r ? +r[field].toFixed(1) : null;
       }),
-      backgroundColor: visible ? p.bg : 'rgba(100,100,100,0.15)',
+      backgroundColor: visible ? p.bg  : 'rgba(100,100,100,0.15)',
       borderColor:     visible ? p.hex : 'rgba(100,100,100,0.3)',
       borderWidth: 1,
       borderRadius: 3,
@@ -559,31 +751,81 @@ function buildDatasets(field) {
   });
 }
 
+function getEngineOrder() {
+  const cardEls = document.querySelectorAll('#engine-grid .suite-item[data-engine]');
+  return cardEls.length > 0
+    ? [...cardEls].map(el => el.dataset.engine)
+    : [...new Set(allRuns.map(r => r.engine))];
+}
+
+function buildCombinedDatasets() {
+  const dsRuns  = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const engines = getEngineOrder();
+  const files   = [...new Set(dsRuns.map(r => r.file))];
+  const datasets = [];
+  engines.forEach(engine => {
+    const p       = pal(engine);
+    const visible = activeEngines.size === 0 || activeEngines.has(engine);
+    const col     = visible ? p.hex : 'rgba(100,100,100,0.3)';
+    const bgCol   = visible ? p.bg  : 'rgba(100,100,100,0.15)';
+    // Barres : Loading time (axe gauche)
+    datasets.push({
+      label: `${engine}`,
+      type: 'bar',
+      yAxisID: 'yLeft',
+      data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.loadingTimeMs.toFixed(0) : null; }),
+      backgroundColor: bgCol,
+      borderColor: col,
+      borderWidth: 1,
+      borderRadius: 3,
+    });
+    // Lignes : Memory (axe droit)
+    datasets.push({
+      label: `${engine} (MB)`,
+      type: 'line',
+      yAxisID: 'yRight',
+      data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.memoryDeltaMb.toFixed(1) : null; }),
+      borderColor: col,
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [5, 3],
+      pointRadius: 3,
+      tension: 0.3,
+    });
+  });
+  return datasets;
+}
+
 function initCharts() {
-  const files  = [...new Set(allRuns.map(r => r.file))];
+  const dsRuns = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const files  = [...new Set(dsRuns.map(r => r.file))];
   const labels = files.map(shortFile);
 
-  const configs = [
-    { id: 'chart-loading',    field: 'loadingTimeMs',          yLabel: 'ms' },
-    { id: 'chart-throughput', field: 'throughputTriplesPerSec', yLabel: 'triples/s' },
-    { id: 'chart-memory',     field: 'memoryDeltaMb',           yLabel: 'MB' },
-    { id: 'chart-cpu',        field: 'cpuPercent',              yLabel: '%' },
+  const defs = [
+    { id: 'chart-loading',    field: 'loadingTimeMs',          unit: 'ms'  },
+    { id: 'chart-throughput', field: 'throughputTriplesPerSec', unit: 't/s' },
+    { id: 'chart-memory',     field: 'memoryDeltaMb',           unit: 'MB'  },
+    { id: 'chart-cpu',        field: 'cpuPercent',              unit: '%'   },
   ];
 
-  for (const { id, field, yLabel } of configs) {
+  for (const { id, field, unit } of defs) {
     allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
       type: 'bar',
       data: { labels, datasets: buildDatasets(field) },
-      options: CHART_OPT(yLabel),
+      options: CHART_OPT(unit),
     });
     allCharts[id]._field = field;
   }
 }
 
 function updateCharts() {
+  const dsRuns = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const files  = [...new Set(dsRuns.map(r => r.file))];
+  const labels = files.map(shortFile);
   for (const [id, chart] of Object.entries(allCharts)) {
+    chart.data.labels   = labels;
     chart.data.datasets = buildDatasets(chart._field);
-    chart.update('none');
+    chart.update();
   }
 }
 
@@ -593,9 +835,7 @@ function renderTable(runs) {
 }
 
 function updateTable(runsArg) {
-  let runs = (runsArg ?? allRuns).filter(r =>
-    activeEngines.size === 0 || activeEngines.has(r.engine)
-  );
+  let runs = getFilteredRuns(runsArg ?? allRuns);
 
   if (sortField) {
     runs = [...runs].sort((a, b) => {
@@ -671,6 +911,7 @@ function updateTable(runsArg) {
 let activeQueryEngines = new Set();
 let queryChart = null;
 let allQueryRuns = [];
+let queryChartDatasetsBase = {}; // datasets originaux, jamais modifiés
 
 function toggleQueryEngine(engine) {
   if (activeQueryEngines.has(engine)) {
@@ -698,43 +939,74 @@ function clearQueryEngineFilter() {
 
 function updateQueryChart() {
   if (!queryChart) return;
-  const engines = [...document.querySelectorAll('.query-engine-card[data-engine]')]
+  // Ordre depuis les cards (drag & drop)
+  const cardOrder = [...document.querySelectorAll('.query-engine-card[data-engine]')]
     .map(el => el.dataset.engine);
-  queryChart.data.datasets = queryChart.data.datasets.map(ds => {
-    const visible = activeQueryEngines.size === 0 || activeQueryEngines.has(ds.label);
-    const p = pal(ds.label);
-    return { ...ds,
-      backgroundColor: visible ? p.bg  : 'rgba(100,100,100,0.15)',
-      borderColor:     visible ? p.hex : 'rgba(100,100,100,0.3)',
-    };
-  });
-  queryChart.update('none');
+  // Réordonner ET mettre à jour les couleurs
+  queryChart.data.datasets = cardOrder
+    .filter(e => queryChartDatasetsBase[e] &&
+      (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
+      (activeEngines.size === 0 || activeEngines.has(e))
+    )
+    .map(e => {
+      const ds = queryChartDatasetsBase[e];
+      const p  = pal(e);
+      return { ...ds,
+        backgroundColor: p.bg,
+        borderColor:     p.hex,
+      };
+    });
+  queryChart.update();
 }
 
 function updateQueryTable() {
   const tbody = document.getElementById('query-results-body');
-  if (!tbody) return;
+  if (!tbody || !allQueryRuns.length) return;
   const table = tbody.closest('table');
   if (!table) return;
 
-  // Map engine → column index (0-based) from thead
-  const headers = [...table.querySelectorAll('thead th')];
-  const engineColIndex = {};
-  headers.forEach((th, i) => {
-    if (th.dataset.engine) engineColIndex[th.dataset.engine] = i;
+  const allEngines = [...new Set(allQueryRuns.map(r => r.engine))];
+  const visibleEngines = allEngines.filter(e =>
+    (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
+    (activeEngines.size === 0 || activeEngines.has(e))
+  );
+
+  const queryIds = [...new Set(allQueryRuns.map(r => r.queryId))].sort(
+    (a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1])
+  );
+
+  // Masquer les colonnes non visibles dans le thead
+  table.querySelectorAll('thead th[data-engine]').forEach(th => {
+    th.style.display = visibleEngines.includes(th.dataset.engine) ? '' : 'none';
   });
 
-  // Apply opacity per cell using direct column index
-  const allRows = [...table.querySelectorAll('tr')];
-  allRows.forEach(tr => {
-    const cells = [...tr.children];
-    headers.forEach((th, i) => {
-      const engine = th.dataset.engine;
-      if (!engine) return;
-      const visible = activeQueryEngines.size === 0 || activeQueryEngines.has(engine);
-      if (cells[i]) cells[i].style.opacity = visible ? '' : '0.25';
+  // Reconstruire le tbody avec best recalculé parmi les moteurs visibles uniquement
+  tbody.innerHTML = queryIds.map(qid => {
+    // Valeurs pour tous les moteurs (pour mapping colonne)
+    const rowData = allEngines.map(engine => {
+      const r = allQueryRuns.find(r => r.engine === engine && r.queryId === qid);
+      return r && r.medianMs >= 0 ? r.medianMs : null;
     });
-  });
+
+    // Best parmi moteurs VISIBLES seulement
+    const visibleData = visibleEngines.map(e => rowData[allEngines.indexOf(e)]);
+    const validVisible = visibleData.filter(v => v !== null);
+    const minMs  = validVisible.length ? Math.min(...validVisible) : null;
+    const winner = minMs !== null ? visibleEngines[visibleData.indexOf(minMs)] : null;
+
+    const cells = allEngines.map((engine, i) => {
+      if (!visibleEngines.includes(engine)) return `<td style="display:none"></td>`;
+      const ms = rowData[i];
+      if (ms === null) return `<td class="text-right query-fail">—</td>`;
+      return `<td class="text-right">${fmt(ms)} ms</td>`;
+    }).join('');
+
+    const bestCell = winner
+      ? `<td class="text-right" style="color:${pal(winner).hex};font-size:11px">${winner}</td>`
+      : `<td class="text-right query-fail">—</td>`;
+
+    return `<tr><td>${qid}</td>${cells}${bestCell}</tr>`;
+  }).join('');
 }
 
 function renderQuerySection(queryRuns) {
@@ -835,13 +1107,7 @@ function renderQuerySection(queryRuns) {
             const cells = engines.map((engine, i) => {
               const ms = rowData[i];
               if (ms === null) return `<td class="text-right query-fail">—</td>`;
-              const isBest  = ms === minMs;
-              const r       = minMs > 0 ? ms / minMs : 1;
-              const isRed   = !isBest && r >= 20;
-              const isOrange= !isBest && r >= 5 && r < 20;
-              const ratio   = !isBest && r >= 2 ? ` <span class="query-ratio">×${r.toFixed(1)}</span>` : '';
-              const cls     = isBest ? 'query-best' : isRed ? 'query-worst' : isOrange ? 'query-slow' : '';
-              return `<td class="text-right ${cls}">${fmt(ms)} ms${ratio}</td>`;
+              return `<td class="text-right">${fmt(ms)} ms</td>`;
             }).join('');
 
             const bestCell = winner
@@ -857,6 +1123,10 @@ function renderQuerySection(queryRuns) {
     </details>
   `;
   document.querySelector('.app-wrapper').appendChild(section);
+
+  // Stocker les datasets originaux pour pouvoir restaurer après filtre
+  queryChartDatasetsBase = {};
+  datasets.forEach(ds => { queryChartDatasetsBase[ds.label] = ds; });
 
   // Render chart — store reference for filter updates
   queryChart = new Chart(document.getElementById('chart-queries'), {
@@ -876,15 +1146,50 @@ function renderQuerySection(queryRuns) {
   });
 }
 
-// ── Tendance historique ───────────────────────────────────────────────────────
+// ── Sparklines (mini charts sur engine cards) ─────────────────────────────────
+function renderSparklines(valid) {
+  document.querySelectorAll('.sparkline-canvas[data-engine]').forEach(canvas => {
+    const engine = canvas.dataset.engine;
+    const points = valid.map(run => {
+      const runs = run.data.runs.filter(r => r.engine === engine);
+      if (!runs.length) return null;
+      return Math.round(runs.reduce((s, r) => s + r.throughputTriplesPerSec, 0) / runs.length);
+    }).filter(v => v !== null);
+
+    if (points.length < 2) { canvas.style.display = 'none'; return; }
+
+    const p = pal(engine);
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: points.map((_, i) => i),
+        datasets: [{
+          data: points,
+          borderColor: p.hex,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          backgroundColor: p.hex + '22',
+          tension: 0.4,
+        }],
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, beginAtZero: false } },
+      },
+    });
+  });
+}
+
+// ── Tendance historique — heatmap régression ──────────────────────────────────
 async function renderTrend() {
   let valid;
 
-  // Priority: inline data (file:// compatible)
   if (window.__HISTORY_DATA__ && window.__HISTORY_DATA__.length >= 2) {
     valid = window.__HISTORY_DATA__;
   } else {
-    // Fallback : fetch (fonctionne sur serveur HTTP)
     let index;
     try {
       const res = await fetch('data/history/index.json');
@@ -907,67 +1212,121 @@ async function renderTrend() {
     if (valid.length < 2) return;
   }
 
-  // Engines: only those present in the current run (allRuns), to keep the chart focused
+  historyData = valid;
+
   const currentEngines = new Set(allRuns.map(r => r.engine));
   const engines = [...new Set(valid.flatMap(r => r.data.runs.map(run => run.engine)))]
     .filter(e => currentEngines.has(e));
 
-  // Time series: average throughput per engine
-  const datasets = engines.map(engine => {
-    const p = pal(engine);
-    return {
-      label: engine,
-      data: valid.map(r => {
-        const runs = r.data.runs.filter(run => run.engine === engine);
-        if (!runs.length) return null;
-        return Math.round(runs.reduce((s, run) => s + run.throughputTriplesPerSec, 0) / runs.length);
-      }),
-      borderColor: p.hex,
-      backgroundColor: p.bg,
-      tension: 0.3,
-      fill: false,
-      pointRadius: 4,
-    };
+  const labels = valid.map(r => {
+    const d = r.date;
+    return `${d.slice(6,8)}/${d.slice(4,6)} ${d.slice(9,11)}h${d.slice(11,13)}`;
   });
 
-  const labels = valid.map(r => {
-    const d = r.date; // format YYYYMMDD_HHMMSS
-    return `${d.slice(6,8)}/${d.slice(4,6)} ${d.slice(9,11)}:${d.slice(11,13)}`;
-  });
+  function avgThru(run, engine) {
+    const runs = run.data.runs.filter(r => r.engine === engine);
+    if (!runs.length) return null;
+    return Math.round(runs.reduce((s, r) => s + r.throughputTriplesPerSec, 0) / runs.length);
+  }
+
+  const rows = engines.map(engine => {
+    const p = pal(engine);
+    const cells = valid.map((run, i) => {
+      const val = avgThru(run, engine);
+      if (val === null) return `<td class="hm-cell hm-na">—</td>`;
+      const prev = i > 0 ? avgThru(valid[i - 1], engine) : null;
+      let cls = 'hm-first', badge = '';
+      if (prev !== null) {
+        const pct = (val - prev) / prev * 100;
+        cls = pct > 5 ? 'hm-good' : pct < -5 ? 'hm-bad' : 'hm-neutral';
+        badge = `<span class="hm-pct">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+      }
+      return `<td class="hm-cell ${cls}" title="${engine} — ${labels[i]}: ${fmt(val, 0)} t/s">
+        <span class="hm-val">${fmt(val, 0)}</span>${badge}
+      </td>`;
+    }).join('');
+    return `<tr>
+      <td class="hm-engine"><span class="engine-dot" style="background:${p.hex}"></span>${engine}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
 
   const section = document.createElement('section');
   section.innerHTML = `
     <details class="query-details">
       <summary class="query-summary" style="margin-top:32px">
         <h2 class="section-heading" style="margin:0;display:inline">Historical trend</h2>
-        <span class="query-summary-meta">${valid.length} runs · avg throughput per engine</span>
+        <span class="query-summary-meta">${valid.length} runs · heatmap avg débit</span>
       </summary>
-    <div class="chart-card" style="margin-top:12px">
-      <div class="chart-header">
-        <span class="chart-title">Throughput over time</span>
-        <span class="chart-unit">triples/s — higher is better</span>
+      <p class="section-note" style="margin-top:8px">
+        <span class="hm-legend hm-legend-good">▮ amélioration &gt;5%</span>
+        <span class="hm-legend hm-legend-bad">▮ régression &gt;5%</span>
+        <span class="hm-legend hm-legend-neutral">▮ stable</span>
+      </p>
+      <div class="hm-scroll">
+        <table class="hm-table">
+          <thead><tr>
+            <th class="hm-th-engine">Engine</th>
+            ${labels.map(l => `<th class="hm-th">${l}</th>`).join('')}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
-      <canvas id="chart-trend" height="60"></canvas>
-    </div>
     </details>
   `;
   document.querySelector('.app-wrapper').appendChild(section);
 
-  new Chart(document.getElementById('chart-trend'), {
-    type: 'line',
-    data: { labels, datasets },
+  renderSparklines(valid);
+}
+
+// ── Chart zoom modal ──────────────────────────────────────────────────────────
+let _zoomChart = null;
+
+function openChartZoom(chartId) {
+  const src = allCharts[chartId];
+  if (!src) return;
+
+  const dialog = document.getElementById('chart-zoom-modal');
+  const titleEl = document.getElementById('chart-zoom-title');
+  const pngBtn  = document.getElementById('chart-zoom-png');
+  const canvas  = document.getElementById('chart-zoom-canvas');
+
+  // Titre = titre du chart-surface correspondant
+  const surface = document.getElementById(chartId)?.closest('.chart-surface');
+  titleEl.textContent = surface?.querySelector('.chart-title')?.textContent ?? chartId;
+
+  // Détruire le chart zoom précédent
+  if (_zoomChart) { _zoomChart.destroy(); _zoomChart = null; }
+
+  // Cloner data + options du chart source
+  _zoomChart = new Chart(canvas.getContext('2d'), {
+    type: src.config.type,
+    data: JSON.parse(JSON.stringify(src.data)),
     options: {
+      ...src.config.options,
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, 0)} t/s` } },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-        y: { beginAtZero: false, ticks: { callback: v => fmt(v, 0) } },
+        ...src.config.options?.plugins,
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 13, family: "'Inter'" } } },
       },
     },
   });
+
+  pngBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.download = `corese-benchmark-${chartId}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+
+  dialog.showModal();
+}
+
+function closeChartZoom() {
+  const dialog = document.getElementById('chart-zoom-modal');
+  dialog.close();
+  if (_zoomChart) { _zoomChart.destroy(); _zoomChart = null; }
 }
 
 // ── PNG export ────────────────────────────────────────────────────────────────
@@ -1000,16 +1359,15 @@ async function main() {
   }
 
   allRuns = data.runs;
+  metadataQueries = data.metadata.queries ?? null;
 
   // Build color map from engines present in the data
   const engines = [...new Set(allRuns.map(r => r.engine))];
   buildColorMap(engines);
 
   renderHeader(data.metadata, allRuns);
-  renderRunInfo(data.metadata);
   renderKPI(allRuns);
-  renderGlobalMeter(allRuns);
-  renderDatasetCards(allRuns, data.metadata.queries ?? null);
+  renderDatasetCards(allRuns, metadataQueries);
   renderEngineCards(allRuns);
   applyStoredEngineOrder();
   initCharts();
@@ -1023,8 +1381,6 @@ async function main() {
     renderQuerySection(data.queryRuns);
   }
 
-  // Historical trend (async, non-blocking)
-  renderTrend();
 }
 
 main();

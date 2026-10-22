@@ -9,17 +9,24 @@ DATASET    ?= dbpedia
 DATASETS   ?= dbpedia,bowlogna,bsbm,lubm
 SCALES     ?= small
 
-.PHONY: help env regression compare next bowlogna lubm bsbm all site clean-out
+# Predefined version sets
+ALL_VERSIONS ?= corese.next,corese.4.6.5,jena.6.2.0,jena.6.1.0,rdf4j.5.3.2,rdf4j.5.3.1
+
+.PHONY: help env regression compare next bowlogna lubm bsbm all versions versions-resume corese-all quick site clean-out
 
 help:
 	@echo ""
 	@echo "  make regression          Detect a Corese regression (local vs 4.6.5)"
 	@echo "  make compare             Compare corese + jena + rdf4j on dbpedia"
 	@echo "  make next                Benchmark corese.next vs corese.4.6.5"
+	@echo "  make versions            All versions: corese(next+3) + jena(3) + rdf4j(3)"
+	@echo "  make versions-resume     Idem, reprend là où c'était arrêté"
+	@echo "  make corese-all          corese.next + corese.4.6.5 sur tous les datasets"
 	@echo "  make bowlogna            Bowlogna dataset with SPARQL queries (corese.local vs 4.6.5)"
 	@echo "  make lubm                LUBM dataset with SPARQL queries"
 	@echo "  make bsbm                BSBM dataset"
 	@echo "  make all                 All datasets (dbpedia + bowlogna + bsbm + lubm) in one run"
+	@echo "  make quick               Quick run (1 rep instead of 3) — faster, less accurate"
 	@echo "  make site                Serve the dashboard at http://localhost:8080"
 	@echo "  make env                 Create conda environment"
 	@echo "  make clean-out           Delete all generated reports in out/"
@@ -41,7 +48,19 @@ compare:
 	$(PYTHON) $(WORKFLOW) --engines $(ENGINES) --dataset $(DATASET)
 
 next:
-	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 --datasets dbpedia,bowlogna --scales $(SCALES)
+	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 --datasets dbpedia,bowlogna,bsbm,lubm --scales $(SCALES)
+
+versions:
+	$(PYTHON) $(WORKFLOW) --engines $(ALL_VERSIONS) --datasets $(DATASETS) --scales $(SCALES)
+
+versions-resume:
+	$(PYTHON) $(WORKFLOW) --engines $(ALL_VERSIONS) --datasets $(DATASETS) --scales $(SCALES) --resume
+
+corese-all:
+	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5 --datasets dbpedia,bowlogna,bsbm,lubm --scales $(SCALES)
+
+quick:
+	$(PYTHON) $(WORKFLOW) --engines $(ENGINES) --datasets $(DATASETS) --scales $(SCALES) --quick
 
 bowlogna:
 	$(PYTHON) $(WORKFLOW) --engines corese.local,corese.4.6.5 --dataset bowlogna --scales $(SCALES)
