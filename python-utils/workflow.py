@@ -7,6 +7,18 @@ import glob
 import json as _json_early
 from datetime import datetime
 
+# Ensure Java 21 is used if JAVA_HOME is not already configured
+if "JAVA_HOME" not in os.environ:
+    for _jdk_candidate in [
+        os.path.expanduser("~/.gradle/jdks/eclipse_adoptium-21-amd64-linux.2"),
+        "/usr/lib/jvm/java-21-openjdk-amd64",
+        "/usr/lib/jvm/java-21-openjdk",
+    ]:
+        if os.path.isdir(_jdk_candidate):
+            os.environ["JAVA_HOME"] = _jdk_candidate
+            os.environ["PATH"] = f"{_jdk_candidate}/bin:{os.environ.get('PATH', '')}"
+            break
+
 ####################################################################################
 # Step 0: Parse arguments
 ####################################################################################
@@ -113,9 +125,21 @@ if "corese.local" in engines_str or "corese.next" in engines_str or "local" in e
         print("WARNING: corese.local requested but no JAR found in libs/ and could not auto-detect.")
         print("  Use --coreseLocalPath /path/to/corese-core or place a JAR in libs/")
 
+# Shared dataset storage resolution (e.g. dedicated Inria SED benchmark node on /media/storage)
+env_input = os.environ.get("BENCHMARK_INPUT_DIR")
+shared_input = "/media/storage/benchmark_data/input"
+
 if args.dataDir:
     input_dir = os.path.join(args.dataDir, "input")
     out_dir   = os.path.join(args.dataDir, "out")
+elif env_input and os.path.isdir(env_input):
+    input_dir = env_input
+    out_dir   = os.path.join(project_dir, "out")
+    print(f"Using environment benchmark dataset cache: {input_dir}")
+elif os.path.isdir(shared_input):
+    input_dir = shared_input
+    out_dir   = os.path.join(project_dir, "out")
+    print(f"Using shared benchmark dataset cache: {input_dir}")
 else:
     input_dir = os.path.join(project_dir, "input")
     out_dir   = os.path.join(project_dir, "out")
