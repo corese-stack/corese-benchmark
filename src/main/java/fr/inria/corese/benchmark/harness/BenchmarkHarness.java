@@ -31,7 +31,8 @@ public class BenchmarkHarness {
     private static final int DEFAULT_REPETITIONS = 3;
     private final int repetitions;
     private static final int QUERY_REPS = 3;
-    private static final long QUERY_TIMEOUT_S = 30; // seconds per query execution
+    private static final long DEFAULT_QUERY_TIMEOUT_S = 30; // seconds per query execution
+    private final long queryTimeoutS;
 
     private final TripleStoreDriver driver;
     private final MetricsCollector metrics;
@@ -44,13 +45,18 @@ public class BenchmarkHarness {
      * @param datasetName logical name of the dataset (recorded in result objects)
      */
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName) {
-        this(driver, datasetName, DEFAULT_REPETITIONS);
+        this(driver, datasetName, DEFAULT_REPETITIONS, DEFAULT_QUERY_TIMEOUT_S);
     }
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
+        this(driver, datasetName, repetitions, DEFAULT_QUERY_TIMEOUT_S);
+    }
+
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions, long queryTimeoutS) {
         this.driver = driver;
         this.datasetName = datasetName;
         this.repetitions = repetitions;
+        this.queryTimeoutS = queryTimeoutS;
         this.metrics = new MetricsCollector();
     }
 
@@ -93,7 +99,9 @@ public class BenchmarkHarness {
                                     result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
                 } catch (OutOfMemoryError e) {
                     System.gc();
-                    log.error("  [{}/{}] {} — OUT OF MEMORY, skipping file", fi + 1, files.length, file.getName(), e);
+                    log.error("  [{}/{}] {} — OUT OF MEMORY (engine={}, dataset={}, file={}), skipping file",
+                        fi + 1, files.length, file.getName(),
+                        driver.getName(), datasetName, file.getAbsolutePath(), e);
                 }
             }
         } finally {
@@ -146,12 +154,12 @@ public class BenchmarkHarness {
                     });
                     Future<Long> future = executor.submit(() -> driver.query(q));
                     try {
-                        times[i] = future.get(QUERY_TIMEOUT_S, TimeUnit.SECONDS);
+                        times[i] = future.get(queryTimeoutS, TimeUnit.SECONDS);
                         executor.shutdown();
                     } catch (TimeoutException e) {
                         future.cancel(true);
                         executor.shutdownNow(); // abandon — daemon thread won't block JVM
-                        log.warn("  {} rep {} timed out after {}s", queryId, i + 1, QUERY_TIMEOUT_S);
+                        log.warn("  {} rep {} timed out after {}s", queryId, i + 1, queryTimeoutS);
                         times[i] = -1L;
                     } catch (ExecutionException e) {
                         executor.shutdown();

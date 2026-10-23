@@ -91,6 +91,13 @@ parser.add_argument(
     default=False,
     help="Quick mode: 1 repetition instead of 3 (faster, less accurate).",
 )
+parser.add_argument(
+    "--query-timeout",
+    type=int,
+    default=None,
+    metavar="SECONDS",
+    help="Per-query SPARQL timeout in seconds (default: 30). Overrides the Java harness default.",
+)
 args = parser.parse_args()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -234,9 +241,18 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
     if args.quick:
         args_str += " --quick"
         print("  Quick mode: 1 repetition")
+    if args.query_timeout is not None:
+        args_str += f" --query-timeout {args.query_timeout}"
+        print(f"  Query timeout: {args.query_timeout}s")
     cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
     print(f"Running benchmark: {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=project_dir, check=True)
+    try:
+        subprocess.run(cmd, cwd=project_dir, check=True, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        stderr_text = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
+        if stderr_text:
+            print(f"[ERROR] Gradle stderr:\n{stderr_text}", file=sys.stderr)
+        raise
 
 
 def merge_json_files(file_list, output_file):
@@ -307,9 +323,17 @@ if args.engines and args.resume:
             safe_engine = engine.replace('.', '_')
             out_file = os.path.join(resume_dir, f"{safe_engine}_{ds}.json")
             if os.path.exists(out_file):
-                print(f"[resume] SKIP {engine} × {ds} — already done ({out_file})")
-                collected.append(out_file)
-                continue
+                try:
+                    with open(out_file) as _f:
+                        _data = _json_early.load(_f)
+                    if isinstance(_data.get("runs"), list) and len(_data["runs"]) > 0:
+                        print(f"[resume] SKIP {engine} × {ds} — already done ({out_file})")
+                        collected.append(out_file)
+                        continue
+                    else:
+                        print(f"[resume] REDO {engine} × {ds} — output exists but has no valid runs")
+                except Exception as _e:
+                    print(f"[resume] REDO {engine} × {ds} — output invalid ({_e})")
             print(f"[resume] RUN  {engine} × {ds}")
             if gradle_props != last_build_props:
                 gradle_build(gradle_props)
