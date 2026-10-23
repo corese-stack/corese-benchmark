@@ -127,32 +127,41 @@ public class BenchmarkHarness {
             log.info("  {} triples loaded — running {} queries × {} reps",
                 driver.getGraphSize(), queries.size(), QUERY_REPS);
 
-            // Benchmark each query with per-execution timeout
-            try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
-                for (int qi = 0; qi < queries.size(); qi++) {
-                    String sparql = queries.get(qi).trim();
-                    if (sparql.isEmpty()) continue;
-                    String queryId = "query_" + (qi + 1);
+            // Benchmark each query with per-execution timeout.
+            // A fresh daemon-thread executor is created per query so that a stuck thread
+            // (one that ignores interrupt) is abandoned rather than blocking all subsequent queries.
+            for (int qi = 0; qi < queries.size(); qi++) {
+                String sparql = queries.get(qi).trim();
+                if (sparql.isEmpty()) continue;
+                String queryId = "query_" + (qi + 1);
 
-                    long[] times = new long[QUERY_REPS];
-                    for (int i = 0; i < QUERY_REPS; i++) {
-                        final String q = sparql;
-                        Future<Long> future = executor.submit(() -> driver.query(q));
-                        try {
-                            times[i] = future.get(QUERY_TIMEOUT_S, TimeUnit.SECONDS);
-                        } catch (TimeoutException e) {
-                            future.cancel(true);
-                            log.warn("  {} rep {} timed out after {}s", queryId, i + 1, QUERY_TIMEOUT_S);
-                            times[i] = -1L;
-                        } catch (ExecutionException e) {
-                            log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
-                            times[i] = -1L;
-                        }
+                long[] times = new long[QUERY_REPS];
+                for (int i = 0; i < QUERY_REPS; i++) {
+                    final String q = sparql;
+                    final int rep = i;
+                    ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+                        Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
+                        t.setDaemon(true); // JVM won't wait for this thread on exit
+                        return t;
+                    });
+                    Future<Long> future = executor.submit(() -> driver.query(q));
+                    try {
+                        times[i] = future.get(QUERY_TIMEOUT_S, TimeUnit.SECONDS);
+                        executor.shutdown();
+                    } catch (TimeoutException e) {
+                        future.cancel(true);
+                        executor.shutdownNow(); // abandon — daemon thread won't block JVM
+                        log.warn("  {} rep {} timed out after {}s", queryId, i + 1, QUERY_TIMEOUT_S);
+                        times[i] = -1L;
+                    } catch (ExecutionException e) {
+                        executor.shutdown();
+                        log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
+                        times[i] = -1L;
                     }
-                    long medianMs = MetricsCollector.median(times);
-                    results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
-                    log.info("  {} | {} ms", queryId, medianMs >= 0 ? medianMs : "TIMEOUT");
                 }
+                long medianMs = MetricsCollector.median(times);
+                results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
+                log.info("  {} | {} ms", queryId, medianMs >= 0 ? medianMs : "TIMEOUT");
             }
         } finally {
             driver.close();

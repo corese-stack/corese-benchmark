@@ -473,34 +473,5 @@ if json_files:
         f.write(f"window.__BENCHMARK_DATA__ = {data};")
     print("Generated report-data.js")
 
-    history_dir = os.path.join(site_data_dir, "history")
-    os.makedirs(history_dir, exist_ok=True)
-    hist_filename = f"{timestamp}.json"
-    shutil.copy(latest, os.path.join(history_dir, hist_filename))
-
-    index_path = os.path.join(history_dir, "index.json")
-    if os.path.exists(index_path):
-        with open(index_path) as f:
-            history_index = _json_early.load(f)
-    else:
-        history_index = []
-
-    history_index.append({"file": hist_filename, "date": timestamp})
-    history_index = history_index[-30:]
-
-    with open(index_path, "w") as f:
-        _json_early.dump(history_index, f, indent=2)
-    print(f"History updated: {len(history_index)} entries in {index_path}")
-
-    history_data = []
-    for entry in history_index:
-        hist_file = os.path.join(history_dir, entry["file"])
-        if os.path.exists(hist_file):
-            with open(hist_file) as hf:
-                history_data.append({"date": entry["date"], "data": _json_early.load(hf)})
-    hist_js = os.path.join(site_data_dir, "history-data.js")
-    with open(hist_js, "w") as f:
-        f.write(f"window.__HISTORY_DATA__ = {_json_early.dumps(history_data)};")
-    print(f"Generated history-data.js ({len(history_data)} entries)")
 else:
     print("No JSON report found in out/")

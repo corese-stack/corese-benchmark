@@ -159,7 +159,7 @@ const DATASET_META = {
     description: 'Lehigh University Benchmark — university domain with RDFS reasoning',
     url:         'https://swat.cse.lehigh.edu/projects/lubm/',
     fileBaseUrl: null,
-    hasSparql:   true,
+    hasSparql:   false,
   },
 };
 
@@ -234,55 +234,6 @@ function renderDatasetCards(runs, queries) {
   }).join('');
 }
 
-function openDatasetModal(ds) {
-  const m       = DATASET_META[ds.toLowerCase()] ?? { label: ds, description: '', url: null };
-  const dsRuns  = allRuns.filter(r => r.dataset === ds);
-  const files   = [...new Set(dsRuns.map(r => r.file))];
-  const engines = [...new Set(dsRuns.map(r => r.engine))];
-  const totalTrip = engines.length ? dsRuns.reduce((s, r) => s + r.triples, 0) / engines.length : 0;
-
-  document.getElementById('modal-ds-title').textContent = m.label;
-  const queriesHtml = metadataQueries && metadataQueries.length > 0 && m.hasSparql ? `
-    <details class="modal-queries-details">
-      <summary class="modal-queries-summary">
-        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        ${metadataQueries.length} SPARQL queries
-      </summary>
-      <div class="modal-queries-list">
-        ${metadataQueries.map((q, i) => `
-          <div class="query-item">
-            <span class="query-item-id">Q${i + 1}</span>
-            <pre class="query-item-text">${q.trim().replace(/</g, '&lt;')}</pre>
-          </div>`).join('')}
-      </div>
-    </details>` : '';
-
-  document.getElementById('modal-ds-body').innerHTML = `
-    <div class="modal-info-grid">
-      ${m.description ? `<div class="info-row"><span class="info-label">Description</span><span>${m.description}</span></div>` : ''}
-      <div class="info-row"><span class="info-label">Files</span><span>${files.length}</span></div>
-      <div class="info-row"><span class="info-label">Triples</span><span class="info-code">${fmt(totalTrip, 0)}</span></div>
-      <div class="info-row"><span class="info-label">Format</span><span class="info-code">N-Triples (.nt)</span></div>
-      ${m.url ? `<div class="info-row"><span class="info-label">Source</span><a href="${m.url}" target="_blank" rel="noopener" class="modal-link">${m.url}</a></div>` : ''}
-    </div>
-    <div class="modal-files-list">${files.map(f => {
-      const label = shortFile(f);
-      const href = m.fileBaseUrl ? `${m.fileBaseUrl}${f}.bz2` : m.url ?? null;
-      return href
-        ? `<a class="modal-file-link" href="${href}" target="_blank" rel="noopener">
-             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-             ${label}
-           </a>`
-        : `<span class="modal-file-link modal-file-link--plain">${label}</span>`;
-    }).join('')}</div>
-    ${queriesHtml}
-  `;
-  document.getElementById('dataset-modal').showModal();
-}
-
-function closeDatasetModal() {
-  document.getElementById('dataset-modal').close();
-}
 
 // ── Table sort state ─────────────────────────────────────────────────────────
 let sortField = null;
@@ -316,7 +267,6 @@ let hiddenEngines  = new Set(); // engines removed from comparator bar via ×
 let allCharts      = {};
 let activeDatasets    = new Set();
 let userRefEngine     = null;
-let historyData       = [];
 let metadataQueries   = null;
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -391,82 +341,75 @@ let _overviewRadarChart = null;
 
 function renderKPI(runs) {
   if (!runs || runs.length === 0) return;
-  const engines = [...new Set(runs.map(r => r.engine))];
+  const engines  = [...new Set(runs.map(r => r.engine))];
+  const datasets = [...new Set(runs.map(r => r.dataset))];
+  const files    = [...new Set(runs.map(r => r.file))];
 
-  // Per-engine aggregates
+  // Normalized per-engine scores — each file contributes equally regardless of scale
+  // For each file: rank engines → award points (1st = engines.length pts, last = 1pt)
+  const winsByThru = Object.fromEntries(engines.map(e => [e, 0]));
+  const winsByMem  = Object.fromEntries(engines.map(e => [e, 0]));
+  const winsTotal  = Object.fromEntries(engines.map(e => [e, 0]));
+
+  files.forEach(file => {
+    const fileRuns = runs.filter(r => r.file === file);
+    // Throughput: higher = better
+    const byThru = [...fileRuns].sort((a,b) => b.throughputTriplesPerSec - a.throughputTriplesPerSec);
+    byThru.forEach((r, i) => { winsByThru[r.engine] = (winsByThru[r.engine] || 0) + (engines.length - i); });
+    // Memory: lower = better
+    const byMem  = [...fileRuns].sort((a,b) => a.memoryDeltaMb - b.memoryDeltaMb);
+    byMem.forEach((r, i)  => { winsByMem[r.engine]  = (winsByMem[r.engine]  || 0) + (engines.length - i); });
+  });
+
+  // Total wins = sum of throughput + memory scores
+  engines.forEach(e => { winsTotal[e] = winsByThru[e] + winsByMem[e]; });
+
+  // Per-engine avg for the winner cards
   const byEngine = {};
   engines.forEach(e => {
     const er = runs.filter(r => r.engine === e);
     byEngine[e] = {
-      avgThru : er.reduce((s,r) => s + r.throughputTriplesPerSec, 0) / er.length,
-      avgTime : er.reduce((s,r) => s + r.loadingTimeMs,           0) / er.length,
-      avgMem  : er.reduce((s,r) => s + r.memoryDeltaMb,           0) / er.length,
+      avgThru: er.reduce((s,r) => s + r.throughputTriplesPerSec, 0) / er.length,
+      avgMem:  er.reduce((s,r) => s + r.memoryDeltaMb,           0) / er.length,
+      avgTime: er.reduce((s,r) => s + r.loadingTimeMs,           0) / er.length,
+      normScore: Math.round(winsTotal[e] / (files.length * 2 * engines.length) * 100),
     };
   });
 
-  const maxThru = Math.max(...engines.map(e => byEngine[e].avgThru));
-  const minTime = Math.min(...engines.map(e => byEngine[e].avgTime));
-  const minMem  = Math.min(...engines.map(e => byEngine[e].avgMem));
+  const bestThruEngine = engines.reduce((a,b) => byEngine[a].avgThru > byEngine[b].avgThru ? a : b);
+  const bestMemEngine  = engines.reduce((a,b) => byEngine[a].avgMem  < byEngine[b].avgMem  ? a : b);
+  const mostWinsEngine = engines.reduce((a,b) => winsTotal[a] > winsTotal[b] ? a : b);
 
-  function breakdownRows(engines, valFn, fmtFn, bestFn) {
-    return engines.map(e => {
-      const val    = valFn(e);
-      const isBest = bestFn(val);
-      const p      = pal(e);
-      return `<div class="kpi-breakdown-row">
-        <span class="kpi-breakdown-name">
-          <span class="engine-dot" style="background:${p.hex}"></span>${e}
-        </span>
-        <span class="kpi-breakdown-val${isBest ? ' kpi-best' : ''}">${fmtFn(val)}</span>
-      </div>`;
-    }).join('');
+  function winnerCard(label, engine, value, sub) {
+    const p = pal(engine);
+    return `<div class="metric-block kpi-winner-card">
+      <div class="kpi-winner-label">${label}</div>
+      <div class="kpi-winner-engine">
+        <span class="engine-dot" style="background:${p.hex}"></span>
+        <strong>${engine}</strong>
+      </div>
+      <div class="kpi-winner-value">${value}</div>
+      <div class="metric-sub-label">${sub}</div>
+    </div>`;
   }
 
-  const kpis = [
-    {
-      label: 'Avg. throughput',
-      sub: 'triples/s — higher is better',
-      rows: breakdownRows(engines,
-        e => byEngine[e].avgThru,
-        v => fmt(v, 0) + ' t/s',
-        v => v === maxThru),
-    },
-    {
-      label: 'Avg. load time',
-      sub: 'ms — lower is better',
-      rows: breakdownRows(engines,
-        e => byEngine[e].avgTime,
-        v => fmt(v, 0) + ' ms',
-        v => v === minTime),
-    },
-    {
-      label: 'Avg. memory Δ',
-      sub: 'MB — lower is better',
-      rows: breakdownRows(engines,
-        e => byEngine[e].avgMem,
-        v => fmt(v, 1) + ' MB',
-        v => v === minMem),
-    },
-    {
-      label: 'Files benchmarked',
-      sub: [...new Set(runs.map(r => r.dataset))].join(' · '),
-      rows: `<div class="kpi-breakdown-row kpi-single">
-        <span class="kpi-big">${[...new Set(runs.map(r => r.file))].length}</span>
-        <span class="kpi-breakdown-name" style="margin-left:8px">files · ${fmt(runs.reduce((s,r)=>s+r.triples,0)/engines.length, 0)} triples avg</span>
-      </div>`,
-    },
-  ];
+  const contextCard = `<div class="metric-block kpi-context-card">
+    <div class="kpi-context-row"><span class="kpi-context-num">${engines.length}</span><span class="kpi-context-lbl">engines</span></div>
+    <div class="kpi-context-row"><span class="kpi-context-num">${datasets.length}</span><span class="kpi-context-lbl">datasets</span></div>
+    <div class="kpi-context-row"><span class="kpi-context-num">${files.length}</span><span class="kpi-context-lbl">files</span></div>
+  </div>`;
 
-  document.getElementById('metrics-grid').innerHTML = kpis.map(k => `
-    <div class="metric-block">
-      <div class="metric-label">${k.label}</div>
-      <div class="metric-sub-label">${k.sub}</div>
-      <div class="kpi-breakdown">${k.rows}</div>
-    </div>
-  `).join('');
+  document.getElementById('metrics-grid').innerHTML =
+    winnerCard('Best throughput', bestThruEngine,
+      fmt(byEngine[bestThruEngine].avgThru, 0) + ' t/s', 'avg triples/s across all files') +
+    winnerCard('Best memory',     bestMemEngine,
+      fmt(byEngine[bestMemEngine].avgMem, 1) + ' MB',   'avg memory Δ across all files') +
+    winnerCard('Overall winner',  mostWinsEngine,
+      fmt(byEngine[mostWinsEngine].normScore, 0) + ' / 100', 'normalized score (throughput + memory)') +
+    contextCard;
 
   const meta = document.getElementById('overview-meta');
-  if (meta) meta.textContent = `${engines.length} engines · ${[...new Set(runs.map(r=>r.dataset))].length} datasets`;
+  if (meta) meta.textContent = `${engines.length} engines · ${datasets.length} datasets · ${files.length} files`;
 
   _renderOverviewCharts(engines, byEngine);
 }
@@ -485,8 +428,8 @@ function _renderOverviewCharts(engines, byEngine) {
       data: {
         labels: engines,
         datasets: [{
-          label: 'Avg. throughput (t/s)',
-          data: engines.map(e => Math.round(byEngine[e].avgThru)),
+          label: 'Overall score',
+          data: engines.map(e => byEngine[e].normScore),
           backgroundColor: engines.map(e => pal(e).bg),
           borderColor:     engines.map(e => pal(e).hex),
           borderWidth: 1,
@@ -498,11 +441,11 @@ function _renderOverviewCharts(engines, byEngine) {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw, 0)} t/s` } },
+          tooltip: { callbacks: { label: ctx => ` Score: ${ctx.raw} / 100` } },
         },
         scales: {
           x: { grid: { display: false }, ticks: { color: textCol, font: { size: 10 } } },
-          y: { beginAtZero: true, grid: { color: gridCol }, ticks: { color: textCol, font: { size: 10 }, callback: v => fmt(v,0) } },
+          y: { beginAtZero: true, max: 100, grid: { color: gridCol }, ticks: { color: textCol, font: { size: 10 }, callback: v => v } },
         },
       },
     });
@@ -560,18 +503,6 @@ function _renderOverviewCharts(engines, byEngine) {
       },
     });
   }
-}
-
-// ── Global meter (proportion bars per engine) ─────────────────────────────────
-function renderGlobalMeter(runs) {
-  const engines = [...new Set(runs.map(r => r.engine))];
-  const total   = runs.length;
-  const meter   = document.getElementById('global-meter');
-  meter.innerHTML = engines.map(e => {
-    const count = runs.filter(r => r.engine === e).length;
-    const pct   = (count / total * 100).toFixed(1);
-    return `<div class="meter-segment" style="width:${pct}%; background:${pal(e).hex}" title="${e}: ${count} fichiers"></div>`;
-  }).join('');
 }
 
 // ── Engine cards ──────────────────────────────────────────────────────────────
@@ -711,7 +642,6 @@ function toggleEngine(engine) {
   renderKPI(filtered);
   renderEngineCards(getDatasetFilteredRuns()); // toujours toutes les cartes
   syncEnginePills();
-  renderModalEngineList();
   updateCharts();
   updateTable();
   // Sync SPARQL section
@@ -773,18 +703,12 @@ function clearDatasetFilter() {
 }
 
 function updateQuerySectionVisibility() {
-  const section = document.querySelector('.query-section');
-  const sparqlNav = document.getElementById('sidebar-sparql-nav');
-  if (!section) return;
-  // Hidden in All mode — only shown when a specific dataset with SPARQL is selected
-  if (activeDatasets.size === 0) {
-    section.style.display = 'none';
-    if (sparqlNav) sparqlNav.style.display = 'none';
-    return;
-  }
-  const hasSparql = [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
-  section.style.display = hasSparql ? '' : 'none';
-  if (sparqlNav) sparqlNav.style.display = hasSparql ? '' : 'none';
+  const sparqlSection = document.getElementById('section-sparql');
+  const sparqlNav     = document.getElementById('sidebar-sparql-nav');
+  const hasSparql     = activeDatasets.size > 0 &&
+    [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
+  if (sparqlSection) sparqlSection.style.display = hasSparql ? '' : 'none';
+  if (sparqlNav)     sparqlNav.style.display     = hasSparql ? '' : 'none';
 }
 
 function renderDatasetPills(runs) {
@@ -817,26 +741,40 @@ function syncDatasetPills() {
 function _syncDatasetSections() {
   const isAll = activeDatasets.size === 0;
 
-  // All mode: show Overview + Datasets, hide detail sections
-  // Dataset selected: hide Overview, show detail sections
+  // All mode: show Overview + Datasets + W3C, hide detail sections
+  // Dataset selected: hide Overview + W3C, show detail sections
   const overviewSection = document.getElementById('section-kpi');
   if (overviewSection) overviewSection.style.display = isAll ? '' : 'none';
 
-  const detailSections = ['section-engines', 'section-charts', 'section-results'];
+  const w3cSection = document.getElementById('section-w3c');
+  if (w3cSection && w3cSection.innerHTML.trim()) w3cSection.style.display = isAll ? '' : 'none';
+
+  const w3cNav = document.getElementById('sidebar-w3c-nav');
+  if (w3cNav) w3cNav.style.display = isAll ? '' : 'none';
+
+  // Full results hidden in All mode AND when Bowlogna is selected (SPARQL-focused)
+  const hideResults = isAll || activeDatasets.has('bowlogna');
+
+  const detailSections = ['section-engines', 'section-charts'];
   detailSections.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = isAll ? 'none' : '';
   });
+  const resultsEl = document.getElementById('section-results');
+  if (resultsEl) resultsEl.style.display = hideResults ? 'none' : '';
 
   // Sidebar: Overview nav visible in All, hidden in dataset mode
   document.querySelectorAll('.sidebar-nav-item[data-target="section-kpi"]').forEach(el => {
     el.closest('li').style.display = isAll ? '' : 'none';
   });
   // Sidebar: detail navs
-  ['section-engines', 'section-charts', 'section-results'].forEach(id => {
+  ['section-engines', 'section-charts'].forEach(id => {
     document.querySelectorAll(`.sidebar-nav-item[data-target="${id}"]`).forEach(el => {
       el.closest('li').style.display = isAll ? 'none' : '';
     });
+  });
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-results"]').forEach(el => {
+    el.closest('li').style.display = hideResults ? 'none' : '';
   });
   // Results group heading in sidebar
   const resultsGroup = document.querySelector('.sidebar-group:last-of-type');
@@ -851,11 +789,29 @@ function toggleDataset(ds) {
     activeDatasets.add(ds); // sélection exclusive
   }
   syncDatasetPills();
-  updateCharts();
+  Object.values(allCharts).forEach(c => c.destroy());
+  allCharts = {};
   updateTable();
   renderKPI(getFilteredRuns(allRuns));
   renderEngineCards(getDatasetFilteredRuns());
+  _refreshQuerySection();
+  if (activeDatasets.size > 0) {
+    requestAnimationFrame(() => requestAnimationFrame(() => { initCharts(); }));
+  }
+}
+
+function _refreshQuerySection() {
+  // Always update visibility (hides SPARQL nav for datasets without SPARQL)
   updateQuerySectionVisibility();
+  if (!allQueryRuns || allQueryRuns.length === 0) return;
+  const filteredQueryRuns = activeDatasets.size === 0
+    ? []
+    : allQueryRuns.filter(r => activeDatasets.has(r.dataset));
+  const sparqlSection = document.getElementById('section-sparql');
+  if (sparqlSection) sparqlSection.innerHTML = '';
+  if (filteredQueryRuns.length > 0) {
+    renderQuerySection(filteredQueryRuns);
+  }
 }
 
 function setRefEngine(engine) {
@@ -1050,14 +1006,16 @@ const CHART_OPT = (yLabel) => ({
 
 function buildDatasets(field) {
   const dsRuns  = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
-  const engines = getEngineOrder();
+  const allEngs = getEngineOrder();
+  // Respect activeEngines filter (empty = all)
+  const engines = allEngs.filter(e =>
+    !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+  );
   const files   = [...new Set(dsRuns.map(r => r.file))];
   return engines.map(engine => {
     const p = pal(engine);
-    const visible = activeEngines.size === 0 || activeEngines.has(engine);
     return {
       label: engine,
-      hidden: !visible,
       data: files.map(f => {
         const r = dsRuns.find(x => x.engine === engine && x.file === f);
         return r ? +r[field].toFixed(1) : null;
@@ -1078,19 +1036,18 @@ function getEngineOrder() {
 }
 
 function buildCombinedDatasets() {
-  const dsRuns  = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
-  const engines = getEngineOrder();
-  const files   = [...new Set(dsRuns.map(r => r.file))];
-  const datasets = [];
+  const dsRuns     = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const allEngines = getEngineOrder();
+  const engines    = activeEngines.size === 0 ? allEngines : allEngines.filter(e => activeEngines.has(e));
+  const files      = [...new Set(dsRuns.map(r => r.file))];
+  const datasets   = [];
   engines.forEach(engine => {
-    const p       = pal(engine);
-    const visible = activeEngines.size === 0 || activeEngines.has(engine);
+    const p = pal(engine);
     // Barres : Loading time (axe gauche)
     datasets.push({
       label: `${engine}`,
       type: 'bar',
       yAxisID: 'yLeft',
-      hidden: !visible,
       data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.loadingTimeMs.toFixed(0) : null; }),
       backgroundColor: p.bg,
       borderColor: p.hex,
@@ -1102,7 +1059,6 @@ function buildCombinedDatasets() {
       label: `${engine} (MB)`,
       type: 'line',
       yAxisID: 'yRight',
-      hidden: !visible,
       data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.memoryDeltaMb.toFixed(1) : null; }),
       borderColor: p.hex,
       backgroundColor: 'transparent',
@@ -1138,15 +1094,38 @@ function initCharts() {
 }
 
 function updateCharts() {
-  const dsRuns = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
-  const files  = [...new Set(dsRuns.map(r => r.file))];
-  const labels = files.map(shortFile);
-  for (const [id, chart] of Object.entries(allCharts)) {
-    chart.data.labels   = labels;
-    chart.data.datasets = buildDatasets(chart._field);
-    chart.update();
+  if (activeDatasets.size === 0) return;
+  if (Object.keys(allCharts).length === 0) return; // charts not yet created
+
+  const dsRuns  = allRuns.filter(r => activeDatasets.has(r.dataset));
+  const allEngs = getEngineOrder();
+  const engines = allEngs.filter(e =>
+    !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+  );
+  const files = [...new Set(dsRuns.map(r => r.file))];
+
+  for (const chart of Object.values(allCharts)) {
+    const field = chart._field;
+    if (!field) continue;
+    // Replace datasets in-place (splice preserves Chart.js internal array reference)
+    const newDs = engines.map(engine => {
+      const p = pal(engine);
+      return {
+        label: engine,
+        data: files.map(f => {
+          const r = dsRuns.find(x => x.engine === engine && x.file === f);
+          return r ? +r[field].toFixed(1) : null;
+        }),
+        backgroundColor: p.bg,
+        borderColor:     p.hex,
+        borderWidth: 1,
+        borderRadius: 3,
+      };
+    });
+    chart.data.datasets.splice(0, chart.data.datasets.length, ...newDs);
+    chart.update('none');
   }
-  // Refresh overview charts (theme change or engine filter)
+
   const filtered = getFilteredRuns(allRuns);
   if (filtered.length > 0) renderKPI(filtered);
 }
@@ -1475,146 +1454,6 @@ function renderQuerySection(queryRuns) {
   });
 }
 
-// ── Sparklines (mini charts sur engine cards) ─────────────────────────────────
-function renderSparklines(valid) {
-  document.querySelectorAll('.sparkline-canvas[data-engine]').forEach(canvas => {
-    const engine = canvas.dataset.engine;
-    const points = valid.map(run => {
-      const runs = run.data.runs.filter(r => r.engine === engine);
-      if (!runs.length) return null;
-      return Math.round(runs.reduce((s, r) => s + r.throughputTriplesPerSec, 0) / runs.length);
-    }).filter(v => v !== null);
-
-    if (points.length < 2) { canvas.style.display = 'none'; return; }
-
-    const p = pal(engine);
-    new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: points.map((_, i) => i),
-        datasets: [{
-          data: points,
-          borderColor: p.hex,
-          borderWidth: 1.5,
-          pointRadius: 0,
-          fill: true,
-          backgroundColor: p.hex + '22',
-          tension: 0.4,
-        }],
-      },
-      options: {
-        responsive: false,
-        animation: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: { x: { display: false }, y: { display: false, beginAtZero: false } },
-      },
-    });
-  });
-}
-
-// ── Tendance historique — heatmap régression ──────────────────────────────────
-async function renderTrend() {
-  let valid;
-
-  if (window.__HISTORY_DATA__ && window.__HISTORY_DATA__.length >= 2) {
-    valid = window.__HISTORY_DATA__;
-  } else {
-    let index;
-    try {
-      const res = await fetch('data/history/index.json');
-      if (!res.ok) return;
-      index = await res.json();
-    } catch (_) { return; }
-    if (!index || index.length < 2) return;
-
-    const reports = await Promise.all(
-      index.map(async entry => {
-        try {
-          const r = await fetch(`data/history/${entry.file}`);
-          if (!r.ok) return null;
-          const d = await r.json();
-          return { date: entry.date, data: d };
-        } catch (_) { return null; }
-      })
-    );
-    valid = reports.filter(Boolean);
-    if (valid.length < 2) return;
-  }
-
-  historyData = valid;
-
-  const currentEngines = new Set(allRuns.map(r => r.engine));
-  const engines = [...new Set(valid.flatMap(r => r.data.runs.map(run => run.engine)))]
-    .filter(e => currentEngines.has(e));
-
-  const labels = valid.map(r => {
-    const d = r.date;
-    return `${d.slice(6,8)}/${d.slice(4,6)} ${d.slice(9,11)}h${d.slice(11,13)}`;
-  });
-
-  function avgThru(run, engine) {
-    const runs = run.data.runs.filter(r => r.engine === engine);
-    if (!runs.length) return null;
-    return Math.round(runs.reduce((s, r) => s + r.throughputTriplesPerSec, 0) / runs.length);
-  }
-
-  const rows = engines.map(engine => {
-    const p = pal(engine);
-    const cells = valid.map((run, i) => {
-      const val = avgThru(run, engine);
-      if (val === null) return `<td class="hm-cell hm-na">—</td>`;
-      const prev = i > 0 ? avgThru(valid[i - 1], engine) : null;
-      let cls = 'hm-first', badge = '';
-      if (prev !== null) {
-        const pct = (val - prev) / prev * 100;
-        cls = pct > 5 ? 'hm-good' : pct < -5 ? 'hm-bad' : 'hm-neutral';
-        badge = `<span class="hm-pct">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
-      }
-      return `<td class="hm-cell ${cls}" title="${engine} — ${labels[i]}: ${fmt(val, 0)} t/s">
-        <span class="hm-val">${fmt(val, 0)}</span>${badge}
-      </td>`;
-    }).join('');
-    return `<tr>
-      <td class="hm-engine"><span class="engine-dot" style="background:${p.hex}"></span>${engine}</td>
-      ${cells}
-    </tr>`;
-  }).join('');
-
-  const section = document.createElement('section');
-  section.innerHTML = `
-    <details class="query-details">
-      <summary class="query-summary" style="margin-top:32px">
-        <h2 class="section-heading" style="margin:0;display:inline">Historical trend</h2>
-        <span class="query-summary-meta">${valid.length} runs · heatmap avg débit</span>
-      </summary>
-      <p class="section-note" style="margin-top:8px">
-        <span class="hm-legend hm-legend-good">▮ improvement &gt;5%</span>
-        <span class="hm-legend hm-legend-bad">▮ regression &gt;5%</span>
-        <span class="hm-legend hm-legend-neutral">▮ stable</span>
-      </p>
-      <div class="hm-scroll">
-        <table class="hm-table">
-          <thead><tr>
-            <th class="hm-th-engine">Engine</th>
-            ${labels.map(l => `<th class="hm-th">${l}</th>`).join('')}
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </details>
-  `;
-  const trendSection = document.getElementById('section-trend');
-  if (trendSection) {
-    trendSection.style.display = '';
-    const trendNav = document.getElementById('sidebar-trend-nav');
-    if (trendNav) trendNav.style.display = '';
-    trendSection.appendChild(section);
-  } else {
-    (document.querySelector('.app-content') || document.querySelector('.app-wrapper')).appendChild(section);
-  }
-
-  renderSparklines(valid);
-}
 
 // ── Chart zoom modal ──────────────────────────────────────────────────────────
 let _zoomChart = null;
@@ -1778,6 +1617,147 @@ function closeAddEngineModal() {
   document.getElementById('modal-add-engine')?.classList.remove('active');
 }
 
+// ── W3C Conformance ───────────────────────────────────────────────────────────
+async function loadW3CData() {
+  try {
+    const res = await fetch('https://corese-stack.github.io/corese-w3c/data/w3c-report.json');
+    if (!res.ok) throw new Error(res.statusText);
+    return await res.json();
+  } catch (e) {
+    console.warn('W3C data unavailable:', e);
+    return null;
+  }
+}
+
+function renderW3CSection(data) {
+  const section = document.getElementById('section-w3c');
+  if (!section) return;
+
+  if (!data) {
+    section.innerHTML = `<div class="section-head-bar"><h2 class="section-heading" style="margin:0">W3C Conformance</h2></div>
+      <p class="section-note" style="margin-top:12px">Data unavailable — check your connection.</p>`;
+    section.style.display = '';
+    return;
+  }
+
+  const { metadata, summary, suites } = data;
+  const engineVersion = metadata?.coreseVersion ?? metadata?.version ?? '—';
+  const runDate       = metadata?.date ?? metadata?.generatedAt ?? null;
+
+  // ── Summary cards ──
+  const pct     = summary.passRate?.toFixed(2) ?? '—';
+  const exePct  = summary.executedPassRate?.toFixed(2) ?? null;
+
+  const summaryCards = [
+    { label: 'Pass rate',     value: `${pct}%`,            sub: exePct ? `${exePct}% executed` : '',  cls: 'w3c-card-pass' },
+    { label: 'Passed',        value: fmt(summary.passed),  sub: `/ ${fmt(summary.total)} tests`,      cls: '' },
+    { label: 'Failed',        value: fmt(summary.failed),  sub: 'tests failed',                       cls: summary.failed > 0 ? 'w3c-card-fail' : '' },
+    { label: 'Inapplicable',  value: fmt(summary.inapplicable ?? summary.skipped ?? 0), sub: 'inapplicable / skipped', cls: '' },
+    { label: 'Cannot tell',   value: fmt(summary.cantTell ?? 0), sub: 'uncertain',                    cls: '' },
+  ].map(c => `
+    <div class="metric-block ${c.cls}">
+      <div class="kpi-winner-label">${c.label}</div>
+      <div class="kpi-winner-value">${c.value}</div>
+      ${c.sub ? `<div class="metric-sub-label">${c.sub}</div>` : ''}
+    </div>`).join('');
+
+  // ── Pass rate bar ──
+  const barPct = Math.min(parseFloat(pct), 100);
+  const barColor = barPct >= 99 ? '#3fb950' : barPct >= 95 ? '#d29922' : '#f85149';
+  const passBar = `
+    <div class="w3c-pass-bar-wrap">
+      <div class="w3c-pass-bar-track">
+        <div class="w3c-pass-bar-fill" style="width:${barPct}%;background:${barColor}"></div>
+      </div>
+      <span class="w3c-pass-bar-label" style="color:${barColor}">${pct}%</span>
+    </div>`;
+
+  // ── Suite table ──
+  const suiteRows = suites.map(s => {
+    const suitePct  = s.total > 0 ? (s.passed / s.total * 100).toFixed(1) : '—';
+    const failCls   = s.failed > 0 ? 'w3c-fail-cell' : '';
+    return `<tr>
+      <td>${s.name ?? s.id}</td>
+      <td class="text-muted-cell">${s.specification ?? s.component ?? '—'}</td>
+      <td class="text-right">${fmt(s.total)}</td>
+      <td class="text-right" style="color:#3fb950">${fmt(s.passed)}</td>
+      <td class="text-right ${failCls}">${fmt(s.failed)}</td>
+      <td class="text-right">${s.inapplicable ?? 0}</td>
+      <td class="text-right w3c-pct-cell" style="color:${parseFloat(suitePct)>=99?'#3fb950':parseFloat(suitePct)>=95?'#d29922':'#f85149'}">${suitePct}%</td>
+    </tr>`;
+  }).join('');
+
+  // ── Failed tests detail ──
+  const failedTests = suites.flatMap(s =>
+    (s.tests ?? []).filter(t => t.status === 'FAILED' || t.outcome === 'FAILED')
+      .map(t => ({ suite: s.name ?? s.id, ...t }))
+  );
+  const failedHtml = failedTests.length === 0 ? '' : `
+    <details class="w3c-failed-details">
+      <summary class="query-summary">
+        <span style="color:#f85149;font-weight:600">${failedTests.length} failed test${failedTests.length > 1 ? 's' : ''}</span>
+      </summary>
+      <div class="table-surface" style="margin-top:8px">
+        <div class="table-scroll">
+          <table class="report-table">
+            <thead><tr>
+              <th>Suite</th><th>Test</th><th>Description</th><th>Error</th>
+            </tr></thead>
+            <tbody>
+              ${failedTests.map(t => `<tr>
+                <td style="font-size:11px;white-space:nowrap">${t.suite}</td>
+                <td style="font-family:var(--font-mono);font-size:11px">${t.name ?? t.testUri ?? '—'}</td>
+                <td style="font-size:11px;color:var(--text-muted)">${t.description ?? '—'}</td>
+                <td style="font-size:11px;color:#f85149;font-family:var(--font-mono)">${t.errorMessage ?? '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>`;
+
+  section.innerHTML = `
+    <div class="section-head-bar">
+      <h2 class="section-heading" style="margin:0">W3C Conformance</h2>
+      <span class="section-meta">
+        Corese only &nbsp;·&nbsp; v${engineVersion}${runDate ? ' · ' + formatDate(runDate) : ''}
+        &nbsp;·&nbsp;
+        <a href="https://corese-stack.github.io/corese-w3c/" target="_blank" rel="noopener" style="color:var(--accent);font-size:11px">corese-w3c ↗</a>
+      </span>
+    </div>
+    ${passBar}
+    <div class="metrics-grid" style="margin-top:12px;grid-template-columns:repeat(5,1fr)">${summaryCards}</div>
+    <div class="table-surface" style="margin-top:20px">
+      <div class="section-heading-row">
+        <span class="chart-title">Results by suite</span>
+        <span class="chart-unit">${suites.length} suites</span>
+      </div>
+      <div class="table-scroll">
+        <table class="report-table">
+          <thead><tr>
+            <th>Suite</th><th>Specification</th>
+            <th class="text-right">Total</th>
+            <th class="text-right">Passed</th>
+            <th class="text-right">Failed</th>
+            <th class="text-right">N/A</th>
+            <th class="text-right">Pass %</th>
+          </tr></thead>
+          <tbody>${suiteRows}</tbody>
+        </table>
+      </div>
+    </div>
+    ${failedHtml}
+  `;
+
+  section.style.display = '';
+  const nav = document.getElementById('sidebar-w3c-nav');
+  if (nav) {
+    nav.style.display = '';
+    const badge = document.getElementById('sidebar-badge-w3c');
+    if (badge) badge.textContent = `${pct}%`;
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   let data;
@@ -1831,6 +1811,9 @@ async function main() {
   if (data.queryRuns && data.queryRuns.length > 0) {
     renderQuerySection(data.queryRuns);
   }
+
+  // W3C Conformance — async, non-blocking
+  loadW3CData().then(renderW3CSection);
 
   document.getElementById('btn-open-add-engine')?.addEventListener('click', openAddEngineModal);
   document.getElementById('btn-modal-cancel')?.addEventListener('click', closeAddEngineModal);
