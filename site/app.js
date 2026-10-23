@@ -266,7 +266,7 @@ let activeEngines  = new Set();
 let hiddenEngines  = new Set(); // engines removed from comparator bar via ×
 let allCharts      = {};
 let activeDatasets    = new Set();
-let userRefEngine     = null;
+let userRefEngine     = localStorage.getItem('refEngine') ?? null;
 let metadataQueries   = null;
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -405,7 +405,7 @@ function renderKPI(runs) {
     winnerCard('Best memory',     bestMemEngine,
       fmt(byEngine[bestMemEngine].avgMem, 1) + ' MB',   'avg memory Δ across all files') +
     winnerCard('Overall winner',  mostWinsEngine,
-      fmt(byEngine[mostWinsEngine].normScore, 0) + ' / 100', 'normalized score (throughput + memory)') +
+      fmt(byEngine[mostWinsEngine].normScore, 0) + ' / 100', 'ranked 1st most often across files') +
     contextCard;
 
   const meta = document.getElementById('overview-meta');
@@ -674,8 +674,18 @@ function getFilteredRuns(runs) {
 function hidePillEngine(engine) {
   hiddenEngines.add(engine);
   activeEngines.delete(engine);
-  // Hide the pill immediately
-  document.querySelectorAll(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`).forEach(el => el.remove());
+  // Grey out the pill instead of removing it — show a restore button
+  document.querySelectorAll(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`).forEach(el => {
+    el.classList.add('pill-hidden');
+    el.draggable = false;
+    el.onclick = null;
+    const removeBtn = el.querySelector('.pill-remove-btn');
+    if (removeBtn) {
+      removeBtn.textContent = '↩';
+      removeBtn.title = 'Restore';
+      removeBtn.onclick = e => { e.stopPropagation(); restorePillEngine(engine); };
+    }
+  });
   const filtered = getFilteredRuns(allRuns);
   renderKPI(filtered);
   renderEngineCards(getDatasetFilteredRuns());
@@ -687,6 +697,30 @@ function hidePillEngine(engine) {
   });
   updateQueryChart();
   updateQueryTable();
+  updatePillsScrollBtns();
+}
+
+function restorePillEngine(engine) {
+  hiddenEngines.delete(engine);
+  const pill = document.querySelector(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`);
+  if (pill) {
+    pill.classList.remove('pill-hidden');
+    pill.draggable = true;
+    pill.onclick = () => toggleEngine(engine);
+    const btn = pill.querySelector('.pill-remove-btn');
+    if (btn) {
+      btn.textContent = '×';
+      btn.title = 'Remove';
+      btn.onclick = e => { e.stopPropagation(); hidePillEngine(engine); };
+    }
+    attachPillDragHandlers(pill);
+  }
+  const filtered = getFilteredRuns(allRuns);
+  renderKPI(filtered);
+  renderEngineCards(getDatasetFilteredRuns());
+  syncEnginePills();
+  updateCharts();
+  updateTable();
   updatePillsScrollBtns();
 }
 
@@ -752,14 +786,15 @@ function _syncDatasetSections() {
   const w3cNav = document.getElementById('sidebar-w3c-nav');
   if (w3cNav) w3cNav.style.display = isAll ? '' : 'none';
 
-  // Full results hidden in All mode AND when Bowlogna is selected (SPARQL-focused)
-  const hideResults = isAll || activeDatasets.has('bowlogna');
+  // Bowlogna is SPARQL-focused: hide Performance charts + Full results, show only Engines + SPARQL
+  const isBowlogna   = activeDatasets.has('bowlogna');
+  const hideCharts   = isAll || isBowlogna;
+  const hideResults  = isAll || isBowlogna;
 
-  const detailSections = ['section-engines', 'section-charts'];
-  detailSections.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = isAll ? 'none' : '';
-  });
+  const enginesEl = document.getElementById('section-engines');
+  if (enginesEl) enginesEl.style.display = isAll ? 'none' : '';
+  const chartsEl = document.getElementById('section-charts');
+  if (chartsEl) chartsEl.style.display = hideCharts ? 'none' : '';
   const resultsEl = document.getElementById('section-results');
   if (resultsEl) resultsEl.style.display = hideResults ? 'none' : '';
 
@@ -767,11 +802,11 @@ function _syncDatasetSections() {
   document.querySelectorAll('.sidebar-nav-item[data-target="section-kpi"]').forEach(el => {
     el.closest('li').style.display = isAll ? '' : 'none';
   });
-  // Sidebar: detail navs
-  ['section-engines', 'section-charts'].forEach(id => {
-    document.querySelectorAll(`.sidebar-nav-item[data-target="${id}"]`).forEach(el => {
-      el.closest('li').style.display = isAll ? 'none' : '';
-    });
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-engines"]').forEach(el => {
+    el.closest('li').style.display = isAll ? 'none' : '';
+  });
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-charts"]').forEach(el => {
+    el.closest('li').style.display = hideCharts ? 'none' : '';
   });
   document.querySelectorAll('.sidebar-nav-item[data-target="section-results"]').forEach(el => {
     el.closest('li').style.display = hideResults ? 'none' : '';
@@ -816,6 +851,8 @@ function _refreshQuerySection() {
 
 function setRefEngine(engine) {
   userRefEngine = userRefEngine === engine ? null : engine;
+  if (userRefEngine) localStorage.setItem('refEngine', userRefEngine);
+  else localStorage.removeItem('refEngine');
   renderEngineCards(getDatasetFilteredRuns());
   document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
     el.classList.toggle('active', activeEngines.has(el.dataset.engine));
@@ -1373,7 +1410,7 @@ function renderQuerySection(queryRuns) {
         <span class="query-summary-meta">${queryIds.length} queries · ${engines.length} engines · ms, lower is better</span>
       </summary>
     <div class="section-heading-row" style="margin-top:8px">
-      <p class="section-note" style="margin:0">Median execution time per query — 3 repetitions</p>
+      <p class="section-note" style="margin:0">Median execution time per query — 3 repetitions &nbsp;·&nbsp; <span style="color:var(--text-faint)">— = timeout or error</span></p>
       <button id="clear-query-engines-btn" class="btn-clear-filter" onclick="clearQueryEngineFilter()" style="display:none">✕ Clear filter</button>
     </div>
     <div class="query-cards" id="query-cards-grid">${cards}</div>
