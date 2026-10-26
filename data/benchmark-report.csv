@@ -1,0 +1,2 @@
+# LOAD BENCHMARK
+engine,dataset,file,triples,loadingTimeMs,throughputTriplesPerSec,memoryBeforeMb,memoryAfterMb,memoryDeltaMb,cpuPercent,rep1Ms,rep2Ms,rep3Ms
