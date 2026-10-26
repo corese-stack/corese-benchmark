@@ -218,7 +218,16 @@ for ds in dataset_names:
 def gradle_build(extra_args=None):
     cmd = [gradle_wrapper, "clean", "build"] + (extra_args or [])
     print(f"Building: {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=project_dir, check=True)
+    try:
+        subprocess.run(cmd, cwd=project_dir, check=True, timeout=600, stderr=subprocess.PIPE)
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Gradle build timed out after 600s — check for stuck daemon", file=sys.stderr)
+        raise
+    except subprocess.CalledProcessError as e:
+        stderr_text = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
+        if stderr_text:
+            print(f"[ERROR] Gradle build stderr:\n{stderr_text}", file=sys.stderr)
+        raise
 
 
 QUERIES_FILES = {

@@ -130,6 +130,21 @@ public class RDF4JDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
+    @Override
+    public long[] queryWithCount(String sparql) {
+        long start = System.currentTimeMillis();
+        long count = -1L;
+        try (RepositoryConnection conn = repository.getConnection()) {
+            TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
+            try (TupleQueryResult result = q.evaluate()) {
+                count = 0;
+                while (result.hasNext()) { result.next(); count++; }
+            }
+        }
+        return new long[]{ System.currentTimeMillis() - start, count };
+    }
+
     /**
      * Returns the total number of statements held in the repository.
      *

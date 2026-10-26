@@ -651,6 +651,7 @@ function toggleEngine(engine) {
   });
   updateQueryChart();
   updateQueryTable();
+  pushStateToUrl();
 }
 
 function clearEngineFilter() {
@@ -661,6 +662,7 @@ function clearEngineFilter() {
   syncEnginePills();
   updateCharts();
   updateTable();
+  pushStateToUrl();
 }
 
 function getFilteredRuns(runs) {
@@ -674,18 +676,8 @@ function getFilteredRuns(runs) {
 function hidePillEngine(engine) {
   hiddenEngines.add(engine);
   activeEngines.delete(engine);
-  // Grey out the pill instead of removing it — show a restore button
-  document.querySelectorAll(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`).forEach(el => {
-    el.classList.add('pill-hidden');
-    el.draggable = false;
-    el.onclick = null;
-    const removeBtn = el.querySelector('.pill-remove-btn');
-    if (removeBtn) {
-      removeBtn.textContent = '↩';
-      removeBtn.title = 'Restore';
-      removeBtn.onclick = e => { e.stopPropagation(); restorePillEngine(engine); };
-    }
-  });
+  // Remove pill from the comparator bar
+  document.querySelectorAll(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`).forEach(el => el.remove());
   const filtered = getFilteredRuns(allRuns);
   renderKPI(filtered);
   renderEngineCards(getDatasetFilteredRuns());
@@ -698,30 +690,7 @@ function hidePillEngine(engine) {
   updateQueryChart();
   updateQueryTable();
   updatePillsScrollBtns();
-}
-
-function restorePillEngine(engine) {
-  hiddenEngines.delete(engine);
-  const pill = document.querySelector(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`);
-  if (pill) {
-    pill.classList.remove('pill-hidden');
-    pill.draggable = true;
-    pill.onclick = () => toggleEngine(engine);
-    const btn = pill.querySelector('.pill-remove-btn');
-    if (btn) {
-      btn.textContent = '×';
-      btn.title = 'Remove';
-      btn.onclick = e => { e.stopPropagation(); hidePillEngine(engine); };
-    }
-    attachPillDragHandlers(pill);
-  }
-  const filtered = getFilteredRuns(allRuns);
-  renderKPI(filtered);
-  renderEngineCards(getDatasetFilteredRuns());
-  syncEnginePills();
-  updateCharts();
-  updateTable();
-  updatePillsScrollBtns();
+  pushStateToUrl();
 }
 
 function clearDatasetFilter() {
@@ -734,6 +703,7 @@ function clearDatasetFilter() {
   const btn = document.getElementById('clear-engines-btn');
   if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
   updateQuerySectionVisibility();
+  pushStateToUrl();
 }
 
 function updateQuerySectionVisibility() {
@@ -830,9 +800,21 @@ function toggleDataset(ds) {
   renderKPI(getFilteredRuns(allRuns));
   renderEngineCards(getDatasetFilteredRuns());
   _refreshQuerySection();
+  pushStateToUrl();
   if (activeDatasets.size > 0) {
-    requestAnimationFrame(() => requestAnimationFrame(() => { initCharts(); }));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      initCharts();
+      _updateChartsMeta();
+    }));
   }
+}
+
+function _updateChartsMeta() {
+  const el = document.getElementById('charts-mode-meta');
+  if (!el) return;
+  el.textContent = isScalabilityMode()
+    ? 'scalability view — X axis = graph size'
+    : '';
 }
 
 function _refreshQuerySection() {
@@ -857,6 +839,7 @@ function setRefEngine(engine) {
   document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
     el.classList.toggle('active', activeEngines.has(el.dataset.engine));
   });
+  pushStateToUrl();
 }
 
 // ── Engine card drag & drop ───────────────────────────────────────────────────
@@ -1041,6 +1024,91 @@ const CHART_OPT = (yLabel) => ({
   },
 });
 
+// ── Scalability mode (single dataset → line charts by triple count) ───────────
+// Active when exactly one non-bowlogna dataset is selected.
+function isScalabilityMode() {
+  return activeDatasets.size === 1 && !activeDatasets.has('bowlogna');
+}
+
+function fmtTriples(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000)     return Math.round(n / 1_000) + 'K';
+  return String(n);
+}
+
+// Returns files sorted by ascending average triple count across engines
+function getScalabilityFiles() {
+  const dsRuns = allRuns.filter(r => activeDatasets.has(r.dataset));
+  const files  = [...new Set(dsRuns.map(r => r.file))];
+  files.sort((a, b) => {
+    const avg = f => {
+      const rs = dsRuns.filter(r => r.file === f);
+      return rs.length ? rs.reduce((s, r) => s + r.triples, 0) / rs.length : 0;
+    };
+    return avg(a) - avg(b);
+  });
+  return files;
+}
+
+// X-axis labels: triple count formatted (e.g. "4M", "800K")
+function getScalabilityLabels(files) {
+  const dsRuns = allRuns.filter(r => activeDatasets.has(r.dataset));
+  return files.map(f => {
+    const rs  = dsRuns.filter(r => r.file === f);
+    const avg = rs.length ? rs.reduce((s, r) => s + r.triples, 0) / rs.length : 0;
+    return fmtTriples(Math.round(avg));
+  });
+}
+
+const LINE_CHART_OPT = (yLabel) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  spanGaps: true,
+  plugins: {
+    legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
+    tooltip: { mode: 'index', intersect: false },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { font: { size: 10 }, maxRotation: 20 },
+      title: { display: true, text: 'Graph size (triples)', font: { size: 10 }, color: '#8b949e' },
+    },
+    y: {
+      grid: { color: 'rgba(255,255,255,0.05)' },
+      ticks: { font: { size: 10 } },
+      beginAtZero: true,
+      title: { display: true, text: yLabel, font: { size: 10 }, color: '#8b949e' },
+    },
+  },
+});
+
+function buildLineDatasets(field) {
+  const dsRuns  = allRuns.filter(r => activeDatasets.has(r.dataset));
+  const allEngs = getEngineOrder();
+  const engines = allEngs.filter(e =>
+    !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+  );
+  const files = getScalabilityFiles();
+  return engines.map(engine => {
+    const p = pal(engine);
+    return {
+      label: engine,
+      data: files.map(f => {
+        const r = dsRuns.find(x => x.engine === engine && x.file === f);
+        return r ? +r[field].toFixed(1) : null;
+      }),
+      borderColor:     p.hex,
+      backgroundColor: p.bg,
+      borderWidth: 2,
+      tension: 0.3,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      fill: false,
+    };
+  });
+}
+
 function buildDatasets(field) {
   const dsRuns  = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
   const allEngs = getEngineOrder();
@@ -1109,24 +1177,37 @@ function buildCombinedDatasets() {
 }
 
 function initCharts() {
-  const dsRuns = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
-  const files  = [...new Set(dsRuns.map(r => r.file))];
-  const labels = files.map(shortFile);
-
   const defs = [
-    { id: 'chart-loading',    field: 'loadingTimeMs',          unit: 'ms'  },
-    { id: 'chart-throughput', field: 'throughputTriplesPerSec', unit: 't/s' },
-    { id: 'chart-memory',     field: 'memoryDeltaMb',           unit: 'MB'  },
-    { id: 'chart-cpu',        field: 'cpuPercent',              unit: '%'   },
+    { id: 'chart-loading', field: 'loadingTimeMs', unit: 'ms' },
+    { id: 'chart-memory',  field: 'memoryDeltaMb', unit: 'MB' },
+    { id: 'chart-cpu',     field: 'cpuPercent',    unit: '%'  },
   ];
 
-  for (const { id, field, unit } of defs) {
-    allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
-      type: 'bar',
-      data: { labels, datasets: buildDatasets(field) },
-      options: CHART_OPT(unit),
-    });
-    allCharts[id]._field = field;
+  if (isScalabilityMode()) {
+    // Single dataset → line charts (X = triple count, ascending)
+    const files  = getScalabilityFiles();
+    const labels = getScalabilityLabels(files);
+    for (const { id, field, unit } of defs) {
+      allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets: buildLineDatasets(field) },
+        options: LINE_CHART_OPT(unit),
+      });
+      allCharts[id]._field = field;
+    }
+  } else {
+    // All / multi-dataset → bar charts
+    const dsRuns = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+    const files  = [...new Set(dsRuns.map(r => r.file))];
+    const labels = files.map(shortFile);
+    for (const { id, field, unit } of defs) {
+      allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'bar',
+        data: { labels, datasets: buildDatasets(field) },
+        options: CHART_OPT(unit),
+      });
+      allCharts[id]._field = field;
+    }
   }
 }
 
@@ -1134,33 +1215,47 @@ function updateCharts() {
   if (activeDatasets.size === 0) return;
   if (Object.keys(allCharts).length === 0) return; // charts not yet created
 
-  const dsRuns  = allRuns.filter(r => activeDatasets.has(r.dataset));
-  const allEngs = getEngineOrder();
-  const engines = allEngs.filter(e =>
-    !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
-  );
-  const files = [...new Set(dsRuns.map(r => r.file))];
+  if (isScalabilityMode()) {
+    // Line mode: update labels + datasets in-place
+    const files  = getScalabilityFiles();
+    const labels = getScalabilityLabels(files);
+    for (const chart of Object.values(allCharts)) {
+      const field = chart._field;
+      if (!field) continue;
+      chart.data.labels = labels;
+      const newDs = buildLineDatasets(field);
+      chart.data.datasets.splice(0, chart.data.datasets.length, ...newDs);
+      chart.update('none');
+    }
+  } else {
+    // Bar mode: update datasets in-place
+    const dsRuns  = allRuns.filter(r => activeDatasets.has(r.dataset));
+    const allEngs = getEngineOrder();
+    const engines = allEngs.filter(e =>
+      !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+    );
+    const files = [...new Set(dsRuns.map(r => r.file))];
 
-  for (const chart of Object.values(allCharts)) {
-    const field = chart._field;
-    if (!field) continue;
-    // Replace datasets in-place (splice preserves Chart.js internal array reference)
-    const newDs = engines.map(engine => {
-      const p = pal(engine);
-      return {
-        label: engine,
-        data: files.map(f => {
-          const r = dsRuns.find(x => x.engine === engine && x.file === f);
-          return r ? +r[field].toFixed(1) : null;
-        }),
-        backgroundColor: p.bg,
-        borderColor:     p.hex,
-        borderWidth: 1,
-        borderRadius: 3,
-      };
-    });
-    chart.data.datasets.splice(0, chart.data.datasets.length, ...newDs);
-    chart.update('none');
+    for (const chart of Object.values(allCharts)) {
+      const field = chart._field;
+      if (!field) continue;
+      const newDs = engines.map(engine => {
+        const p = pal(engine);
+        return {
+          label: engine,
+          data: files.map(f => {
+            const r = dsRuns.find(x => x.engine === engine && x.file === f);
+            return r ? +r[field].toFixed(1) : null;
+          }),
+          backgroundColor: p.bg,
+          borderColor:     p.hex,
+          borderWidth: 1,
+          borderRadius: 3,
+        };
+      });
+      chart.data.datasets.splice(0, chart.data.datasets.length, ...newDs);
+      chart.update('none');
+    }
   }
 
   const filtered = getFilteredRuns(allRuns);
@@ -1821,6 +1916,9 @@ async function main() {
   const engines = [...new Set(allRuns.map(r => r.engine))];
   buildColorMap(engines);
 
+  // Restore state from URL before rendering (shareable links)
+  applyUrlState();
+
   renderHeader(data.metadata, allRuns);
   // Pills scroll arrows — listen once after pills are rendered
   const pillsWrap = document.getElementById('engine-pills');
@@ -1893,6 +1991,86 @@ async function main() {
     closeAddEngineModal();
   });
 
+}
+
+// ── URL shareable state ───────────────────────────────────────────────────────
+// Encodes: ?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5
+// Called after any state change that should be reflected in the URL.
+
+function pushStateToUrl() {
+  const params = new URLSearchParams();
+  if (activeDatasets.size > 0) {
+    params.set('ds', [...activeDatasets].join(','));
+  }
+  const visibleEngines = getEngineOrder().filter(e => !hiddenEngines.has(e));
+  const allEngines     = [...new Set(allRuns.map(r => r.engine))];
+  // Only encode if different from "all engines"
+  if (hiddenEngines.size > 0) {
+    params.set('engines', visibleEngines.join(','));
+  }
+  if (activeEngines.size > 0) {
+    params.set('filter', [...activeEngines].join(','));
+  }
+  if (userRefEngine) {
+    params.set('ref', userRefEngine);
+  }
+  const qs = params.toString();
+  const newUrl = qs ? `${location.pathname}?${qs}` : location.pathname;
+  history.replaceState(null, '', newUrl);
+}
+
+function applyUrlState() {
+  const params = new URLSearchParams(location.search);
+
+  // Dataset
+  const ds = params.get('ds');
+  if (ds) {
+    activeDatasets.clear();
+    ds.split(',').forEach(d => d && activeDatasets.add(d));
+  }
+
+  // Hidden engines (engines= lists visible ones; those absent are hidden)
+  const enginesParam = params.get('engines');
+  if (enginesParam) {
+    const visible = new Set(enginesParam.split(',').filter(Boolean));
+    const all     = [...new Set(allRuns.map(r => r.engine))];
+    hiddenEngines.clear();
+    all.forEach(e => { if (!visible.has(e)) hiddenEngines.add(e); });
+  }
+
+  // Engine filter (active selection)
+  const filter = params.get('filter');
+  if (filter) {
+    activeEngines.clear();
+    filter.split(',').forEach(e => e && activeEngines.add(e));
+  }
+
+  // Reference engine
+  const ref = params.get('ref');
+  if (ref) userRefEngine = ref;
+}
+
+// ── Export CSV (filtered view) ────────────────────────────────────────────────
+
+function exportFilteredCsv() {
+  const runs = getFilteredRuns(allRuns);
+  if (runs.length === 0) return;
+
+  const headers = ['engine', 'dataset', 'file', 'triples', 'loadingTimeMs',
+                   'throughputTriplesPerSec', 'memoryDeltaMb', 'cpuPercent'];
+  const escape  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+  const lines = [
+    headers.join(','),
+    ...runs.map(r => headers.map(h => escape(r[h])).join(',')),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `benchmark-filtered-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 main();

@@ -71,6 +71,27 @@ public class JenaDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
+    @Override
+    public long[] queryWithCount(String sparql) {
+        long start = System.currentTimeMillis();
+        long count = -1L;
+        try (QueryExecution qe = QueryExecution.model(model).query(sparql).build()) {
+            if (qe.getQuery().isSelectType()) {
+                ResultSet rs = qe.execSelect();
+                count = 0;
+                while (rs.hasNext()) { rs.next(); count++; }
+            } else if (qe.getQuery().isConstructType()) {
+                qe.execConstruct();
+            } else if (qe.getQuery().isAskType()) {
+                qe.execAsk();
+            } else if (qe.getQuery().isDescribeType()) {
+                qe.execDescribe();
+            }
+        }
+        return new long[]{ System.currentTimeMillis() - start, count };
+    }
+
     /**
      * Returns the number of statements currently held in the Jena model.
      *

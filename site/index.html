@@ -196,6 +196,7 @@
       <section class="page-section" id="section-charts">
         <div class="section-head-bar">
           <h2 class="section-heading" style="margin:0">Performance</h2>
+          <span class="section-meta" id="charts-mode-meta"></span>
         </div>
         <div class="charts-grid">
 
@@ -207,16 +208,6 @@
               <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-loading')" title="Agrandir">⤢</button>
             </div>
             <canvas id="chart-loading"></canvas>
-          </div>
-
-          <div class="chart-surface" onclick="openChartZoom('chart-throughput')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">Throughput</span>
-              <span class="chart-unit">triples/s — higher is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-throughput','throughput')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-throughput')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-throughput"></canvas>
           </div>
 
           <div class="chart-surface" onclick="openChartZoom('chart-memory')" style="cursor:pointer">
@@ -247,6 +238,16 @@
         <div class="section-head-bar">
           <h2 class="section-heading" style="margin:0">Full results</h2>
           <span class="section-meta" id="full-results-meta"></span>
+          <button class="btn-download" onclick="exportFilteredCsv()" title="Exporter les résultats filtrés en CSV">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="12" y2="18"></line>
+              <line x1="15" y1="15" x2="12" y2="18"></line>
+            </svg>
+            <span>Export CSV</span>
+          </button>
         </div>
         <div class="table-surface">
           <div class="table-scroll">

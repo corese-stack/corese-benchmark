@@ -135,6 +135,39 @@ public class BenchmarkHarness {
             log.info("  {} triples loaded — running {} queries × {} reps",
                 driver.getGraphSize(), queries.size(), QUERY_REPS);
 
+            // Warmup: one discarded run per query to prime the JIT and validate results.
+            log.info("  Warming up {} queries (1 run discarded)...", queries.size());
+            for (int qi = 0; qi < queries.size(); qi++) {
+                String warmupSparql = queries.get(qi).trim();
+                if (warmupSparql.isEmpty()) continue;
+                String warmupId = "query_" + (qi + 1);
+                final String wq = warmupSparql;
+                ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
+                    Thread t = new Thread(r, "warmup-" + warmupId);
+                    t.setDaemon(true);
+                    return t;
+                });
+                Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(wq));
+                try {
+                    long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
+                    long count = res[1];
+                    if (count == 0) {
+                        log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
+                    } else if (count > 0) {
+                        log.debug("  {} warmup: {} result(s)", warmupId, count);
+                    }
+                    warmupExec.shutdown();
+                } catch (TimeoutException e) {
+                    wf.cancel(true);
+                    warmupExec.shutdownNow();
+                    log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
+                } catch (Exception e) {
+                    warmupExec.shutdown();
+                    log.warn("  {} warmup failed: {}", warmupId,
+                        e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                }
+            }
+
             // Benchmark each query with per-execution timeout.
             // A fresh daemon-thread executor is created per query so that a stuck thread
             // (one that ignores interrupt) is abandoned rather than blocking all subsequent queries.

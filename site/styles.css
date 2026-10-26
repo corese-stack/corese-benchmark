@@ -1217,12 +1217,6 @@ body {
 .engine-pills-wrap .engine-pill.ep-active { box-shadow: 0 0 0 2px currentColor; }
 .engine-pills-wrap .engine-pill.pill-dragging { opacity: 0.4; cursor: grabbing; }
 .engine-pills-wrap .engine-pill.pill-drag-over { outline: 2px dashed currentColor; outline-offset: 2px; }
-.engine-pills-wrap .engine-pill.pill-hidden {
-  opacity: 0.35;
-  filter: grayscale(1);
-  cursor: default;
-  text-decoration: line-through;
-}
 
 .engine-pills-wrap .pill-version {
   font-family: var(--font-mono);
