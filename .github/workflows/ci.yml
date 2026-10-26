@@ -83,6 +83,24 @@ jobs:
           find out/ -name "*.json" -mtime +30 -delete 2>/dev/null || true
           rm -rf build/ input/
 
+      - name: Build corese.next JAR
+        env:
+          CORESE_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
+        run: |
+          CORESE_DIR="$HOME/corese-next-build"
+          if [ ! -d "$CORESE_DIR/.git" ]; then
+            git clone https://github.com/corese-stack/corese-core.git "$CORESE_DIR"
+          fi
+          cd "$CORESE_DIR"
+          git fetch origin feature/corese-next
+          git checkout "$CORESE_COMMIT"
+          chmod +x gradlew
+          ./gradlew shadowJar --no-daemon -q
+          JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
+          mkdir -p "$GITHUB_WORKSPACE/libs"
+          cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
+          echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
+
       - name: Set up conda environment
         run: |
           CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
@@ -95,8 +113,8 @@ jobs:
           source "$CONDA_SH"
           conda activate benchmarkenv
           python python-utils/workflow.py \
-            --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
-            --datasets="dbpedia,bowlogna"
+            --engines="corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
+            --datasets="dbpedia,bowlogna,lubm"
 
       - name: Check site/data output
         run: ls -la ./site/data/
@@ -128,7 +146,7 @@ jobs:
       - name: Build corese.next JAR
         if: contains(github.event.inputs.engines, 'corese.next')
         env:
-          CORESE_COMMIT: b8dbc158
+          CORESE_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
         run: |
           CORESE_DIR="$HOME/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then

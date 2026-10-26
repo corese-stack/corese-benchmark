@@ -316,12 +316,17 @@ function renderSidebarMeta(meta, engines, runs, queryRuns) {
   // Footer meta
   const box = document.getElementById('sidebar-meta');
   if (box) {
+    const rows = [
+      ['Date',     formatDate(meta.generatedAt)],
+      ['Java',     `<code>${meta.java ?? '—'}</code>`],
+      ['OS',       meta.os ?? '—'],
+      ['Protocol', meta.protocol ? `${meta.protocol.repetitions} reps + warmup` : '—'],
+    ];
     box.innerHTML = `
-      <strong>Run context</strong>
-      <span><b>Date :</b> ${formatDate(meta.generatedAt)}</span>
-      <span><b>Java :</b> <code>${meta.java ?? '—'}</code></span>
-      ${meta.os ? `<span><b>OS :</b> ${meta.os}</span>` : ''}
-      ${meta.protocol ? `<span><b>Protocol :</b> ${meta.protocol.repetitions} reps + warmup</span>` : ''}
+      <span class="meta-box-title">Run context</span>
+      <dl class="meta-box-grid">
+        ${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
+      </dl>
     `;
   }
 }
@@ -345,25 +350,6 @@ function renderKPI(runs) {
   const datasets = [...new Set(runs.map(r => r.dataset))];
   const files    = [...new Set(runs.map(r => r.file))];
 
-  // Normalized per-engine scores — each file contributes equally regardless of scale
-  // For each file: rank engines → award points (1st = engines.length pts, last = 1pt)
-  const winsByThru = Object.fromEntries(engines.map(e => [e, 0]));
-  const winsByMem  = Object.fromEntries(engines.map(e => [e, 0]));
-  const winsTotal  = Object.fromEntries(engines.map(e => [e, 0]));
-
-  files.forEach(file => {
-    const fileRuns = runs.filter(r => r.file === file);
-    // Throughput: higher = better
-    const byThru = [...fileRuns].sort((a,b) => b.throughputTriplesPerSec - a.throughputTriplesPerSec);
-    byThru.forEach((r, i) => { winsByThru[r.engine] = (winsByThru[r.engine] || 0) + (engines.length - i); });
-    // Memory: lower = better
-    const byMem  = [...fileRuns].sort((a,b) => a.memoryDeltaMb - b.memoryDeltaMb);
-    byMem.forEach((r, i)  => { winsByMem[r.engine]  = (winsByMem[r.engine]  || 0) + (engines.length - i); });
-  });
-
-  // Total wins = sum of throughput + memory scores
-  engines.forEach(e => { winsTotal[e] = winsByThru[e] + winsByMem[e]; });
-
   // Per-engine avg for the winner cards
   const byEngine = {};
   engines.forEach(e => {
@@ -372,13 +358,12 @@ function renderKPI(runs) {
       avgThru: er.reduce((s,r) => s + r.throughputTriplesPerSec, 0) / er.length,
       avgMem:  er.reduce((s,r) => s + r.memoryDeltaMb,           0) / er.length,
       avgTime: er.reduce((s,r) => s + r.loadingTimeMs,           0) / er.length,
-      normScore: Math.round(winsTotal[e] / (files.length * 2 * engines.length) * 100),
     };
   });
 
   const bestThruEngine = engines.reduce((a,b) => byEngine[a].avgThru > byEngine[b].avgThru ? a : b);
   const bestMemEngine  = engines.reduce((a,b) => byEngine[a].avgMem  < byEngine[b].avgMem  ? a : b);
-  const mostWinsEngine = engines.reduce((a,b) => winsTotal[a] > winsTotal[b] ? a : b);
+  const bestTimeEngine = engines.reduce((a,b) => byEngine[a].avgTime < byEngine[b].avgTime ? a : b);
 
   function winnerCard(label, engine, value, sub) {
     const p = pal(engine);
@@ -404,8 +389,8 @@ function renderKPI(runs) {
       fmt(byEngine[bestThruEngine].avgThru, 0) + ' t/s', 'avg triples/s across all files') +
     winnerCard('Best memory',     bestMemEngine,
       fmt(byEngine[bestMemEngine].avgMem, 1) + ' MB',   'avg memory Δ across all files') +
-    winnerCard('Overall winner',  mostWinsEngine,
-      fmt(byEngine[mostWinsEngine].normScore, 0) + ' / 100', 'ranked 1st most often across files') +
+    winnerCard('Best load time',  bestTimeEngine,
+      fmt(byEngine[bestTimeEngine].avgTime, 0) + ' ms',  'avg loading time across all files') +
     contextCard;
 
   const meta = document.getElementById('overview-meta');
@@ -419,7 +404,7 @@ function _renderOverviewCharts(engines, byEngine) {
   const gridCol = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
   const textCol = isDark ? '#8b949e' : '#57606a';
 
-  // ── Bar: avg throughput ───────────────────────────────────────────────
+  // ── Bar: avg loading time ─────────────────────────────────────────────
   const barCtx = document.getElementById('chart-overview-bar')?.getContext('2d');
   if (barCtx) {
     if (_overviewBarChart) _overviewBarChart.destroy();
@@ -428,8 +413,8 @@ function _renderOverviewCharts(engines, byEngine) {
       data: {
         labels: engines,
         datasets: [{
-          label: 'Overall score',
-          data: engines.map(e => byEngine[e].normScore),
+          label: 'Avg load time',
+          data: engines.map(e => Math.round(byEngine[e].avgTime)),
           backgroundColor: engines.map(e => pal(e).bg),
           borderColor:     engines.map(e => pal(e).hex),
           borderWidth: 1,
@@ -441,11 +426,11 @@ function _renderOverviewCharts(engines, byEngine) {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` Score: ${ctx.raw} / 100` } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} ms` } },
         },
         scales: {
           x: { grid: { display: false }, ticks: { color: textCol, font: { size: 10 } } },
-          y: { beginAtZero: true, max: 100, grid: { color: gridCol }, ticks: { color: textCol, font: { size: 10 }, callback: v => v } },
+          y: { beginAtZero: true, grid: { color: gridCol }, ticks: { color: textCol, font: { size: 10 }, callback: v => v.toLocaleString() } },
         },
       },
     });
@@ -821,13 +806,21 @@ function _refreshQuerySection() {
   // Always update visibility (hides SPARQL nav for datasets without SPARQL)
   updateQuerySectionVisibility();
   if (!allQueryRuns || allQueryRuns.length === 0) return;
-  const filteredQueryRuns = activeDatasets.size === 0
-    ? []
-    : allQueryRuns.filter(r => activeDatasets.has(r.dataset));
+  const hasSparql = activeDatasets.size > 0 &&
+    [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
+  const filteredQueryRuns = hasSparql
+    ? allQueryRuns.filter(r => activeDatasets.has(r.dataset))
+    : [];
   const sparqlSection = document.getElementById('section-sparql');
   if (sparqlSection) sparqlSection.innerHTML = '';
   if (filteredQueryRuns.length > 0) {
     renderQuerySection(filteredQueryRuns);
+    // Re-apply hidden engines (renderQuerySection re-renders from scratch)
+    document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => {
+      el.style.display = hiddenEngines.has(el.dataset.engine) ? 'none' : '';
+    });
+    updateQueryChart();
+    updateQueryTable();
   }
 }
 
@@ -1005,6 +998,7 @@ function applyStoredEngineOrder() {
 
 // ── Charts ────────────────────────────────────────────────────────────────────
 let allRuns = [];
+let currentData = null;
 
 const CHART_OPT = (yLabel) => ({
   responsive: true,
@@ -1060,13 +1054,23 @@ function getScalabilityLabels(files) {
   });
 }
 
-const LINE_CHART_OPT = (yLabel) => ({
+const LINE_CHART_OPT = (yLabel, fileNames = []) => ({
   responsive: true,
   maintainAspectRatio: false,
   spanGaps: true,
   plugins: {
     legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
-    tooltip: { mode: 'index', intersect: false },
+    tooltip: {
+      mode: 'index',
+      intersect: false,
+      callbacks: {
+        title: (items) => {
+          const idx   = items[0]?.dataIndex ?? 0;
+          const fname = fileNames[idx] ? shortFile(fileNames[idx]) : '';
+          return fname ? `${items[0].label} — ${fname}` : items[0].label;
+        },
+      },
+    },
   },
   scales: {
     x: {
@@ -1191,7 +1195,7 @@ function initCharts() {
       allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
         type: 'line',
         data: { labels, datasets: buildLineDatasets(field) },
-        options: LINE_CHART_OPT(unit),
+        options: LINE_CHART_OPT(unit, files),
       });
       allCharts[id]._field = field;
     }
@@ -1378,6 +1382,7 @@ function updateQueryChart() {
   // Réordonner ET mettre à jour les couleurs
   queryChart.data.datasets = cardOrder
     .filter(e => queryChartDatasetsBase[e] &&
+      !hiddenEngines.has(e) &&
       (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
       (activeEngines.size === 0 || activeEngines.has(e))
     )
@@ -1400,6 +1405,7 @@ function updateQueryTable() {
 
   const allEngines = [...new Set(allQueryRuns.map(r => r.engine))];
   const visibleEngines = allEngines.filter(e =>
+    !hiddenEngines.has(e) &&
     (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
     (activeEngines.size === 0 || activeEngines.has(e))
   );
@@ -1910,6 +1916,7 @@ async function main() {
   }
 
   allRuns = data.runs;
+  currentData = data;
   metadataQueries = data.metadata.queries ?? null;
 
   // Build color map from engines present in the data
@@ -1993,6 +2000,7 @@ async function main() {
 
 }
 
+// ── Copy URL ──────────────────────────────────────────────────────────────────
 // ── URL shareable state ───────────────────────────────────────────────────────
 // Encodes: ?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5
 // Called after any state change that should be reflected in the URL.
@@ -2050,20 +2058,59 @@ function applyUrlState() {
   if (ref) userRefEngine = ref;
 }
 
+// ── Export JSON (filtered view) ───────────────────────────────────────────────
+
+function exportFilteredJson() {
+  const runs = getFilteredRuns(allRuns);
+  const queryRuns = (allQueryRuns ?? []).filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+  if (runs.length === 0 && queryRuns.length === 0) return;
+
+  const payload = { metadata: currentData?.metadata ?? {}, runs };
+  if (queryRuns.length > 0) payload.queryRuns = queryRuns;
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `benchmark-filtered-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Export CSV (filtered view) ────────────────────────────────────────────────
 
 function exportFilteredCsv() {
   const runs = getFilteredRuns(allRuns);
-  if (runs.length === 0) return;
+  const queryRuns = (allQueryRuns ?? []).filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+  if (runs.length === 0 && queryRuns.length === 0) return;
 
-  const headers = ['engine', 'dataset', 'file', 'triples', 'loadingTimeMs',
-                   'throughputTriplesPerSec', 'memoryDeltaMb', 'cpuPercent'];
-  const escape  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines  = [];
 
-  const lines = [
-    headers.join(','),
-    ...runs.map(r => headers.map(h => escape(r[h])).join(',')),
-  ];
+  if (runs.length > 0) {
+    const hdr = ['engine', 'dataset', 'file', 'triples', 'loadingTimeMs', 'memoryDeltaMb', 'cpuPercent'];
+    lines.push('# LOAD BENCHMARK');
+    lines.push(hdr.join(','));
+    runs.forEach(r => lines.push(hdr.map(h => escape(r[h])).join(',')));
+  }
+
+  if (queryRuns.length > 0) {
+    if (lines.length) lines.push('');
+    lines.push('# QUERY BENCHMARK');
+    lines.push(['engine', 'dataset', 'queryId', 'medianMs'].join(','));
+    queryRuns.forEach(r =>
+      lines.push([escape(r.engine), escape(r.dataset), escape(r.queryId), escape(r.medianMs)].join(','))
+    );
+  }
+
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');

@@ -281,16 +281,6 @@ Dashboard note: Bowlogna shows only the **SPARQL** section (no Performance/Load 
 python python-utils/workflow.py --dataset bowlogna --scales small --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
 ```
 
-### BSBM
-
-Berlin SPARQL Benchmark — synthetic e-commerce dataset. Generated with [bsbmtools 0.2](https://sourceforge.net/projects/bsbmtools/).
-
-| Scale | Products | Triples (approx.) |
-|-------|---------|-------------------|
-| `small` | 1,000 | ~50 K |
-| `medium` | 50,000 | ~1 M |
-| `large` | 500,000 | ~10 M |
-
 ```bash
 python python-utils/workflow.py --dataset bsbm --scales small,medium --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
 ```

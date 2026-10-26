@@ -302,6 +302,28 @@ def merge_json_files(file_list, output_file):
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+# ── Log to file (mirrors stdout+stderr) ──────────────────────────────────────
+_log_dir = os.path.join(out_json_dir, "..", "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_log_path = os.path.join(_log_dir, f"{timestamp}.log")
+
+class _Tee:
+    def __init__(self, *streams):
+        self._streams = streams
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+    def fileno(self):
+        return self._streams[0].fileno()
+
+_log_fh     = open(_log_path, "w", buffering=1, encoding="utf-8")
+sys.stdout  = _Tee(sys.__stdout__, _log_fh)
+sys.stderr  = _Tee(sys.__stderr__, _log_fh)
+print(f"Logging to: {_log_path}")
+
 # ── Resume mode: one engine × one dataset at a time, skips existing results ──
 if args.engines and args.resume:
     engines_list = [e.strip() for e in args.engines.split(",")]

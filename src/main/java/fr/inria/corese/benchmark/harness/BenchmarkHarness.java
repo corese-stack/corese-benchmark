@@ -136,8 +136,10 @@ public class BenchmarkHarness {
                 driver.getGraphSize(), queries.size(), QUERY_REPS);
 
             // Warmup: one discarded run per query to prime the JIT and validate results.
-            log.info("  Warming up {} queries (1 run discarded)...", queries.size());
-            for (int qi = 0; qi < queries.size(); qi++) {
+            // Skipped in quick mode (repetitions == 1) to save time.
+            if (repetitions == 1) log.info("  Quick mode — skipping query warmup");
+            if (repetitions > 1) log.info("  Warming up {} queries (1 run discarded)...", queries.size());
+            for (int qi = 0; repetitions > 1 && qi < queries.size(); qi++) {
                 String warmupSparql = queries.get(qi).trim();
                 if (warmupSparql.isEmpty()) continue;
                 String warmupId = "query_" + (qi + 1);
@@ -224,12 +226,14 @@ public class BenchmarkHarness {
     private FileResult benchmarkFile(File file) throws Exception {
         String path = file.getAbsolutePath();
 
-        // --- Warmup (discarded) ---
-        driver.clear();
-        System.gc();
-        driver.load(path);
-        driver.clear();
-        System.gc();
+        // --- Warmup (discarded) — skipped in quick mode (repetitions == 1) ---
+        if (repetitions > 1) {
+            driver.clear();
+            System.gc();
+            driver.load(path);
+            driver.clear();
+            System.gc();
+        }
 
         // --- 3 repetitions ---
         long[] timesMs   = new long[repetitions];
