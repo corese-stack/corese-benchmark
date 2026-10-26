@@ -2,6 +2,8 @@ name: Benchmark & Deploy to GitHub Pages
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 on:
   push:
@@ -119,12 +121,13 @@ jobs:
       - name: Check site/data output
         run: ls -la ./site/data/
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          force_orphan: true
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
 
   # ─── Manual run (workflow_dispatch) ───────────────────────────────────────
   benchmark-manual:
@@ -185,9 +188,10 @@ jobs:
       - name: Check site/data output
         run: ls -la ./site/data/
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          force_orphan: true
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
