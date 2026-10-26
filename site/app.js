@@ -38,6 +38,13 @@ const AUTO_COLORS = [
   { hex: '#FF5722', bg: 'rgba(255,87,34,0.75)'   },
 ];
 
+// Known engine versions (order preserved in pills, filtered to what's in data)
+const KNOWN_ENGINE_ORDER = [
+  'corese.next', 'corese.local', 'corese.4.6.5', 'corese.4.6.4', 'corese.4.6.3',
+  'jena.6.2.0', 'jena.6.1.0', 'jena.6.0.0',
+  'rdf4j.5.3.2', 'rdf4j.5.3.1', 'rdf4j.5.3.0',
+];
+
 // Dynamic resolution: builds engine → color map from data
 let ENGINE_COLOR_MAP = {};
 
@@ -79,7 +86,7 @@ async function loadData() {
     return await res.json();
   } catch (_) {
     if (typeof window.__BENCHMARK_DATA__ !== 'undefined') return window.__BENCHMARK_DATA__;
-    throw new Error('Aucune donnée. Lancez le benchmark d\'abord.');
+    throw new Error('No data. Run the benchmark first.');
   }
 }
 
@@ -130,21 +137,29 @@ const DATASET_META = {
     label:       'DBpedia',
     description: 'Real-world RDF dump — 5 N-Triples files from DBpedia 3.5.1',
     url:         'https://downloads.dbpedia.org/3.5.1/en/',
+    fileBaseUrl: 'https://downloads.dbpedia.org/3.5.1/en/',
+    hasSparql:   false,
   },
   bowlogna: {
     label:       'Bowlogna',
     description: 'Synthetic university dataset with SPARQL queries (HOBBIT benchmark)',
     url:         'https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip',
+    fileBaseUrl: null,
+    hasSparql:   true,
   },
   bsbm: {
     label:       'BSBM',
     description: 'Berlin SPARQL Benchmark — synthetic e-commerce dataset',
     url:         'https://sourceforge.net/projects/bsbmtools/',
+    fileBaseUrl: null,
+    hasSparql:   true,
   },
   lubm: {
     label:       'LUBM',
     description: 'Lehigh University Benchmark — university domain with RDFS reasoning',
     url:         'https://swat.cse.lehigh.edu/projects/lubm/',
+    fileBaseUrl: null,
+    hasSparql:   false,
   },
 };
 
@@ -154,9 +169,6 @@ function renderDatasetCards(runs, queries) {
   if (!grid) return;
   const meta = document.getElementById('datasets-meta');
   if (meta) meta.textContent = `${datasets.length} dataset${datasets.length > 1 ? 's' : ''}`;
-  // Collapse by default when more than one dataset (keeps the page compact)
-  const details = grid.closest('details');
-  if (details && datasets.length > 1) details.removeAttribute('open');
 
   grid.innerHTML = datasets.map(ds => {
     const meta      = DATASET_META[ds.toLowerCase()] ?? { label: ds, description: '', url: null };
@@ -177,9 +189,9 @@ function renderDatasetCards(runs, queries) {
       `<span class="file-tag">${shortFile(f)}</span>`
     ).join('');
 
-    // SPARQL queries collapsible (only if queries embedded in JSON)
+    // SPARQL queries collapsible (only if queries embedded in JSON et dataset hasSparql)
     let queriesHtml = '';
-    if (queries && queries.length > 0) {
+    if (queries && queries.length > 0 && (DATASET_META[ds.toLowerCase()]?.hasSparql ?? false)) {
       const queryItems = queries.map((q, i) => `
         <div class="query-item">
           <span class="query-item-id">Q${i + 1}</span>
@@ -196,7 +208,7 @@ function renderDatasetCards(runs, queries) {
     }
 
     return `
-      <div class="suite-item dataset-card">
+      <div class="suite-item dataset-card" data-ds="${ds}" onclick="toggleDataset('${ds}')">
         <div class="suite-item-header">
           <span class="suite-name">${meta.label}</span>
           ${linkHtml}
@@ -221,6 +233,7 @@ function renderDatasetCards(runs, queries) {
       </div>`;
   }).join('');
 }
+
 
 // ── Table sort state ─────────────────────────────────────────────────────────
 let sortField = null;
@@ -249,25 +262,73 @@ function initTableSort() {
 
 // ── Engine filter state ───────────────────────────────────────────────────────
 // activeEngines: Set of selected engine names. Empty = all engines shown.
-let activeEngines = new Set();
-let allCharts     = {};
+let activeEngines  = new Set();
+let hiddenEngines  = new Set(); // engines removed from comparator bar via ×
+let allCharts      = {};
+let activeDatasets    = new Set();
+let userRefEngine     = localStorage.getItem('refEngine') ?? null;
+let metadataQueries   = null;
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
 function renderHeader(meta, runs) {
   const datasets = [...new Set(runs.map(r => r.dataset))];
-  const badgeContainer = document.getElementById('hdr-datasets');
-  if (badgeContainer) {
-    badgeContainer.innerHTML = datasets.map(d => `<span class="badge-tag">${d}</span>`).join('');
-  }
-  document.getElementById('hdr-date').textContent = formatDate(meta.generatedAt);
-  document.getElementById('hdr-java').textContent = `Java ${meta.java}`;
+  const engines  = [...new Set(runs.map(r => r.engine))];
 
-  const engines = [...new Set(runs.map(r => r.engine))];
-  const engineHtml = engines.map(e => `<strong>${e}</strong>`).join(' · ');
-  const desc = document.getElementById('main-desc');
-  if (desc) desc.innerHTML =
-    `Corese reference benchmark dashboard — Loading performance comparison&nbsp;: ${engineHtml}`;
+
+  const enginePills = document.getElementById('engine-pills');
+  if (enginePills) {
+    const sorted = [
+      ...KNOWN_ENGINE_ORDER.filter(e => engines.includes(e)),
+      ...engines.filter(e => !KNOWN_ENGINE_ORDER.includes(e)),
+    ];
+    enginePills.innerHTML = sorted.map(engine => {
+      const dot    = engine.indexOf('.');
+      const family = dot >= 0 ? engine.slice(0, dot) : engine;
+      const version = dot >= 0 ? engine.slice(dot + 1) : engine;
+      const p = pal(engine);
+      return `<div class="engine-pill family-${family}" data-engine="${engine}"
+                draggable="true"
+                onclick="toggleEngine('${engine}')" title="${engine}" style="cursor:grab">
+        <span>${family}</span>
+        <span class="pill-version">${version}</span>
+        <button class="pill-remove-btn" onclick="event.stopPropagation();hidePillEngine('${engine}')" title="Remove">&times;</button>
+      </div>`;
+    }).join('');
+    // Attach drag handlers to newly created pills
+    enginePills.querySelectorAll('.engine-pill[data-engine]').forEach(attachPillDragHandlers);
+  }
+}
+
+function renderSidebarMeta(meta, engines, runs, queryRuns) {
+  // Badges
+  const datasets = [...new Set(runs.map(r => r.dataset))];
+  const el = id => document.getElementById(id);
+  if (el('sidebar-badge-datasets')) el('sidebar-badge-datasets').textContent = datasets.length;
+  if (el('sidebar-badge-engines'))  el('sidebar-badge-engines').textContent  = engines.length;
+  if (el('sidebar-badge-results'))  el('sidebar-badge-results').textContent  = runs.length;
+  if (queryRuns && queryRuns.length > 0) {
+    const queryIds = [...new Set(queryRuns.map(r => r.queryId))];
+    if (el('sidebar-badge-sparql')) el('sidebar-badge-sparql').textContent = queryIds.length + ' q';
+    const sparqlNav = document.getElementById('sidebar-sparql-nav');
+    if (sparqlNav) sparqlNav.style.display = '';
+  }
+  // Footer meta
+  const box = document.getElementById('sidebar-meta');
+  if (box) {
+    const rows = [
+      ['Date',     formatDate(meta.generatedAt)],
+      ['Java',     `<code>${meta.java ?? '—'}</code>`],
+      ['OS',       meta.os ?? '—'],
+      ['Protocol', meta.protocol ? `${meta.protocol.repetitions} reps + warmup` : '—'],
+    ];
+    box.innerHTML = `
+      <span class="meta-box-title">Run context</span>
+      <dl class="meta-box-grid">
+        ${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
+      </dl>
+    `;
+  }
 }
 
 // ── Run info bar ──────────────────────────────────────────────────────────────
@@ -280,39 +341,153 @@ function renderRunInfo(meta) {
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
+let _overviewBarChart   = null;
+let _overviewRadarChart = null;
+
 function renderKPI(runs) {
-  const engines = [...new Set(runs.map(r => r.engine))];
-  const files   = [...new Set(runs.map(r => r.file))];
-  const totalTrip = runs.reduce((s, r) => s + r.triples, 0);
-  const bestR     = runs.reduce((best, r) =>
-    r.throughputTriplesPerSec > best.throughputTriplesPerSec ? r : best, runs[0]);
+  if (!runs || runs.length === 0) return;
+  const engines  = [...new Set(runs.map(r => r.engine))];
+  const datasets = [...new Set(runs.map(r => r.dataset))];
+  const files    = [...new Set(runs.map(r => r.file))];
 
-  const kpis = [
-    { label: 'Engines tested',  num: engines.length,       note: engines.join(' · ') },
-    { label: 'Files tested',    num: files.length,          note: '.nt (N-Triples) files' },
-    { label: 'Total triples',   num: fmt(totalTrip),        note: 'loaded in total' },
-    { label: 'Best throughput', num: fmt(bestR.throughputTriplesPerSec, 0), note: bestR.engine },
-  ];
+  // Per-engine avg for the winner cards
+  const byEngine = {};
+  engines.forEach(e => {
+    const er = runs.filter(r => r.engine === e);
+    byEngine[e] = {
+      avgThru: er.reduce((s,r) => s + r.throughputTriplesPerSec, 0) / er.length,
+      avgMem:  er.reduce((s,r) => s + r.memoryDeltaMb,           0) / er.length,
+      avgTime: er.reduce((s,r) => s + r.loadingTimeMs,           0) / er.length,
+    };
+  });
 
-  document.getElementById('metrics-grid').innerHTML = kpis.map(k => `
-    <div class="metric-block">
-      <div class="metric-label">${k.label}</div>
-      <div class="metric-num">${k.num}</div>
-      <div class="metric-note">${k.note}</div>
-    </div>
-  `).join('');
+  const bestThruEngine = engines.reduce((a,b) => byEngine[a].avgThru > byEngine[b].avgThru ? a : b);
+  const bestMemEngine  = engines.reduce((a,b) => byEngine[a].avgMem  < byEngine[b].avgMem  ? a : b);
+  const bestTimeEngine = engines.reduce((a,b) => byEngine[a].avgTime < byEngine[b].avgTime ? a : b);
+
+  function winnerCard(label, engine, value, sub) {
+    const p = pal(engine);
+    return `<div class="metric-block kpi-winner-card">
+      <div class="kpi-winner-label">${label}</div>
+      <div class="kpi-winner-engine">
+        <span class="engine-dot" style="background:${p.hex}"></span>
+        <strong>${engine}</strong>
+      </div>
+      <div class="kpi-winner-value">${value}</div>
+      <div class="metric-sub-label">${sub}</div>
+    </div>`;
+  }
+
+  const contextCard = `<div class="metric-block kpi-context-card">
+    <div class="kpi-context-row"><span class="kpi-context-num">${engines.length}</span><span class="kpi-context-lbl">engines</span></div>
+    <div class="kpi-context-row"><span class="kpi-context-num">${datasets.length}</span><span class="kpi-context-lbl">datasets</span></div>
+    <div class="kpi-context-row"><span class="kpi-context-num">${files.length}</span><span class="kpi-context-lbl">files</span></div>
+  </div>`;
+
+  document.getElementById('metrics-grid').innerHTML =
+    winnerCard('Best throughput', bestThruEngine,
+      fmt(byEngine[bestThruEngine].avgThru, 0) + ' t/s', 'avg triples/s across all files') +
+    winnerCard('Best memory',     bestMemEngine,
+      fmt(byEngine[bestMemEngine].avgMem, 1) + ' MB',   'avg memory Δ across all files') +
+    winnerCard('Best load time',  bestTimeEngine,
+      fmt(byEngine[bestTimeEngine].avgTime, 0) + ' ms',  'avg loading time across all files') +
+    contextCard;
+
+  const meta = document.getElementById('overview-meta');
+  if (meta) meta.textContent = `${engines.length} engines · ${datasets.length} datasets · ${files.length} files`;
+
+  _renderOverviewCharts(engines, byEngine);
 }
 
-// ── Global meter (proportion bars per engine) ─────────────────────────────────
-function renderGlobalMeter(runs) {
-  const engines = [...new Set(runs.map(r => r.engine))];
-  const total   = runs.length;
-  const meter   = document.getElementById('global-meter');
-  meter.innerHTML = engines.map(e => {
-    const count = runs.filter(r => r.engine === e).length;
-    const pct   = (count / total * 100).toFixed(1);
-    return `<div class="meter-segment" style="width:${pct}%; background:${pal(e).hex}" title="${e}: ${count} fichiers"></div>`;
-  }).join('');
+function _renderOverviewCharts(engines, byEngine) {
+  const isDark  = document.documentElement.getAttribute('data-theme') !== 'light';
+  const gridCol = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const textCol = isDark ? '#8b949e' : '#57606a';
+
+  // ── Bar: avg loading time ─────────────────────────────────────────────
+  const barCtx = document.getElementById('chart-overview-bar')?.getContext('2d');
+  if (barCtx) {
+    if (_overviewBarChart) _overviewBarChart.destroy();
+    _overviewBarChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: engines,
+        datasets: [{
+          label: 'Avg load time',
+          data: engines.map(e => Math.round(byEngine[e].avgTime)),
+          backgroundColor: engines.map(e => pal(e).bg),
+          borderColor:     engines.map(e => pal(e).hex),
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} ms` } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textCol, font: { size: 10 } } },
+          y: { beginAtZero: true, grid: { color: gridCol }, ticks: { color: textCol, font: { size: 10 }, callback: v => v.toLocaleString() } },
+        },
+      },
+    });
+  }
+
+  // ── Radar: normalized scores ──────────────────────────────────────────
+  const radarCtx = document.getElementById('chart-overview-radar')?.getContext('2d');
+  if (radarCtx) {
+    if (_overviewRadarChart) _overviewRadarChart.destroy();
+
+    const maxThru = Math.max(...engines.map(e => byEngine[e].avgThru));
+    const maxTime = Math.max(...engines.map(e => byEngine[e].avgTime));
+    const maxMem  = Math.max(...engines.map(e => byEngine[e].avgMem));
+
+    const radarDatasets = engines.map(e => {
+      const p = pal(e);
+      // Throughput: higher = better → normalize directly
+      // Load time: lower = better → invert
+      // Memory: lower = better → invert
+      const scoreThru = maxThru > 0 ? Math.round(byEngine[e].avgThru / maxThru * 100) : 0;
+      const scoreTime = maxTime > 0 ? Math.round((1 - (byEngine[e].avgTime - Math.min(...engines.map(x=>byEngine[x].avgTime))) / maxTime) * 100) : 100;
+      const scoreMem  = maxMem  > 0 ? Math.round((1 - (byEngine[e].avgMem  - Math.min(...engines.map(x=>byEngine[x].avgMem)))  / maxMem)  * 100) : 100;
+      return {
+        label: e,
+        data: [scoreThru, scoreTime, scoreMem],
+        borderColor:     p.hex,
+        backgroundColor: p.hex + '22',
+        pointBackgroundColor: p.hex,
+        borderWidth: 1.8,
+        pointRadius: 3,
+      };
+    });
+
+    _overviewRadarChart = new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: ['Throughput', 'Load speed', 'Memory efficiency'],
+        datasets: radarDatasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10, font: { size: 10 }, color: textCol } },
+        },
+        scales: {
+          r: {
+            min: 0, max: 100,
+            ticks: { display: false, stepSize: 25 },
+            grid:       { color: gridCol },
+            angleLines: { color: gridCol },
+            pointLabels: { font: { size: 11 }, color: textCol },
+          },
+        },
+      },
+    });
+  }
 }
 
 // ── Engine cards ──────────────────────────────────────────────────────────────
@@ -333,7 +508,9 @@ function renderEngineCards(runs) {
   // Reference: stable Corese version if present, otherwise the best engine
   const stableCorese = engines.find(isStableCorese);
   const maxAvgThru   = Math.max(...Object.values(avgThruMap));
-  const refEngine    = stableCorese ?? engines.find(e => avgThruMap[e] === maxAvgThru);
+  const refEngine    = userRefEngine && engines.includes(userRefEngine)
+    ? userRefEngine
+    : (stableCorese ?? engines.find(e => avgThruMap[e] === maxAvgThru));
   const refThru      = avgThruMap[refEngine];
 
   document.getElementById('engine-grid').innerHTML = engines.map(engine => {
@@ -380,7 +557,14 @@ function renderEngineCards(runs) {
             <span class="engine-dot" style="background:${p.hex}"></span>
             ${engine}
           </span>
-          <span class="suite-pct" title="${tooltip}" style="cursor:help">${scoreDisplay}</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span class="suite-pct" title="${tooltip}" style="cursor:help">${scoreDisplay}</span>
+            <button class="btn-set-ref ${engine === refEngine ? 'is-ref' : ''}"
+              title="${engine === refEngine ? 'Current reference — click to remove' : 'Set as reference'}"
+              onclick="event.stopPropagation(); setRefEngine('${engine}')">
+              ${engine === refEngine ? '★' : '☆'}
+            </button>
+          </span>
         </div>
         <div class="suite-stats">
           <div class="stat-item">
@@ -408,33 +592,324 @@ function renderEngineCards(runs) {
   }).join('');
 }
 
+function syncEnginePills() {
+  document.querySelectorAll('.engine-pills-wrap .engine-pill[data-engine]').forEach(el => {
+    const e = el.dataset.engine;
+    el.classList.remove('ep-active', 'ep-dimmed');
+    if (activeEngines.size > 0) {
+      if (activeEngines.has(e)) el.classList.add('ep-active');
+      else el.classList.add('ep-dimmed');
+    }
+  });
+  // also sync engine cards in engine-grid
+  document.querySelectorAll('#engine-grid .suite-item[data-engine]').forEach(el => {
+    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
+  });
+  const btn = document.getElementById('clear-engines-btn');
+  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+}
+
+function getDatasetFilteredRuns() {
+  // Runs filtered only by dataset (not by engine) — used to keep all engine cards visible
+  return allRuns.filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+}
+
 function toggleEngine(engine) {
   if (activeEngines.has(engine)) {
     activeEngines.delete(engine);
   } else {
     activeEngines.add(engine);
   }
-  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
-    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
-  });
-  // Show/hide clear button
-  const btn = document.getElementById('clear-engines-btn');
-  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+  const filtered = getFilteredRuns(allRuns);
+  renderKPI(filtered);
+  renderEngineCards(getDatasetFilteredRuns()); // toujours toutes les cartes
+  syncEnginePills();
   updateCharts();
   updateTable();
+  // Sync SPARQL section
+  document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => {
+    const e = el.dataset.engine;
+    el.style.display = (activeEngines.size === 0 || activeEngines.has(e)) ? '' : 'none';
+  });
+  updateQueryChart();
+  updateQueryTable();
+  pushStateToUrl();
 }
 
 function clearEngineFilter() {
   activeEngines.clear();
-  document.querySelectorAll('.suite-item[data-engine]').forEach(el => el.classList.remove('active'));
   const btn = document.getElementById('clear-engines-btn');
   if (btn) btn.style.display = 'none';
+  renderEngineCards(getDatasetFilteredRuns());
+  syncEnginePills();
   updateCharts();
   updateTable();
+  pushStateToUrl();
+}
+
+function getFilteredRuns(runs) {
+  return runs.filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+}
+
+function hidePillEngine(engine) {
+  hiddenEngines.add(engine);
+  activeEngines.delete(engine);
+  // Remove pill from the comparator bar
+  document.querySelectorAll(`.engine-pills-wrap .engine-pill[data-engine="${engine}"]`).forEach(el => el.remove());
+  const filtered = getFilteredRuns(allRuns);
+  renderKPI(filtered);
+  renderEngineCards(getDatasetFilteredRuns());
+  syncEnginePills();
+  updateCharts();
+  updateTable();
+  document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => {
+    el.style.display = hiddenEngines.has(el.dataset.engine) ? 'none' : '';
+  });
+  updateQueryChart();
+  updateQueryTable();
+  updatePillsScrollBtns();
+  pushStateToUrl();
+}
+
+function clearDatasetFilter() {
+  activeDatasets.clear();
+  syncDatasetPills();
+  updateCharts();
+  updateTable();
+  renderKPI(getFilteredRuns(allRuns));
+  renderEngineCards(getDatasetFilteredRuns());
+  const btn = document.getElementById('clear-engines-btn');
+  if (btn) btn.style.display = activeEngines.size > 0 ? '' : 'none';
+  updateQuerySectionVisibility();
+  pushStateToUrl();
+}
+
+function updateQuerySectionVisibility() {
+  const sparqlSection = document.getElementById('section-sparql');
+  const sparqlNav     = document.getElementById('sidebar-sparql-nav');
+  const hasSparql     = activeDatasets.size > 0 &&
+    [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
+  if (sparqlSection) sparqlSection.style.display = hasSparql ? '' : 'none';
+  if (sparqlNav)     sparqlNav.style.display     = hasSparql ? '' : 'none';
+}
+
+function renderDatasetPills(runs) {
+  const wrap = document.getElementById('dataset-pills');
+  if (!wrap) return;
+  const datasets = [...new Set(runs.map(r => r.dataset))];
+  wrap.innerHTML =
+    `<button class="dataset-pill dataset-pill-all active" data-ds="" onclick="clearDatasetFilter()">All</button>` +
+    datasets.map(ds => {
+      const meta  = DATASET_META[ds.toLowerCase()] ?? { label: ds };
+      const label = meta.label ?? ds;
+      return `<button class="dataset-pill" data-ds="${ds}" onclick="toggleDataset('${ds}')">${label}</button>`;
+    }).join('');
+}
+
+function syncDatasetPills() {
+  document.querySelectorAll('.dataset-pill[data-ds]').forEach(el => {
+    const ds = el.dataset.ds;
+    el.classList.toggle('active', ds === '' ? activeDatasets.size === 0 : activeDatasets.has(ds));
+  });
+  // Dataset cards: show only selected one (or all in All mode)
+  document.querySelectorAll('.dataset-card[data-ds]').forEach(el => {
+    const ds = el.dataset.ds;
+    el.classList.toggle('active', activeDatasets.has(ds));
+    el.style.display = (activeDatasets.size === 0 || activeDatasets.has(ds)) ? '' : 'none';
+  });
+  _syncDatasetSections();
+}
+
+function _syncDatasetSections() {
+  const isAll = activeDatasets.size === 0;
+
+  // All mode: show Overview + Datasets + W3C, hide detail sections
+  // Dataset selected: hide Overview + W3C, show detail sections
+  const overviewSection = document.getElementById('section-kpi');
+  if (overviewSection) overviewSection.style.display = isAll ? '' : 'none';
+
+  const w3cSection = document.getElementById('section-w3c');
+  if (w3cSection && w3cSection.innerHTML.trim()) w3cSection.style.display = isAll ? '' : 'none';
+
+  const w3cNav = document.getElementById('sidebar-w3c-nav');
+  if (w3cNav) w3cNav.style.display = isAll ? '' : 'none';
+
+  // Bowlogna is SPARQL-focused: hide Performance charts + Full results, show only Engines + SPARQL
+  const isBowlogna   = activeDatasets.has('bowlogna');
+  const hideCharts   = isAll || isBowlogna;
+  const hideResults  = isAll || isBowlogna;
+
+  const enginesEl = document.getElementById('section-engines');
+  if (enginesEl) enginesEl.style.display = isAll ? 'none' : '';
+  const chartsEl = document.getElementById('section-charts');
+  if (chartsEl) chartsEl.style.display = hideCharts ? 'none' : '';
+  const resultsEl = document.getElementById('section-results');
+  if (resultsEl) resultsEl.style.display = hideResults ? 'none' : '';
+
+  // Sidebar: Overview nav visible in All, hidden in dataset mode
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-kpi"]').forEach(el => {
+    el.closest('li').style.display = isAll ? '' : 'none';
+  });
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-engines"]').forEach(el => {
+    el.closest('li').style.display = isAll ? 'none' : '';
+  });
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-charts"]').forEach(el => {
+    el.closest('li').style.display = hideCharts ? 'none' : '';
+  });
+  document.querySelectorAll('.sidebar-nav-item[data-target="section-results"]').forEach(el => {
+    el.closest('li').style.display = hideResults ? 'none' : '';
+  });
+  // Results group heading in sidebar
+  const resultsGroup = document.querySelector('.sidebar-group:last-of-type');
+  if (resultsGroup) resultsGroup.style.display = isAll ? 'none' : '';
+}
+
+function toggleDataset(ds) {
+  if (activeDatasets.has(ds)) {
+    activeDatasets.clear(); // re-clic → tout afficher
+  } else {
+    activeDatasets.clear();
+    activeDatasets.add(ds); // sélection exclusive
+  }
+  syncDatasetPills();
+  Object.values(allCharts).forEach(c => c.destroy());
+  allCharts = {};
+  updateTable();
+  renderKPI(getFilteredRuns(allRuns));
+  renderEngineCards(getDatasetFilteredRuns());
+  _refreshQuerySection();
+  pushStateToUrl();
+  if (activeDatasets.size > 0) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      initCharts();
+      _updateChartsMeta();
+    }));
+  }
+}
+
+function _updateChartsMeta() {
+  const el = document.getElementById('charts-mode-meta');
+  if (!el) return;
+  el.textContent = isScalabilityMode()
+    ? 'scalability view — X axis = graph size'
+    : '';
+}
+
+function _refreshQuerySection() {
+  // Always update visibility (hides SPARQL nav for datasets without SPARQL)
+  updateQuerySectionVisibility();
+  if (!allQueryRuns || allQueryRuns.length === 0) return;
+  const hasSparql = activeDatasets.size > 0 &&
+    [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
+  const filteredQueryRuns = hasSparql
+    ? allQueryRuns.filter(r => activeDatasets.has(r.dataset))
+    : [];
+  const sparqlSection = document.getElementById('section-sparql');
+  if (sparqlSection) sparqlSection.innerHTML = '';
+  if (filteredQueryRuns.length > 0) {
+    renderQuerySection(filteredQueryRuns);
+    // Re-apply hidden engines (renderQuerySection re-renders from scratch)
+    document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => {
+      el.style.display = hiddenEngines.has(el.dataset.engine) ? 'none' : '';
+    });
+    updateQueryChart();
+    updateQueryTable();
+  }
+}
+
+function setRefEngine(engine) {
+  userRefEngine = userRefEngine === engine ? null : engine;
+  if (userRefEngine) localStorage.setItem('refEngine', userRefEngine);
+  else localStorage.removeItem('refEngine');
+  renderEngineCards(getDatasetFilteredRuns());
+  document.querySelectorAll('.suite-item[data-engine]').forEach(el => {
+    el.classList.toggle('active', activeEngines.has(el.dataset.engine));
+  });
+  pushStateToUrl();
 }
 
 // ── Engine card drag & drop ───────────────────────────────────────────────────
-let dragSrc = null;
+let dragSrc     = null;
+let pillDragSrc = null;
+
+// ── Pill drag-to-reorder ──────────────────────────────────────────────────────
+function pillDragStart(e) {
+  pillDragSrc = e.currentTarget;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', pillDragSrc.dataset.engine);
+  pillDragSrc.classList.add('pill-dragging');
+}
+
+function pillDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const target = e.currentTarget;
+  if (target !== pillDragSrc) target.classList.add('pill-drag-over');
+}
+
+function pillDragLeave(e) {
+  e.currentTarget.classList.remove('pill-drag-over');
+}
+
+function pillDrop(e) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.classList.remove('pill-drag-over');
+  if (!pillDragSrc || pillDragSrc === target) return;
+  const wrap = document.getElementById('engine-pills');
+  if (!wrap || !wrap.contains(pillDragSrc) || !wrap.contains(target)) return;
+
+  const pills  = [...wrap.querySelectorAll('.engine-pill[data-engine]')];
+  const srcIdx = pills.indexOf(pillDragSrc);
+  const tgtIdx = pills.indexOf(target);
+
+  if (srcIdx < tgtIdx) wrap.insertBefore(pillDragSrc, target.nextSibling);
+  else                  wrap.insertBefore(pillDragSrc, target);
+
+  // Sync engine cards order to match pills
+  const newOrder = [...wrap.querySelectorAll('.engine-pill[data-engine]')].map(el => el.dataset.engine);
+  syncCardsToOrder(newOrder);
+}
+
+function pillDragEnd(e) {
+  e.currentTarget.classList.remove('pill-dragging');
+  document.querySelectorAll('.engine-pill').forEach(el => el.classList.remove('pill-drag-over'));
+  pillDragSrc = null;
+  updatePillsScrollBtns();
+}
+
+function syncCardsToOrder(order) {
+  const grid = document.getElementById('engine-grid');
+  if (!grid) return;
+  order.forEach(engine => {
+    const card = grid.querySelector(`.suite-item[data-engine="${engine}"]`);
+    if (card) grid.appendChild(card);
+  });
+}
+
+function syncPillsToOrder(order) {
+  const wrap = document.getElementById('engine-pills');
+  if (!wrap) return;
+  order.forEach(engine => {
+    const pill = wrap.querySelector(`.engine-pill[data-engine="${engine}"]`);
+    if (pill) wrap.appendChild(pill);
+  });
+}
+
+function attachPillDragHandlers(pill) {
+  pill.addEventListener('dragstart', pillDragStart);
+  pill.addEventListener('dragover',  pillDragOver);
+  pill.addEventListener('drop',      pillDrop);
+  pill.addEventListener('dragend',   pillDragEnd);
+  pill.addEventListener('dragleave', pillDragLeave);
+}
 
 function dragStart(e) {
   dragSrc = e.currentTarget;
@@ -473,6 +948,8 @@ function dragDrop(e) {
 
   const order = [...grid.querySelectorAll('.suite-item[data-engine]')].map(el => el.dataset.engine);
   localStorage.setItem('engineOrder', JSON.stringify(order));
+  syncPillsToOrder(order);
+  updateCharts();
 }
 
 function dragQueryDrop(e) {
@@ -491,6 +968,7 @@ function dragQueryDrop(e) {
 
   if (srcIdx < tgtIdx) grid.insertBefore(dragSrc, target.nextSibling);
   else                  grid.insertBefore(dragSrc, target);
+  updateQueryChart();
 }
 
 function dragEnd(e) {
@@ -520,6 +998,7 @@ function applyStoredEngineOrder() {
 
 // ── Charts ────────────────────────────────────────────────────────────────────
 let allRuns = [];
+let currentData = null;
 
 const CHART_OPT = (yLabel) => ({
   responsive: true,
@@ -539,52 +1018,252 @@ const CHART_OPT = (yLabel) => ({
   },
 });
 
-function buildDatasets(field) {
-  const engines = [...new Set(allRuns.map(r => r.engine))];
-  const files   = [...new Set(allRuns.map(r => r.file))];
+// ── Scalability mode (single dataset → line charts by triple count) ───────────
+// Active when exactly one non-bowlogna dataset is selected.
+function isScalabilityMode() {
+  return activeDatasets.size === 1 && !activeDatasets.has('bowlogna');
+}
+
+function fmtTriples(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000)     return Math.round(n / 1_000) + 'K';
+  return String(n);
+}
+
+// Returns files sorted by ascending average triple count across engines
+function getScalabilityFiles() {
+  const dsRuns = allRuns.filter(r => activeDatasets.has(r.dataset));
+  const files  = [...new Set(dsRuns.map(r => r.file))];
+  files.sort((a, b) => {
+    const avg = f => {
+      const rs = dsRuns.filter(r => r.file === f);
+      return rs.length ? rs.reduce((s, r) => s + r.triples, 0) / rs.length : 0;
+    };
+    return avg(a) - avg(b);
+  });
+  return files;
+}
+
+// X-axis labels: triple count formatted (e.g. "4M", "800K")
+function getScalabilityLabels(files) {
+  const dsRuns = allRuns.filter(r => activeDatasets.has(r.dataset));
+  return files.map(f => {
+    const rs  = dsRuns.filter(r => r.file === f);
+    const avg = rs.length ? rs.reduce((s, r) => s + r.triples, 0) / rs.length : 0;
+    return fmtTriples(Math.round(avg));
+  });
+}
+
+const LINE_CHART_OPT = (yLabel, fileNames = []) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  spanGaps: true,
+  plugins: {
+    legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
+    tooltip: {
+      mode: 'index',
+      intersect: false,
+      callbacks: {
+        title: (items) => {
+          const idx   = items[0]?.dataIndex ?? 0;
+          const fname = fileNames[idx] ? shortFile(fileNames[idx]) : '';
+          return fname ? `${items[0].label} — ${fname}` : items[0].label;
+        },
+      },
+    },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { font: { size: 10 }, maxRotation: 20 },
+      title: { display: true, text: 'Graph size (triples)', font: { size: 10 }, color: '#8b949e' },
+    },
+    y: {
+      grid: { color: 'rgba(255,255,255,0.05)' },
+      ticks: { font: { size: 10 } },
+      beginAtZero: true,
+      title: { display: true, text: yLabel, font: { size: 10 }, color: '#8b949e' },
+    },
+  },
+});
+
+function buildLineDatasets(field) {
+  const dsRuns  = allRuns.filter(r => activeDatasets.has(r.dataset));
+  const allEngs = getEngineOrder();
+  const engines = allEngs.filter(e =>
+    !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+  );
+  const files = getScalabilityFiles();
   return engines.map(engine => {
     const p = pal(engine);
-    const visible = activeEngines.size === 0 || activeEngines.has(engine);
     return {
       label: engine,
       data: files.map(f => {
-        const r = allRuns.find(x => x.engine === engine && x.file === f);
+        const r = dsRuns.find(x => x.engine === engine && x.file === f);
         return r ? +r[field].toFixed(1) : null;
       }),
-      backgroundColor: visible ? p.bg : 'rgba(100,100,100,0.15)',
-      borderColor:     visible ? p.hex : 'rgba(100,100,100,0.3)',
+      borderColor:     p.hex,
+      backgroundColor: p.bg,
+      borderWidth: 2,
+      tension: 0.3,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      fill: false,
+    };
+  });
+}
+
+function buildDatasets(field) {
+  const dsRuns  = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const allEngs = getEngineOrder();
+  // Respect activeEngines filter (empty = all)
+  const engines = allEngs.filter(e =>
+    !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+  );
+  const files   = [...new Set(dsRuns.map(r => r.file))];
+  return engines.map(engine => {
+    const p = pal(engine);
+    return {
+      label: engine,
+      data: files.map(f => {
+        const r = dsRuns.find(x => x.engine === engine && x.file === f);
+        return r ? +r[field].toFixed(1) : null;
+      }),
+      backgroundColor: p.bg,
+      borderColor:     p.hex,
       borderWidth: 1,
       borderRadius: 3,
     };
   });
 }
 
-function initCharts() {
-  const files  = [...new Set(allRuns.map(r => r.file))];
-  const labels = files.map(shortFile);
+function getEngineOrder() {
+  const cardEls = document.querySelectorAll('#engine-grid .suite-item[data-engine]');
+  return cardEls.length > 0
+    ? [...cardEls].map(el => el.dataset.engine)
+    : [...new Set(allRuns.map(r => r.engine))];
+}
 
-  const configs = [
-    { id: 'chart-loading',    field: 'loadingTimeMs',          yLabel: 'ms' },
-    { id: 'chart-throughput', field: 'throughputTriplesPerSec', yLabel: 'triples/s' },
-    { id: 'chart-memory',     field: 'memoryDeltaMb',           yLabel: 'MB' },
-    { id: 'chart-cpu',        field: 'cpuPercent',              yLabel: '%' },
+function buildCombinedDatasets() {
+  const dsRuns     = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+  const allEngines = getEngineOrder();
+  const engines    = activeEngines.size === 0 ? allEngines : allEngines.filter(e => activeEngines.has(e));
+  const files      = [...new Set(dsRuns.map(r => r.file))];
+  const datasets   = [];
+  engines.forEach(engine => {
+    const p = pal(engine);
+    // Barres : Loading time (axe gauche)
+    datasets.push({
+      label: `${engine}`,
+      type: 'bar',
+      yAxisID: 'yLeft',
+      data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.loadingTimeMs.toFixed(0) : null; }),
+      backgroundColor: p.bg,
+      borderColor: p.hex,
+      borderWidth: 1,
+      borderRadius: 3,
+    });
+    // Lignes : Memory (axe droit)
+    datasets.push({
+      label: `${engine} (MB)`,
+      type: 'line',
+      yAxisID: 'yRight',
+      data: files.map(f => { const r = dsRuns.find(x => x.engine === engine && x.file === f); return r ? +r.memoryDeltaMb.toFixed(1) : null; }),
+      borderColor: p.hex,
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [5, 3],
+      pointRadius: 3,
+      tension: 0.3,
+    });
+  });
+  return datasets;
+}
+
+function initCharts() {
+  const defs = [
+    { id: 'chart-loading', field: 'loadingTimeMs', unit: 'ms' },
+    { id: 'chart-memory',  field: 'memoryDeltaMb', unit: 'MB' },
+    { id: 'chart-cpu',     field: 'cpuPercent',    unit: '%'  },
   ];
 
-  for (const { id, field, yLabel } of configs) {
-    allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
-      type: 'bar',
-      data: { labels, datasets: buildDatasets(field) },
-      options: CHART_OPT(yLabel),
-    });
-    allCharts[id]._field = field;
+  if (isScalabilityMode()) {
+    // Single dataset → line charts (X = triple count, ascending)
+    const files  = getScalabilityFiles();
+    const labels = getScalabilityLabels(files);
+    for (const { id, field, unit } of defs) {
+      allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets: buildLineDatasets(field) },
+        options: LINE_CHART_OPT(unit, files),
+      });
+      allCharts[id]._field = field;
+    }
+  } else {
+    // All / multi-dataset → bar charts
+    const dsRuns = activeDatasets.size === 0 ? allRuns : allRuns.filter(r => activeDatasets.has(r.dataset));
+    const files  = [...new Set(dsRuns.map(r => r.file))];
+    const labels = files.map(shortFile);
+    for (const { id, field, unit } of defs) {
+      allCharts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'bar',
+        data: { labels, datasets: buildDatasets(field) },
+        options: CHART_OPT(unit),
+      });
+      allCharts[id]._field = field;
+    }
   }
 }
 
 function updateCharts() {
-  for (const [id, chart] of Object.entries(allCharts)) {
-    chart.data.datasets = buildDatasets(chart._field);
-    chart.update('none');
+  if (activeDatasets.size === 0) return;
+  if (Object.keys(allCharts).length === 0) return; // charts not yet created
+
+  if (isScalabilityMode()) {
+    // Line mode: update labels + datasets in-place
+    const files  = getScalabilityFiles();
+    const labels = getScalabilityLabels(files);
+    for (const chart of Object.values(allCharts)) {
+      const field = chart._field;
+      if (!field) continue;
+      chart.data.labels = labels;
+      const newDs = buildLineDatasets(field);
+      chart.data.datasets.splice(0, chart.data.datasets.length, ...newDs);
+      chart.update('none');
+    }
+  } else {
+    // Bar mode: update datasets in-place
+    const dsRuns  = allRuns.filter(r => activeDatasets.has(r.dataset));
+    const allEngs = getEngineOrder();
+    const engines = allEngs.filter(e =>
+      !hiddenEngines.has(e) && (activeEngines.size === 0 || activeEngines.has(e))
+    );
+    const files = [...new Set(dsRuns.map(r => r.file))];
+
+    for (const chart of Object.values(allCharts)) {
+      const field = chart._field;
+      if (!field) continue;
+      const newDs = engines.map(engine => {
+        const p = pal(engine);
+        return {
+          label: engine,
+          data: files.map(f => {
+            const r = dsRuns.find(x => x.engine === engine && x.file === f);
+            return r ? +r[field].toFixed(1) : null;
+          }),
+          backgroundColor: p.bg,
+          borderColor:     p.hex,
+          borderWidth: 1,
+          borderRadius: 3,
+        };
+      });
+      chart.data.datasets.splice(0, chart.data.datasets.length, ...newDs);
+      chart.update('none');
+    }
   }
+
+  const filtered = getFilteredRuns(allRuns);
+  if (filtered.length > 0) renderKPI(filtered);
 }
 
 // ── Tableau ────────────────────────────────────────────────────────────────────
@@ -593,9 +1272,7 @@ function renderTable(runs) {
 }
 
 function updateTable(runsArg) {
-  let runs = (runsArg ?? allRuns).filter(r =>
-    activeEngines.size === 0 || activeEngines.has(r.engine)
-  );
+  let runs = getFilteredRuns(runsArg ?? allRuns);
 
   if (sortField) {
     runs = [...runs].sort((a, b) => {
@@ -671,6 +1348,7 @@ function updateTable(runsArg) {
 let activeQueryEngines = new Set();
 let queryChart = null;
 let allQueryRuns = [];
+let queryChartDatasetsBase = {}; // datasets originaux, jamais modifiés
 
 function toggleQueryEngine(engine) {
   if (activeQueryEngines.has(engine)) {
@@ -698,43 +1376,76 @@ function clearQueryEngineFilter() {
 
 function updateQueryChart() {
   if (!queryChart) return;
-  const engines = [...document.querySelectorAll('.query-engine-card[data-engine]')]
+  // Ordre depuis les cards (drag & drop)
+  const cardOrder = [...document.querySelectorAll('.query-engine-card[data-engine]')]
     .map(el => el.dataset.engine);
-  queryChart.data.datasets = queryChart.data.datasets.map(ds => {
-    const visible = activeQueryEngines.size === 0 || activeQueryEngines.has(ds.label);
-    const p = pal(ds.label);
-    return { ...ds,
-      backgroundColor: visible ? p.bg  : 'rgba(100,100,100,0.15)',
-      borderColor:     visible ? p.hex : 'rgba(100,100,100,0.3)',
-    };
-  });
-  queryChart.update('none');
+  // Réordonner ET mettre à jour les couleurs
+  queryChart.data.datasets = cardOrder
+    .filter(e => queryChartDatasetsBase[e] &&
+      !hiddenEngines.has(e) &&
+      (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
+      (activeEngines.size === 0 || activeEngines.has(e))
+    )
+    .map(e => {
+      const ds = queryChartDatasetsBase[e];
+      const p  = pal(e);
+      return { ...ds,
+        backgroundColor: p.bg,
+        borderColor:     p.hex,
+      };
+    });
+  queryChart.update();
 }
 
 function updateQueryTable() {
   const tbody = document.getElementById('query-results-body');
-  if (!tbody) return;
+  if (!tbody || !allQueryRuns.length) return;
   const table = tbody.closest('table');
   if (!table) return;
 
-  // Map engine → column index (0-based) from thead
-  const headers = [...table.querySelectorAll('thead th')];
-  const engineColIndex = {};
-  headers.forEach((th, i) => {
-    if (th.dataset.engine) engineColIndex[th.dataset.engine] = i;
+  const allEngines = [...new Set(allQueryRuns.map(r => r.engine))];
+  const visibleEngines = allEngines.filter(e =>
+    !hiddenEngines.has(e) &&
+    (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
+    (activeEngines.size === 0 || activeEngines.has(e))
+  );
+
+  const queryIds = [...new Set(allQueryRuns.map(r => r.queryId))].sort(
+    (a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1])
+  );
+
+  // Masquer les colonnes non visibles dans le thead
+  table.querySelectorAll('thead th[data-engine]').forEach(th => {
+    th.style.display = visibleEngines.includes(th.dataset.engine) ? '' : 'none';
   });
 
-  // Apply opacity per cell using direct column index
-  const allRows = [...table.querySelectorAll('tr')];
-  allRows.forEach(tr => {
-    const cells = [...tr.children];
-    headers.forEach((th, i) => {
-      const engine = th.dataset.engine;
-      if (!engine) return;
-      const visible = activeQueryEngines.size === 0 || activeQueryEngines.has(engine);
-      if (cells[i]) cells[i].style.opacity = visible ? '' : '0.25';
+  // Reconstruire le tbody avec best recalculé parmi les moteurs visibles uniquement
+  tbody.innerHTML = queryIds.map(qid => {
+    // Valeurs pour tous les moteurs (pour mapping colonne)
+    const rowData = allEngines.map(engine => {
+      const r = allQueryRuns.find(r => r.engine === engine && r.queryId === qid);
+      return r && r.medianMs >= 0 ? r.medianMs : null;
     });
-  });
+
+    // Best parmi moteurs VISIBLES seulement
+    const visibleData = visibleEngines.map(e => rowData[allEngines.indexOf(e)]);
+    const validVisible = visibleData.filter(v => v !== null);
+    const minMs  = validVisible.length ? Math.min(...validVisible) : null;
+    const winner = minMs !== null ? visibleEngines[visibleData.indexOf(minMs)] : null;
+
+    const cells = allEngines.map((engine, i) => {
+      if (!visibleEngines.includes(engine)) return `<td style="display:none"></td>`;
+      const ms = rowData[i];
+      if (ms === null) return `<td class="text-right query-fail">—</td>`;
+      return `<td class="text-right">${fmt(ms)} ms</td>`;
+    }).join('');
+
+    const bestCell = winner
+      ? `<td class="text-right" style="color:${pal(winner).hex};font-size:11px">${winner}</td>`
+      : `<td class="text-right query-fail">—</td>`;
+
+    return `<tr><td>${qid}</td>${cells}${bestCell}</tr>`;
+  }).join('');
 }
 
 function renderQuerySection(queryRuns) {
@@ -800,7 +1511,7 @@ function renderQuerySection(queryRuns) {
         <span class="query-summary-meta">${queryIds.length} queries · ${engines.length} engines · ms, lower is better</span>
       </summary>
     <div class="section-heading-row" style="margin-top:8px">
-      <p class="section-note" style="margin:0">Median execution time per query — 3 repetitions</p>
+      <p class="section-note" style="margin:0">Median execution time per query — 3 repetitions &nbsp;·&nbsp; <span style="color:var(--text-faint)">— = timeout or error</span></p>
       <button id="clear-query-engines-btn" class="btn-clear-filter" onclick="clearQueryEngineFilter()" style="display:none">✕ Clear filter</button>
     </div>
     <div class="query-cards" id="query-cards-grid">${cards}</div>
@@ -835,13 +1546,7 @@ function renderQuerySection(queryRuns) {
             const cells = engines.map((engine, i) => {
               const ms = rowData[i];
               if (ms === null) return `<td class="text-right query-fail">—</td>`;
-              const isBest  = ms === minMs;
-              const r       = minMs > 0 ? ms / minMs : 1;
-              const isRed   = !isBest && r >= 20;
-              const isOrange= !isBest && r >= 5 && r < 20;
-              const ratio   = !isBest && r >= 2 ? ` <span class="query-ratio">×${r.toFixed(1)}</span>` : '';
-              const cls     = isBest ? 'query-best' : isRed ? 'query-worst' : isOrange ? 'query-slow' : '';
-              return `<td class="text-right ${cls}">${fmt(ms)} ms${ratio}</td>`;
+              return `<td class="text-right">${fmt(ms)} ms</td>`;
             }).join('');
 
             const bestCell = winner
@@ -856,7 +1561,18 @@ function renderQuerySection(queryRuns) {
     </div>
     </details>
   `;
-  document.querySelector('.app-wrapper').appendChild(section);
+  const sparqlSection = document.getElementById('section-sparql');
+  if (sparqlSection) {
+    // Show only if a specific dataset is selected (not in All mode)
+    sparqlSection.style.display = activeDatasets.size > 0 ? '' : 'none';
+    sparqlSection.appendChild(section);
+  } else {
+    (document.querySelector('.app-content') || document.querySelector('.app-wrapper')).appendChild(section);
+  }
+
+  // Stocker les datasets originaux pour pouvoir restaurer après filtre
+  queryChartDatasetsBase = {};
+  datasets.forEach(ds => { queryChartDatasetsBase[ds.label] = ds; });
 
   // Render chart — store reference for filter updates
   queryChart = new Chart(document.getElementById('chart-queries'), {
@@ -876,98 +1592,55 @@ function renderQuerySection(queryRuns) {
   });
 }
 
-// ── Tendance historique ───────────────────────────────────────────────────────
-async function renderTrend() {
-  let valid;
 
-  // Priority: inline data (file:// compatible)
-  if (window.__HISTORY_DATA__ && window.__HISTORY_DATA__.length >= 2) {
-    valid = window.__HISTORY_DATA__;
-  } else {
-    // Fallback : fetch (fonctionne sur serveur HTTP)
-    let index;
-    try {
-      const res = await fetch('data/history/index.json');
-      if (!res.ok) return;
-      index = await res.json();
-    } catch (_) { return; }
-    if (!index || index.length < 2) return;
+// ── Chart zoom modal ──────────────────────────────────────────────────────────
+let _zoomChart = null;
 
-    const reports = await Promise.all(
-      index.map(async entry => {
-        try {
-          const r = await fetch(`data/history/${entry.file}`);
-          if (!r.ok) return null;
-          const d = await r.json();
-          return { date: entry.date, data: d };
-        } catch (_) { return null; }
-      })
-    );
-    valid = reports.filter(Boolean);
-    if (valid.length < 2) return;
-  }
+function openChartZoom(chartId) {
+  const src = allCharts[chartId];
+  if (!src) return;
 
-  // Engines: only those present in the current run (allRuns), to keep the chart focused
-  const currentEngines = new Set(allRuns.map(r => r.engine));
-  const engines = [...new Set(valid.flatMap(r => r.data.runs.map(run => run.engine)))]
-    .filter(e => currentEngines.has(e));
+  const dialog = document.getElementById('chart-zoom-modal');
+  const titleEl = document.getElementById('chart-zoom-title');
+  const pngBtn  = document.getElementById('chart-zoom-png');
+  const canvas  = document.getElementById('chart-zoom-canvas');
 
-  // Time series: average throughput per engine
-  const datasets = engines.map(engine => {
-    const p = pal(engine);
-    return {
-      label: engine,
-      data: valid.map(r => {
-        const runs = r.data.runs.filter(run => run.engine === engine);
-        if (!runs.length) return null;
-        return Math.round(runs.reduce((s, run) => s + run.throughputTriplesPerSec, 0) / runs.length);
-      }),
-      borderColor: p.hex,
-      backgroundColor: p.bg,
-      tension: 0.3,
-      fill: false,
-      pointRadius: 4,
-    };
-  });
+  // Titre = titre du chart-surface correspondant
+  const surface = document.getElementById(chartId)?.closest('.chart-surface');
+  titleEl.textContent = surface?.querySelector('.chart-title')?.textContent ?? chartId;
 
-  const labels = valid.map(r => {
-    const d = r.date; // format YYYYMMDD_HHMMSS
-    return `${d.slice(6,8)}/${d.slice(4,6)} ${d.slice(9,11)}:${d.slice(11,13)}`;
-  });
+  // Détruire le chart zoom précédent
+  if (_zoomChart) { _zoomChart.destroy(); _zoomChart = null; }
 
-  const section = document.createElement('section');
-  section.innerHTML = `
-    <details class="query-details">
-      <summary class="query-summary" style="margin-top:32px">
-        <h2 class="section-heading" style="margin:0;display:inline">Historical trend</h2>
-        <span class="query-summary-meta">${valid.length} runs · avg throughput per engine</span>
-      </summary>
-    <div class="chart-card" style="margin-top:12px">
-      <div class="chart-header">
-        <span class="chart-title">Throughput over time</span>
-        <span class="chart-unit">triples/s — higher is better</span>
-      </div>
-      <canvas id="chart-trend" height="60"></canvas>
-    </div>
-    </details>
-  `;
-  document.querySelector('.app-wrapper').appendChild(section);
-
-  new Chart(document.getElementById('chart-trend'), {
-    type: 'line',
-    data: { labels, datasets },
+  // Cloner data + options du chart source
+  _zoomChart = new Chart(canvas.getContext('2d'), {
+    type: src.config.type,
+    data: JSON.parse(JSON.stringify(src.data)),
     options: {
+      ...src.config.options,
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, 0)} t/s` } },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-        y: { beginAtZero: false, ticks: { callback: v => fmt(v, 0) } },
+        ...src.config.options?.plugins,
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 13, family: "'Inter'" } } },
       },
     },
   });
+
+  pngBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.download = `corese-benchmark-${chartId}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+
+  dialog.showModal();
+}
+
+function closeChartZoom() {
+  const dialog = document.getElementById('chart-zoom-modal');
+  dialog.close();
+  if (_zoomChart) { _zoomChart.destroy(); _zoomChart = null; }
 }
 
 // ── PNG export ────────────────────────────────────────────────────────────────
@@ -978,6 +1651,249 @@ function downloadChart(canvasId, name) {
   a.download = `corese-benchmark-${name}.png`;
   a.href = canvas.toDataURL('image/png');
   a.click();
+}
+
+// ── Pills scroll arrows ───────────────────────────────────────────────────────
+function scrollPills(dir) {
+  const wrap = document.getElementById('engine-pills');
+  if (!wrap) return;
+  wrap.scrollBy({ left: dir * 180, behavior: 'smooth' });
+}
+
+function updatePillsScrollBtns() {
+  const wrap = document.getElementById('engine-pills');
+  const btnL = document.getElementById('pills-scroll-left');
+  const btnR = document.getElementById('pills-scroll-right');
+  if (!wrap || !btnL || !btnR) return;
+  const canScrollL = wrap.scrollLeft > 4;
+  const canScrollR = wrap.scrollLeft < wrap.scrollWidth - wrap.clientWidth - 4;
+  btnL.style.opacity = canScrollL ? '1' : '0.25';
+  btnL.style.pointerEvents = canScrollL ? '' : 'none';
+  btnR.style.opacity = canScrollR ? '1' : '0.25';
+  btnR.style.pointerEvents = canScrollR ? '' : 'none';
+  // hide both if no overflow
+  const hasOverflow = wrap.scrollWidth > wrap.clientWidth + 4;
+  btnL.style.display = hasOverflow ? '' : 'none';
+  btnR.style.display = hasOverflow ? '' : 'none';
+}
+
+// ── Sidebar scroll-spy ────────────────────────────────────────────────────────
+function initSidebar() {
+  // Click → smooth scroll
+  document.querySelectorAll('.sidebar-nav-item[data-target]').forEach(item => {
+    item.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(item.dataset.target);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Search filter
+  document.getElementById('sidebar-search-input')?.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.closest('li').style.display = text.includes(q) ? '' : 'none';
+    });
+  });
+
+  // Scroll-spy via IntersectionObserver
+  const sections = document.querySelectorAll('.page-section[id]');
+  const navItems = document.querySelectorAll('.sidebar-nav-item[data-target]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navItems.forEach(item => item.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-nav-item[data-target="${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+}
+
+// ── Add engine modal ──────────────────────────────────────────────────────────
+// Famille → préfixe avant le premier "."
+function _engineFamily(e) { const d = e.indexOf('.'); return d >= 0 ? e.slice(0, d) : e; }
+
+function _populateVersionSelect(family, subset) {
+  const engines = subset ?? [...new Set(allRuns.map(r => r.engine))];
+  const versions = engines
+    .filter(e => _engineFamily(e) === family)
+    .map(e => { const d = e.indexOf('.'); return d >= 0 ? e.slice(d + 1) : e; });
+  const sel = document.getElementById('modal-select-version');
+  if (!sel) return;
+  sel.innerHTML = versions.map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+function openAddEngineModal() {
+  const overlay = document.getElementById('modal-add-engine');
+  if (!overlay) return;
+
+  // Familles disponibles dans les données (uniquement moteurs cachés)
+  const allEngines = [...new Set(allRuns.map(r => r.engine))];
+  const available  = hiddenEngines.size > 0
+    ? allEngines.filter(e => hiddenEngines.has(e))
+    : allEngines;
+  const families   = [...new Set(available.map(_engineFamily))];
+
+  const triplesel = document.getElementById('modal-select-triplestore');
+  if (triplesel) {
+    const labels = { corese: 'Corese', jena: 'Apache Jena', rdf4j: 'Eclipse RDF4J' };
+    triplesel.innerHTML = families.map(f =>
+      `<option value="${f}">${labels[f] ?? f}</option>`
+    ).join('');
+    _populateVersionSelect(triplesel.value, available);
+    triplesel.onchange = () => _populateVersionSelect(triplesel.value, available);
+  }
+
+  overlay.classList.add('active');
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeAddEngineModal(); }, { once: true });
+}
+
+function closeAddEngineModal() {
+  document.getElementById('modal-add-engine')?.classList.remove('active');
+}
+
+// ── W3C Conformance ───────────────────────────────────────────────────────────
+async function loadW3CData() {
+  try {
+    const res = await fetch('https://corese-stack.github.io/corese-w3c/data/w3c-report.json');
+    if (!res.ok) throw new Error(res.statusText);
+    return await res.json();
+  } catch (e) {
+    console.warn('W3C data unavailable:', e);
+    return null;
+  }
+}
+
+function renderW3CSection(data) {
+  const section = document.getElementById('section-w3c');
+  if (!section) return;
+
+  if (!data) {
+    section.innerHTML = `<div class="section-head-bar"><h2 class="section-heading" style="margin:0">W3C Conformance</h2></div>
+      <p class="section-note" style="margin-top:12px">Data unavailable — check your connection.</p>`;
+    section.style.display = '';
+    return;
+  }
+
+  const { metadata, summary, suites } = data;
+  const engineVersion = metadata?.coreseVersion ?? metadata?.version ?? '—';
+  const runDate       = metadata?.date ?? metadata?.generatedAt ?? null;
+
+  // ── Summary cards ──
+  const pct     = summary.passRate?.toFixed(2) ?? '—';
+  const exePct  = summary.executedPassRate?.toFixed(2) ?? null;
+
+  const summaryCards = [
+    { label: 'Pass rate',     value: `${pct}%`,            sub: exePct ? `${exePct}% executed` : '',  cls: 'w3c-card-pass' },
+    { label: 'Passed',        value: fmt(summary.passed),  sub: `/ ${fmt(summary.total)} tests`,      cls: '' },
+    { label: 'Failed',        value: fmt(summary.failed),  sub: 'tests failed',                       cls: summary.failed > 0 ? 'w3c-card-fail' : '' },
+    { label: 'Inapplicable',  value: fmt(summary.inapplicable ?? summary.skipped ?? 0), sub: 'inapplicable / skipped', cls: '' },
+    { label: 'Cannot tell',   value: fmt(summary.cantTell ?? 0), sub: 'uncertain',                    cls: '' },
+  ].map(c => `
+    <div class="metric-block ${c.cls}">
+      <div class="kpi-winner-label">${c.label}</div>
+      <div class="kpi-winner-value">${c.value}</div>
+      ${c.sub ? `<div class="metric-sub-label">${c.sub}</div>` : ''}
+    </div>`).join('');
+
+  // ── Pass rate bar ──
+  const barPct = Math.min(parseFloat(pct), 100);
+  const barColor = barPct >= 99 ? '#3fb950' : barPct >= 95 ? '#d29922' : '#f85149';
+  const passBar = `
+    <div class="w3c-pass-bar-wrap">
+      <div class="w3c-pass-bar-track">
+        <div class="w3c-pass-bar-fill" style="width:${barPct}%;background:${barColor}"></div>
+      </div>
+      <span class="w3c-pass-bar-label" style="color:${barColor}">${pct}%</span>
+    </div>`;
+
+  // ── Suite table ──
+  const suiteRows = suites.map(s => {
+    const suitePct  = s.total > 0 ? (s.passed / s.total * 100).toFixed(1) : '—';
+    const failCls   = s.failed > 0 ? 'w3c-fail-cell' : '';
+    return `<tr>
+      <td>${s.name ?? s.id}</td>
+      <td class="text-muted-cell">${s.specification ?? s.component ?? '—'}</td>
+      <td class="text-right">${fmt(s.total)}</td>
+      <td class="text-right" style="color:#3fb950">${fmt(s.passed)}</td>
+      <td class="text-right ${failCls}">${fmt(s.failed)}</td>
+      <td class="text-right">${s.inapplicable ?? 0}</td>
+      <td class="text-right w3c-pct-cell" style="color:${parseFloat(suitePct)>=99?'#3fb950':parseFloat(suitePct)>=95?'#d29922':'#f85149'}">${suitePct}%</td>
+    </tr>`;
+  }).join('');
+
+  // ── Failed tests detail ──
+  const failedTests = suites.flatMap(s =>
+    (s.tests ?? []).filter(t => t.status === 'FAILED' || t.outcome === 'FAILED')
+      .map(t => ({ suite: s.name ?? s.id, ...t }))
+  );
+  const failedHtml = failedTests.length === 0 ? '' : `
+    <details class="w3c-failed-details">
+      <summary class="query-summary">
+        <span style="color:#f85149;font-weight:600">${failedTests.length} failed test${failedTests.length > 1 ? 's' : ''}</span>
+      </summary>
+      <div class="table-surface" style="margin-top:8px">
+        <div class="table-scroll">
+          <table class="report-table">
+            <thead><tr>
+              <th>Suite</th><th>Test</th><th>Description</th><th>Error</th>
+            </tr></thead>
+            <tbody>
+              ${failedTests.map(t => `<tr>
+                <td style="font-size:11px;white-space:nowrap">${t.suite}</td>
+                <td style="font-family:var(--font-mono);font-size:11px">${t.name ?? t.testUri ?? '—'}</td>
+                <td style="font-size:11px;color:var(--text-muted)">${t.description ?? '—'}</td>
+                <td style="font-size:11px;color:#f85149;font-family:var(--font-mono)">${t.errorMessage ?? '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>`;
+
+  section.innerHTML = `
+    <div class="section-head-bar">
+      <h2 class="section-heading" style="margin:0">W3C Conformance</h2>
+      <span class="section-meta">
+        Corese only &nbsp;·&nbsp; v${engineVersion}${runDate ? ' · ' + formatDate(runDate) : ''}
+        &nbsp;·&nbsp;
+        <a href="https://corese-stack.github.io/corese-w3c/" target="_blank" rel="noopener" style="color:var(--accent);font-size:11px">corese-w3c ↗</a>
+      </span>
+    </div>
+    ${passBar}
+    <div class="metrics-grid" style="margin-top:12px;grid-template-columns:repeat(5,1fr)">${summaryCards}</div>
+    <div class="table-surface" style="margin-top:20px">
+      <div class="section-heading-row">
+        <span class="chart-title">Results by suite</span>
+        <span class="chart-unit">${suites.length} suites</span>
+      </div>
+      <div class="table-scroll">
+        <table class="report-table">
+          <thead><tr>
+            <th>Suite</th><th>Specification</th>
+            <th class="text-right">Total</th>
+            <th class="text-right">Passed</th>
+            <th class="text-right">Failed</th>
+            <th class="text-right">N/A</th>
+            <th class="text-right">Pass %</th>
+          </tr></thead>
+          <tbody>${suiteRows}</tbody>
+        </table>
+      </div>
+    </div>
+    ${failedHtml}
+  `;
+
+  section.style.display = '';
+  const nav = document.getElementById('sidebar-w3c-nav');
+  if (nav) {
+    nav.style.display = '';
+    const badge = document.getElementById('sidebar-badge-w3c');
+    if (badge) badge.textContent = `${pct}%`;
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -1000,17 +1916,32 @@ async function main() {
   }
 
   allRuns = data.runs;
+  currentData = data;
+  metadataQueries = data.metadata.queries ?? null;
 
   // Build color map from engines present in the data
   const engines = [...new Set(allRuns.map(r => r.engine))];
   buildColorMap(engines);
 
+  // Restore state from URL before rendering (shareable links)
+  applyUrlState();
+
   renderHeader(data.metadata, allRuns);
-  renderRunInfo(data.metadata);
+  // Pills scroll arrows — listen once after pills are rendered
+  const pillsWrap = document.getElementById('engine-pills');
+  if (pillsWrap) {
+    pillsWrap.addEventListener('scroll', updatePillsScrollBtns, { passive: true });
+    new ResizeObserver(updatePillsScrollBtns).observe(pillsWrap);
+  }
+  updatePillsScrollBtns();
+  renderDatasetPills(allRuns);
+  _syncDatasetSections();
+  updateQuerySectionVisibility();
   renderKPI(allRuns);
-  renderGlobalMeter(allRuns);
-  renderDatasetCards(allRuns, data.metadata.queries ?? null);
+  renderDatasetCards(allRuns, metadataQueries);
   renderEngineCards(allRuns);
+  renderSidebarMeta(data.metadata, engines, allRuns, data.queryRuns);
+  initSidebar();
   applyStoredEngineOrder();
   initCharts();
   initTableSort();
@@ -1023,8 +1954,170 @@ async function main() {
     renderQuerySection(data.queryRuns);
   }
 
-  // Historical trend (async, non-blocking)
-  renderTrend();
+  // W3C Conformance — async, non-blocking
+  loadW3CData().then(renderW3CSection);
+
+  document.getElementById('btn-open-add-engine')?.addEventListener('click', openAddEngineModal);
+  document.getElementById('btn-modal-cancel')?.addEventListener('click', closeAddEngineModal);
+  document.getElementById('btn-modal-submit')?.addEventListener('click', () => {
+    const family  = document.getElementById('modal-select-triplestore')?.value;
+    const version = document.getElementById('modal-select-version')?.value;
+    if (!family || !version) return;
+    const engineId = `${family}.${version}`;
+    if (hiddenEngines.has(engineId)) {
+      hiddenEngines.delete(engineId);
+      // Re-add pill to comparator bar
+      const wrap = document.getElementById('engine-pills');
+      if (wrap && !wrap.querySelector(`[data-engine="${engineId}"]`)) {
+        const dot    = engineId.indexOf('.');
+        const fam    = dot >= 0 ? engineId.slice(0, dot) : engineId;
+        const ver    = dot >= 0 ? engineId.slice(dot + 1) : engineId;
+        const pill   = document.createElement('div');
+        pill.className = `engine-pill family-${fam}`;
+        pill.dataset.engine = engineId;
+        pill.title = engineId;
+        pill.draggable = true;
+        pill.style.cursor = 'grab';
+        pill.onclick = () => toggleEngine(engineId);
+        pill.addEventListener('dragstart', pillDragStart);
+        pill.addEventListener('dragover',  pillDragOver);
+        pill.addEventListener('drop',      pillDrop);
+        pill.addEventListener('dragend',   pillDragEnd);
+        pill.addEventListener('dragleave', pillDragLeave);
+        pill.innerHTML = `<span>${fam}</span><span class="pill-version">${ver}</span>
+          <button class="pill-remove-btn" onclick="event.stopPropagation();hidePillEngine('${engineId}')" title="Remove">&times;</button>`;
+        wrap.appendChild(pill);
+      }
+      syncEnginePills();
+      const filtered = getFilteredRuns(allRuns);
+      renderKPI(filtered);
+      renderEngineCards(getDatasetFilteredRuns());
+      updateCharts();
+      updateTable();
+    }
+    closeAddEngineModal();
+  });
+
+}
+
+// ── Copy URL ──────────────────────────────────────────────────────────────────
+// ── URL shareable state ───────────────────────────────────────────────────────
+// Encodes: ?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5
+// Called after any state change that should be reflected in the URL.
+
+function pushStateToUrl() {
+  const params = new URLSearchParams();
+  if (activeDatasets.size > 0) {
+    params.set('ds', [...activeDatasets].join(','));
+  }
+  const visibleEngines = getEngineOrder().filter(e => !hiddenEngines.has(e));
+  const allEngines     = [...new Set(allRuns.map(r => r.engine))];
+  // Only encode if different from "all engines"
+  if (hiddenEngines.size > 0) {
+    params.set('engines', visibleEngines.join(','));
+  }
+  if (activeEngines.size > 0) {
+    params.set('filter', [...activeEngines].join(','));
+  }
+  if (userRefEngine) {
+    params.set('ref', userRefEngine);
+  }
+  const qs = params.toString();
+  const newUrl = qs ? `${location.pathname}?${qs}` : location.pathname;
+  history.replaceState(null, '', newUrl);
+}
+
+function applyUrlState() {
+  const params = new URLSearchParams(location.search);
+
+  // Dataset
+  const ds = params.get('ds');
+  if (ds) {
+    activeDatasets.clear();
+    ds.split(',').forEach(d => d && activeDatasets.add(d));
+  }
+
+  // Hidden engines (engines= lists visible ones; those absent are hidden)
+  const enginesParam = params.get('engines');
+  if (enginesParam) {
+    const visible = new Set(enginesParam.split(',').filter(Boolean));
+    const all     = [...new Set(allRuns.map(r => r.engine))];
+    hiddenEngines.clear();
+    all.forEach(e => { if (!visible.has(e)) hiddenEngines.add(e); });
+  }
+
+  // Engine filter (active selection)
+  const filter = params.get('filter');
+  if (filter) {
+    activeEngines.clear();
+    filter.split(',').forEach(e => e && activeEngines.add(e));
+  }
+
+  // Reference engine
+  const ref = params.get('ref');
+  if (ref) userRefEngine = ref;
+}
+
+// ── Export JSON (filtered view) ───────────────────────────────────────────────
+
+function exportFilteredJson() {
+  const runs = getFilteredRuns(allRuns);
+  const queryRuns = (allQueryRuns ?? []).filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+  if (runs.length === 0 && queryRuns.length === 0) return;
+
+  const payload = { metadata: currentData?.metadata ?? {}, runs };
+  if (queryRuns.length > 0) payload.queryRuns = queryRuns;
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `benchmark-filtered-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Export CSV (filtered view) ────────────────────────────────────────────────
+
+function exportFilteredCsv() {
+  const runs = getFilteredRuns(allRuns);
+  const queryRuns = (allQueryRuns ?? []).filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeEngines.size  === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size === 0 || activeDatasets.has(r.dataset))
+  );
+  if (runs.length === 0 && queryRuns.length === 0) return;
+
+  const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines  = [];
+
+  if (runs.length > 0) {
+    const hdr = ['engine', 'dataset', 'file', 'triples', 'loadingTimeMs', 'memoryDeltaMb', 'cpuPercent'];
+    lines.push('# LOAD BENCHMARK');
+    lines.push(hdr.join(','));
+    runs.forEach(r => lines.push(hdr.map(h => escape(r[h])).join(',')));
+  }
+
+  if (queryRuns.length > 0) {
+    if (lines.length) lines.push('');
+    lines.push('# QUERY BENCHMARK');
+    lines.push(['engine', 'dataset', 'queryId', 'medianMs'].join(','));
+    queryRuns.forEach(r =>
+      lines.push([escape(r.engine), escape(r.dataset), escape(r.queryId), escape(r.medianMs)].join(','))
+    );
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `benchmark-filtered-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 main();

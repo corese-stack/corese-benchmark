@@ -63,6 +63,16 @@ public class CoreseDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */
+    @Override
+    public long[] queryWithCount(String sparql) throws Exception {
+        QueryProcess exec = QueryProcess.create(graph);
+        long start = System.currentTimeMillis();
+        var maps = exec.query(sparql);
+        long elapsed = System.currentTimeMillis() - start;
+        return new long[]{ elapsed, maps != null ? maps.size() : -1L };
+    }
+
     /** @return number of triples in the graph */
     @Override
     public long getGraphSize() {

@@ -15,8 +15,8 @@ This repository benchmarks Java-based RDF triple stores on loading and SPARQL qu
 **Principles:**
 - Java 21 harness with a rigorous measurement protocol (warmup + 3 repetitions + median)
 - Memory measured as delta before/after loading with forced GC
+- SPARQL query benchmark with per-query timeout and warmup
 - Automatic JSON + CSV output
-- Run history for trend tracking
 - Python orchestration for dataset download, build, and deployment
 
 ---
@@ -26,7 +26,19 @@ This repository benchmarks Java-based RDF triple stores on loading and SPARQL qu
 The interactive benchmark dashboard is published at:
 **[https://corese-stack.github.io/corese-benchmark/](https://corese-stack.github.io/corese-benchmark/)**
 
-To view it locally, open `site/index.html` in a browser.
+To view it locally:
+
+```bash
+make site   # serves at http://localhost:8080
+```
+
+**Dashboard features:**
+- **Scalability charts** — when a single dataset is selected, Performance charts switch to line charts (X = graph size in triples) showing how each engine scales
+- **W3C Conformance** — live pass/fail results fetched from [corese-stack.github.io/corese-w3c](https://corese-stack.github.io/corese-w3c/data/w3c-report.json) (All mode only)
+- **Shareable URLs** — state (dataset, engine filter, reference engine) is encoded in the URL (`?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5`)
+- **Export CSV** — exports the currently filtered results directly from the browser (Full results section)
+- **Engine filter** — click engine cards to filter charts; click × on pills to remove from comparison
+- **SPARQL section** — per-engine latency cards, median per query, color-coded comparison table
 
 ---
 
@@ -120,7 +132,7 @@ python python-utils/workflow.py --coreseCommits a17f3d6,b089a03
 
 ### E) Benchmark with SPARQL queries
 
-For datasets that have associated queries (e.g. Bowlogna):
+For datasets that have associated queries (Bowlogna, BSBM):
 
 ```bash
 python python-utils/workflow.py --engines corese.local,corese.4.6.5 --dataset bowlogna
@@ -130,6 +142,39 @@ The **SPARQL Queries** section appears in the dashboard with:
 - Per-engine latency cards: avg, p50, p95, p99
 - Median time per query and per engine
 - Color-coded comparison table (green = best, orange = ×5–19, red = ×20+)
+- `—` indicates timeout or error
+
+---
+
+### F) Resume mode
+
+Resume mode runs one engine × one dataset at a time and skips combinations whose output already contains a valid JSON report. Useful for long runs that may be interrupted:
+
+```bash
+python python-utils/workflow.py \
+  --engines corese.local,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
+  --datasets dbpedia,bowlogna,bsbm,lubm \
+  --resume
+```
+
+Partial or empty JSON files are automatically re-run (not skipped).
+
+---
+
+### Workflow options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--engines` | — | Comma-separated engine list (e.g. `corese.4.6.5,jena.6.2.0`) |
+| `--dataset` | `dbpedia` | Single dataset: `dbpedia`, `bowlogna`, `bsbm`, `lubm` |
+| `--datasets` | — | Multiple datasets in one run (e.g. `dbpedia,bowlogna`) |
+| `--scales` | `small,medium,large` | Scale tiers for synthetic datasets |
+| `--resume` | off | Skip already-completed engine × dataset pairs |
+| `--quick` | off | 1 repetition instead of 3 (faster, less accurate) |
+| `--query-timeout` | `30` | Per-query SPARQL timeout in seconds |
+| `--inference` | off | Enable RDFS inference for Corese engines |
+| `--coreseLocalPath` | auto | Path to corese-core project or JAR |
+| `--dataDir` | `./input` | Custom data directory |
 
 ---
 
@@ -144,6 +189,9 @@ The **SPARQL Queries** section appears in the dashboard with:
 
 # Run (with queries)
 ./gradlew runBenchmark --args="input/dbpedia/unzip out/json/report.json corese.4.6.5 dbpedia queries.txt"
+
+# Run with custom query timeout (60s)
+./gradlew runBenchmark --args="input/dbpedia/unzip out/json/report.json corese.4.6.5 dbpedia queries.txt --query-timeout 60"
 ```
 
 ---
@@ -158,14 +206,12 @@ Each run automatically generates:
 | `out/csv/<timestamp>_<engines>.csv` | Same data in CSV format (Excel, etc.) |
 | `site/data/benchmark-report.json` | Copy of the latest report (current dashboard) |
 | `site/data/benchmark-report.csv` | Copy of the latest CSV (download button) |
-| `site/data/history/<timestamp>.json` | History entry (last 30 runs kept) |
-| `site/data/history-data.js` | Inline history (trend chart) |
-
-The **historical trend chart** appears in the dashboard once 2 or more runs are available.
 
 ---
 
 ## Measurement Protocol
+
+### Load benchmark
 
 For each file and each engine:
 
@@ -176,6 +222,15 @@ For each file and each engine:
    - Forced GC + memory snapshot after
    - Record time and memory delta
 3. **Keep the median** of the 3 repetitions
+
+### SPARQL benchmark
+
+For each query and each engine:
+
+1. **Warmup** — one execution discarded (primes JIT); logs result count with `WARN` if 0 results
+2. **3 repetitions** with per-execution timeout (default 30s, configurable via `--query-timeout`)
+3. Each rep runs in a **daemon thread** via `ExecutorService` — a stuck query is abandoned without blocking subsequent queries
+4. **Keep the median** of the 3 repetitions (`—` if all reps timed out)
 
 This protocol ensures reproducible results by eliminating JIT compilation bias and GC timing noise.
 
@@ -214,6 +269,8 @@ python python-utils/workflow.py --dataset dbpedia --engines corese.4.6.5,jena.6.
 
 Synthetic dataset describing student/university relations. Includes associated **SPARQL queries** for latency benchmarking. Source: [DICE Research / HOBBIT](https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip)
 
+Dashboard note: Bowlogna shows only the **SPARQL** section (no Performance/Load charts — the dataset is optimised for query benchmarking).
+
 | Scale | Departments | Triples (approx.) |
 |-------|-------------|-------------------|
 | `small` | 1 | ~1.2 M |
@@ -223,16 +280,6 @@ Synthetic dataset describing student/university relations. Includes associated *
 ```bash
 python python-utils/workflow.py --dataset bowlogna --scales small --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
 ```
-
-### BSBM
-
-Berlin SPARQL Benchmark — synthetic e-commerce dataset. Generated with [bsbmtools 0.2](https://sourceforge.net/projects/bsbmtools/).
-
-| Scale | Products | Triples (approx.) |
-|-------|---------|-------------------|
-| `small` | 1,000 | ~50 K |
-| `medium` | 50,000 | ~1 M |
-| `large` | 500,000 | ~10 M |
 
 ```bash
 python python-utils/workflow.py --dataset bsbm --scales small,medium --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2

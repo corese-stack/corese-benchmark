@@ -79,6 +79,25 @@ parser.add_argument(
     default=False,
     help="Enable RDFS inference for Corese engines (passed to Java harness).",
 )
+parser.add_argument(
+    "--resume",
+    action="store_true",
+    default=False,
+    help="Resume mode: run one engine×dataset at a time, skip if output already exists.",
+)
+parser.add_argument(
+    "--quick",
+    action="store_true",
+    default=False,
+    help="Quick mode: 1 repetition instead of 3 (faster, less accurate).",
+)
+parser.add_argument(
+    "--query-timeout",
+    type=int,
+    default=None,
+    metavar="SECONDS",
+    help="Per-query SPARQL timeout in seconds (default: 30). Overrides the Java harness default.",
+)
 args = parser.parse_args()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -199,7 +218,16 @@ for ds in dataset_names:
 def gradle_build(extra_args=None):
     cmd = [gradle_wrapper, "clean", "build"] + (extra_args or [])
     print(f"Building: {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=project_dir, check=True)
+    try:
+        subprocess.run(cmd, cwd=project_dir, check=True, timeout=600, stderr=subprocess.PIPE)
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Gradle build timed out after 600s — check for stuck daemon", file=sys.stderr)
+        raise
+    except subprocess.CalledProcessError as e:
+        stderr_text = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
+        if stderr_text:
+            print(f"[ERROR] Gradle build stderr:\n{stderr_text}", file=sys.stderr)
+        raise
 
 
 QUERIES_FILES = {
@@ -219,9 +247,21 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
     if args.inference:
         args_str += " --inference"
         print("  Inference: enabled")
+    if args.quick:
+        args_str += " --quick"
+        print("  Quick mode: 1 repetition")
+    if args.query_timeout is not None:
+        args_str += f" --query-timeout {args.query_timeout}"
+        print(f"  Query timeout: {args.query_timeout}s")
     cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
     print(f"Running benchmark: {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=project_dir, check=True)
+    try:
+        subprocess.run(cmd, cwd=project_dir, check=True, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        stderr_text = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
+        if stderr_text:
+            print(f"[ERROR] Gradle stderr:\n{stderr_text}", file=sys.stderr)
+        raise
 
 
 def merge_json_files(file_list, output_file):
@@ -261,6 +301,83 @@ def merge_json_files(file_list, output_file):
 
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# ── Log to file (mirrors stdout+stderr) ──────────────────────────────────────
+_log_dir = os.path.join(out_json_dir, "..", "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_log_path = os.path.join(_log_dir, f"{timestamp}.log")
+
+class _Tee:
+    def __init__(self, *streams):
+        self._streams = streams
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+    def fileno(self):
+        return self._streams[0].fileno()
+
+_log_fh     = open(_log_path, "w", buffering=1, encoding="utf-8")
+sys.stdout  = _Tee(sys.__stdout__, _log_fh)
+sys.stderr  = _Tee(sys.__stderr__, _log_fh)
+print(f"Logging to: {_log_path}")
+
+# ── Resume mode: one engine × one dataset at a time, skips existing results ──
+if args.engines and args.resume:
+    engines_list = [e.strip() for e in args.engines.split(",")]
+
+    def needs_local_jar_r(e):
+        return e in ('corese.next', 'corese.local') or e.startswith('corese.commit.')
+
+    def build_gradle_props_r(engine):
+        parts = engine.split(".", 1)
+        family, ver = (parts[0], parts[1]) if len(parts) == 2 else (engine, None)
+        extra = []
+        if family == 'corese':
+            extra += [f"-PcoreseVersion={'local' if ver in ('next','local') else ver}"]
+        elif family == 'jena' and ver:
+            extra += [f"-PjenaVersion={ver}"]
+        elif family == 'rdf4j' and ver:
+            extra += [f"-Prdf4jVersion={ver}"]
+        return extra
+
+    resume_dir = os.path.join(out_json_dir, "resume")
+    os.makedirs(resume_dir, exist_ok=True)
+    collected = []
+    last_build_props = None
+
+    for engine in engines_list:
+        gradle_props = build_gradle_props_r(engine)
+        for ds in dataset_names:
+            safe_engine = engine.replace('.', '_')
+            out_file = os.path.join(resume_dir, f"{safe_engine}_{ds}.json")
+            if os.path.exists(out_file):
+                try:
+                    with open(out_file) as _f:
+                        _data = _json_early.load(_f)
+                    if isinstance(_data.get("runs"), list) and len(_data["runs"]) > 0:
+                        print(f"[resume] SKIP {engine} × {ds} — already done ({out_file})")
+                        collected.append(out_file)
+                        continue
+                    else:
+                        print(f"[resume] REDO {engine} × {ds} — output exists but has no valid runs")
+                except Exception as _e:
+                    print(f"[resume] REDO {engine} × {ds} — output invalid ({_e})")
+            print(f"[resume] RUN  {engine} × {ds}")
+            if gradle_props != last_build_props:
+                gradle_build(gradle_props)
+                last_build_props = gradle_props
+            run_benchmark(engine, out_file, ds, dataset_dirs[ds], gradle_props=gradle_props)
+            collected.append(out_file)
+
+    if collected:
+        engines_tag  = args.engines.replace(',', '_')
+        final_output = os.path.join(out_json_dir, f"{timestamp}_resume_{engines_tag}.json")
+        merge_json_files(list(collected), final_output)
+        print(f"\n[resume] Rapport final : {final_output}")
+    import sys; sys.exit(0)
 
 # Case A: --engines (single build, all engines)
 if args.engines:
@@ -411,34 +528,5 @@ if json_files:
         f.write(f"window.__BENCHMARK_DATA__ = {data};")
     print("Generated report-data.js")
 
-    history_dir = os.path.join(site_data_dir, "history")
-    os.makedirs(history_dir, exist_ok=True)
-    hist_filename = f"{timestamp}.json"
-    shutil.copy(latest, os.path.join(history_dir, hist_filename))
-
-    index_path = os.path.join(history_dir, "index.json")
-    if os.path.exists(index_path):
-        with open(index_path) as f:
-            history_index = _json_early.load(f)
-    else:
-        history_index = []
-
-    history_index.append({"file": hist_filename, "date": timestamp})
-    history_index = history_index[-30:]
-
-    with open(index_path, "w") as f:
-        _json_early.dump(history_index, f, indent=2)
-    print(f"History updated: {len(history_index)} entries in {index_path}")
-
-    history_data = []
-    for entry in history_index:
-        hist_file = os.path.join(history_dir, entry["file"])
-        if os.path.exists(hist_file):
-            with open(hist_file) as hf:
-                history_data.append({"date": entry["date"], "data": _json_early.load(hf)})
-    hist_js = os.path.join(site_data_dir, "history-data.js")
-    with open(hist_js, "w") as f:
-        f.write(f"window.__HISTORY_DATA__ = {_json_early.dumps(history_data)};")
-    print(f"Generated history-data.js ({len(history_data)} entries)")
 else:
     print("No JSON report found in out/")

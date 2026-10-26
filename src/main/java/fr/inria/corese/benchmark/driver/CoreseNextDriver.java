@@ -128,6 +128,28 @@ public class CoreseNextDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /** Executes a SPARQL query and returns {@code [timeMs, resultCount]} (SELECT only). */
+    @Override
+    public long[] queryWithCount(String sparql) {
+        long start = System.currentTimeMillis();
+        long count = -1L;
+        switch (detectQueryType(sparql)) {
+            case SELECT -> {
+                try (TupleQueryResult result = connection.prepareTupleQuery(sparql).evaluate()) {
+                    count = 0;
+                    while (result.hasNext()) { result.next(); count++; }
+                }
+            }
+            case ASK -> connection.prepareBooleanQuery(sparql).evaluate();
+            default -> {
+                try (GraphQueryResult result = connection.prepareGraphQuery(sparql).evaluate()) {
+                    while (result.hasNext()) result.next();
+                }
+            }
+        }
+        return new long[]{ System.currentTimeMillis() - start, count };
+    }
+
     /**
      * Returns the total number of statements currently held in the repository.
      *

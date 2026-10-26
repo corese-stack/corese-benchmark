@@ -28,9 +28,11 @@ import java.util.concurrent.*;
 public class BenchmarkHarness {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkHarness.class);
-    private static final int REPETITIONS = 3;
+    private static final int DEFAULT_REPETITIONS = 3;
+    private final int repetitions;
     private static final int QUERY_REPS = 3;
-    private static final long QUERY_TIMEOUT_S = 30; // seconds per query execution
+    private static final long DEFAULT_QUERY_TIMEOUT_S = 30; // seconds per query execution
+    private final long queryTimeoutS;
 
     private final TripleStoreDriver driver;
     private final MetricsCollector metrics;
@@ -43,8 +45,18 @@ public class BenchmarkHarness {
      * @param datasetName logical name of the dataset (recorded in result objects)
      */
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName) {
+        this(driver, datasetName, DEFAULT_REPETITIONS, DEFAULT_QUERY_TIMEOUT_S);
+    }
+
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
+        this(driver, datasetName, repetitions, DEFAULT_QUERY_TIMEOUT_S);
+    }
+
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions, long queryTimeoutS) {
         this.driver = driver;
         this.datasetName = datasetName;
+        this.repetitions = repetitions;
+        this.queryTimeoutS = queryTimeoutS;
         this.metrics = new MetricsCollector();
     }
 
@@ -77,14 +89,19 @@ public class BenchmarkHarness {
                     FileResult result = benchmarkFile(file);
                     results.add(result);
                     long[] reps = result.repetitionsMs();
-                    String repStr = String.format("[%d, %d, %d]", reps[0], reps[1], reps[2]);
+                    StringBuilder sb = new StringBuilder("[");
+                    for (int r = 0; r < reps.length; r++) { if (r > 0) sb.append(", "); sb.append(reps[r]); }
+                    sb.append("]");
+                    String repStr = sb.toString();
                     log.info("  [{}/{}] {}", fi + 1, files.length,
                             String.format(Locale.US, "%-45s | %6d ms %s | %,9d triples | %8.1f MB | %,.0f triples/s",
                                     file.getName(), result.loadingTimeMs(), repStr,
                                     result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
                 } catch (OutOfMemoryError e) {
                     System.gc();
-                    log.error("  [{}/{}] {} — OUT OF MEMORY, skipping file", fi + 1, files.length, file.getName(), e);
+                    log.error("  [{}/{}] {} — OUT OF MEMORY (engine={}, dataset={}, file={}), skipping file",
+                        fi + 1, files.length, file.getName(),
+                        driver.getName(), datasetName, file.getAbsolutePath(), e);
                 }
             }
         } finally {
@@ -118,32 +135,76 @@ public class BenchmarkHarness {
             log.info("  {} triples loaded — running {} queries × {} reps",
                 driver.getGraphSize(), queries.size(), QUERY_REPS);
 
-            // Benchmark each query with per-execution timeout
-            try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
-                for (int qi = 0; qi < queries.size(); qi++) {
-                    String sparql = queries.get(qi).trim();
-                    if (sparql.isEmpty()) continue;
-                    String queryId = "query_" + (qi + 1);
-
-                    long[] times = new long[QUERY_REPS];
-                    for (int i = 0; i < QUERY_REPS; i++) {
-                        final String q = sparql;
-                        Future<Long> future = executor.submit(() -> driver.query(q));
-                        try {
-                            times[i] = future.get(QUERY_TIMEOUT_S, TimeUnit.SECONDS);
-                        } catch (TimeoutException e) {
-                            future.cancel(true);
-                            log.warn("  {} rep {} timed out after {}s", queryId, i + 1, QUERY_TIMEOUT_S);
-                            times[i] = -1L;
-                        } catch (ExecutionException e) {
-                            log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
-                            times[i] = -1L;
-                        }
+            // Warmup: one discarded run per query to prime the JIT and validate results.
+            // Skipped in quick mode (repetitions == 1) to save time.
+            if (repetitions == 1) log.info("  Quick mode — skipping query warmup");
+            if (repetitions > 1) log.info("  Warming up {} queries (1 run discarded)...", queries.size());
+            for (int qi = 0; repetitions > 1 && qi < queries.size(); qi++) {
+                String warmupSparql = queries.get(qi).trim();
+                if (warmupSparql.isEmpty()) continue;
+                String warmupId = "query_" + (qi + 1);
+                final String wq = warmupSparql;
+                ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
+                    Thread t = new Thread(r, "warmup-" + warmupId);
+                    t.setDaemon(true);
+                    return t;
+                });
+                Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(wq));
+                try {
+                    long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
+                    long count = res[1];
+                    if (count == 0) {
+                        log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
+                    } else if (count > 0) {
+                        log.debug("  {} warmup: {} result(s)", warmupId, count);
                     }
-                    long medianMs = MetricsCollector.median(times);
-                    results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
-                    log.info("  {} | {} ms", queryId, medianMs >= 0 ? medianMs : "TIMEOUT");
+                    warmupExec.shutdown();
+                } catch (TimeoutException e) {
+                    wf.cancel(true);
+                    warmupExec.shutdownNow();
+                    log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
+                } catch (Exception e) {
+                    warmupExec.shutdown();
+                    log.warn("  {} warmup failed: {}", warmupId,
+                        e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
                 }
+            }
+
+            // Benchmark each query with per-execution timeout.
+            // A fresh daemon-thread executor is created per query so that a stuck thread
+            // (one that ignores interrupt) is abandoned rather than blocking all subsequent queries.
+            for (int qi = 0; qi < queries.size(); qi++) {
+                String sparql = queries.get(qi).trim();
+                if (sparql.isEmpty()) continue;
+                String queryId = "query_" + (qi + 1);
+
+                long[] times = new long[QUERY_REPS];
+                for (int i = 0; i < QUERY_REPS; i++) {
+                    final String q = sparql;
+                    final int rep = i;
+                    ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+                        Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
+                        t.setDaemon(true); // JVM won't wait for this thread on exit
+                        return t;
+                    });
+                    Future<Long> future = executor.submit(() -> driver.query(q));
+                    try {
+                        times[i] = future.get(queryTimeoutS, TimeUnit.SECONDS);
+                        executor.shutdown();
+                    } catch (TimeoutException e) {
+                        future.cancel(true);
+                        executor.shutdownNow(); // abandon — daemon thread won't block JVM
+                        log.warn("  {} rep {} timed out after {}s", queryId, i + 1, queryTimeoutS);
+                        times[i] = -1L;
+                    } catch (ExecutionException e) {
+                        executor.shutdown();
+                        log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
+                        times[i] = -1L;
+                    }
+                }
+                long medianMs = MetricsCollector.median(times);
+                results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
+                log.info("  {} | {} ms", queryId, medianMs >= 0 ? medianMs : "TIMEOUT");
             }
         } finally {
             driver.close();
@@ -165,21 +226,23 @@ public class BenchmarkHarness {
     private FileResult benchmarkFile(File file) throws Exception {
         String path = file.getAbsolutePath();
 
-        // --- Warmup (discarded) ---
-        driver.clear();
-        System.gc();
-        driver.load(path);
-        driver.clear();
-        System.gc();
+        // --- Warmup (discarded) — skipped in quick mode (repetitions == 1) ---
+        if (repetitions > 1) {
+            driver.clear();
+            System.gc();
+            driver.load(path);
+            driver.clear();
+            System.gc();
+        }
 
         // --- 3 repetitions ---
-        long[] timesMs   = new long[REPETITIONS];
-        double[] memBefore  = new double[REPETITIONS];
-        double[] memAfter   = new double[REPETITIONS];
-        double[] cpuSamples = new double[REPETITIONS];
+        long[] timesMs   = new long[repetitions];
+        double[] memBefore  = new double[repetitions];
+        double[] memAfter   = new double[repetitions];
+        double[] cpuSamples = new double[repetitions];
         long triples = 0;
 
-        for (int i = 0; i < REPETITIONS; i++) {
+        for (int i = 0; i < repetitions; i++) {
             driver.clear();
             memBefore[i] = metrics.getUsedMemoryMb();
 
@@ -195,8 +258,8 @@ public class BenchmarkHarness {
         // --- Compute medians ---
         long medianTimeMs = MetricsCollector.median(timesMs);
 
-        double[] deltas = new double[REPETITIONS];
-        for (int i = 0; i < REPETITIONS; i++) deltas[i] = memAfter[i] - memBefore[i];
+        double[] deltas = new double[repetitions];
+        for (int i = 0; i < repetitions; i++) deltas[i] = memAfter[i] - memBefore[i];
 
         return new FileResult(
             driver.getName(),

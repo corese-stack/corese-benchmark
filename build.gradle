@@ -25,6 +25,9 @@ def useLocalCorese = (project.hasProperty('coreseVersion') && project.coreseVers
 if (useLocalCorese && (!localJars.isEmpty() || project.hasProperty('coreseJar'))) {
     // corese-next build: exclude 4.x driver (incompatible RuleEngine API)
     sourceSets.main.java.exclude '**/CoreseDriver.java'
+    // Also exclude tests that directly instantiate CoreseDriver (won't compile without it)
+    sourceSets.test.java.exclude '**/CrossEngineConsistencyTest.java'
+    sourceSets.test.java.exclude '**/DriverFormatTest.java'
     if (project.hasProperty('coreseJar')) {
         dependencies { compileOnly files(project.coreseJar) }
     } else {
@@ -60,12 +63,38 @@ dependencies {
     implementation "org.eclipse.rdf4j:rdf4j-sail-memory:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-repository-sail:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio:${rdf4jVersion}"
+    // RIO parsers — required for multi-format support (.nq, .ttl, .trig)
+    implementation "org.eclipse.rdf4j:rdf4j-rio-ntriples:${rdf4jVersion}"
+    implementation "org.eclipse.rdf4j:rdf4j-rio-nquads:${rdf4jVersion}"
+    implementation "org.eclipse.rdf4j:rdf4j-rio-turtle:${rdf4jVersion}"
+    implementation "org.eclipse.rdf4j:rdf4j-rio-trig:${rdf4jVersion}"
 
     // JSON output
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.0'
 
     // Logging
     implementation 'ch.qos.logback:logback-classic:1.4.14'
+
+    // Tests
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'fr.inria.corese:corese-core:4.6.5'
+    def jenaVersionTest = project.hasProperty('jenaVersion') ? project.jenaVersion : '6.2.0'
+    testImplementation "org.apache.jena:jena-core:${jenaVersionTest}"
+    testImplementation "org.apache.jena:jena-arq:${jenaVersionTest}"
+    def rdf4jVersionTest = project.hasProperty('rdf4jVersion') ? project.rdf4jVersion : '5.3.2'
+    testImplementation "org.eclipse.rdf4j:rdf4j-repository:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-sail-memory:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-repository-sail:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio-ntriples:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio-nquads:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio-turtle:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio-trig:${rdf4jVersionTest}"
+}
+
+test {
+    useJUnitPlatform()
 }
 
 application {

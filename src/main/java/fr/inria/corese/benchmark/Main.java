@@ -52,12 +52,18 @@ public class Main {
         String[] engines   = args[2].split(",");
         String datasetName = args.length > 3 ? args[3] : "dataset";
 
-        // Parse remaining args: optional queries file and --inference flag
-        String queriesFile = null;
-        boolean inference  = false;
+        // Parse remaining args: optional queries file and flags
+        String queriesFile   = null;
+        boolean inference    = false;
+        boolean quick        = false;
+        int queryTimeoutSecs = -1; // -1 = use harness default
         for (int i = 4; i < args.length; i++) {
             if ("--inference".equals(args[i])) {
                 inference = true;
+            } else if ("--quick".equals(args[i])) {
+                quick = true;
+            } else if ("--query-timeout".equals(args[i]) && i + 1 < args.length) {
+                try { queryTimeoutSecs = Integer.parseInt(args[++i]); } catch (NumberFormatException ignored) {}
             } else if (queriesFile == null) {
                 queriesFile = args[i];
             }
@@ -83,7 +89,10 @@ public class Main {
             log.info("Starting engine: {}", engineName);
             try {
                 TripleStoreDriver driver = DriverFactory.create(engineName, inference);
-                BenchmarkHarness harness = new BenchmarkHarness(driver, datasetName);
+                int reps = quick ? 1 : 3;
+                BenchmarkHarness harness = queryTimeoutSecs > 0
+                    ? new BenchmarkHarness(driver, datasetName, reps, queryTimeoutSecs)
+                    : new BenchmarkHarness(driver, datasetName, reps);
 
                 // Load benchmark
                 List<FileResult> fileResults = harness.run(datasetDir);
@@ -96,7 +105,7 @@ public class Main {
                 }
             } catch (OutOfMemoryError e) {
                 System.gc();
-                log.error("Engine {} ran out of memory — skipping to next engine", engineName, e);
+                log.error("Engine {} ran out of memory on dataset '{}' — skipping to next engine", engineName, datasetName, e);
             } catch (Exception e) {
                 log.error("Engine {} failed: {} — skipping to next engine", engineName, e.getMessage(), e);
             }
