@@ -16,10 +16,10 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      dataset:
+      datasets:
         description: 'Datasets à benchmarker (séparés par virgule : dbpedia,bowlogna,bsbm,lubm)'
         required: false
-        default: 'dbpedia'
+        default: 'dbpedia,bowlogna,lubm'
       engines:
         description: 'Comma-separated engines (e.g. corese.4.6.5,jena.6.2.0)'
         required: false
@@ -172,7 +172,7 @@ jobs:
       - name: Run benchmark
         env:
           ENGINES: ${{ github.event.inputs.engines }}
-          DATASETS: ${{ github.event.inputs.dataset }}
+          DATASETS: ${{ github.event.inputs.datasets }}
           SCALES: ${{ github.event.inputs.scales }}
           CORESE_COMMIT: ${{ github.event.inputs.corese_commit }}
           DO_INFERENCE: ${{ github.event.inputs.inference }}
