@@ -691,6 +691,36 @@ body {
   font-size: 13px;
 }
 
+/* Query-type filter pills */
+.query-type-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 8px;
+}
+.query-type-filter-bar .filter-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+.query-type-pill {
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.query-type-pill:hover { background: var(--bg-surface-hover); color: var(--text-main); }
+.query-type-pill.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* Tableau requêtes */
 .query-section .report-table td,
 .query-section .report-table th { white-space: nowrap; }

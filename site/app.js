@@ -159,7 +159,7 @@ const DATASET_META = {
     description: 'Lehigh University Benchmark — university domain with RDFS reasoning',
     url:         'https://swat.cse.lehigh.edu/projects/lubm/',
     fileBaseUrl: null,
-    hasSparql:   false,
+    hasSparql:   true,
   },
 };
 
@@ -741,10 +741,12 @@ function _syncDatasetSections() {
   const w3cNav = document.getElementById('sidebar-w3c-nav');
   if (w3cNav) w3cNav.style.display = isAll ? '' : 'none';
 
-  // Bowlogna is SPARQL-focused: hide Performance charts + Full results, show only Engines + SPARQL
+  // Bowlogna/BSBM are SPARQL-focused or single-file: hide Performance charts + Full results
   const isBowlogna   = activeDatasets.has('bowlogna');
-  const hideCharts   = isAll || isBowlogna;
-  const hideResults  = isAll || isBowlogna;
+  const isBsbm       = activeDatasets.has('bsbm');
+  const isLubm       = activeDatasets.has('lubm');
+  const hideCharts   = isAll || isBowlogna || isBsbm || isLubm;
+  const hideResults  = isAll || isBowlogna || isBsbm || isLubm;
 
   const enginesEl = document.getElementById('section-engines');
   if (enginesEl) enginesEl.style.display = isAll ? 'none' : '';
@@ -805,11 +807,11 @@ function _updateChartsMeta() {
 function _refreshQuerySection() {
   // Always update visibility (hides SPARQL nav for datasets without SPARQL)
   updateQuerySectionVisibility();
-  if (!allQueryRuns || allQueryRuns.length === 0) return;
+  if (!_allQueryRunsGlobal || _allQueryRunsGlobal.length === 0) return;
   const hasSparql = activeDatasets.size > 0 &&
     [...activeDatasets].some(ds => DATASET_META[ds.toLowerCase()]?.hasSparql ?? false);
   const filteredQueryRuns = hasSparql
-    ? allQueryRuns.filter(r => activeDatasets.has(r.dataset))
+    ? _allQueryRunsGlobal.filter(r => activeDatasets.has(r.dataset))
     : [];
   const sparqlSection = document.getElementById('section-sparql');
   if (sparqlSection) sparqlSection.innerHTML = '';
@@ -1347,8 +1349,11 @@ function updateTable(runsArg) {
 // ── Query benchmark section ───────────────────────────────────────────────────
 let activeQueryEngines = new Set();
 let queryChart = null;
-let allQueryRuns = [];
+let allQueryRuns = [];       // filtered to active dataset (used by charts/table)
+let _allQueryRunsGlobal = []; // full set from JSON (never overwritten)
 let queryChartDatasetsBase = {}; // datasets originaux, jamais modifiés
+let queryTtfrDatasetsBase  = {};
+let activeQueryTypeFilter  = 'all'; // 'all' | 'GRAPH_PATTERN' | 'TEMPORAL' | 'GROUP_BY' | 'SUBQUERY'
 
 function toggleQueryEngine(engine) {
   if (activeQueryEngines.has(engine)) {
@@ -1365,6 +1370,26 @@ function toggleQueryEngine(engine) {
   updateQueryTable();
 }
 
+function setQueryTypeFilter(type) {
+  activeQueryTypeFilter = type;
+  document.querySelectorAll('.query-type-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+  updateQueryChart();
+  updateQueryTable();
+}
+
+function _syncQueryTypePills() {
+  const present = new Set(allQueryRuns.map(r => r.queryCategory ?? 'GRAPH_PATTERN'));
+  // Hide the entire filter bar if all queries have the same category (no useful filtering)
+  const filterBar = document.getElementById('query-type-filter-bar');
+  if (filterBar) filterBar.style.display = present.size <= 1 ? 'none' : '';
+  document.querySelectorAll('.query-type-pill[data-type]').forEach(btn => {
+    const t = btn.dataset.type;
+    btn.style.display = (t === 'all' || present.has(t)) ? '' : 'none';
+  });
+}
+
 function clearQueryEngineFilter() {
   activeQueryEngines.clear();
   document.querySelectorAll('.query-engine-card[data-engine]').forEach(el => el.classList.remove('active'));
@@ -1374,27 +1399,56 @@ function clearQueryEngineFilter() {
   updateQueryTable();
 }
 
-function updateQueryChart() {
-  if (!queryChart) return;
-  // Ordre depuis les cards (drag & drop)
+function _classifySparql(sparql) {
+  if (!sparql) return 'GRAPH_PATTERN';
+  // Strip comments and string literals, then uppercase
+  const cleaned = sparql.replace(/#[^\n]*/g, '').replace(/"[^"]*"|'[^']*'/g, '""').toUpperCase();
+  if (/\{[^{}]*\bSELECT\b/.test(cleaned))   return 'SUBQUERY';
+  if (/\bGROUP\s+BY\b/.test(cleaned))        return 'GROUP_BY';
+  if (/\bNOW\s*\(|\bXSD:DATETIME\b|\bXSD:DATE\b|\b(DAY|MONTH|YEAR|HOURS|MINUTES|SECONDS)\s*\(/.test(cleaned)) return 'TEMPORAL';
+  return 'GRAPH_PATTERN';
+}
+
+function _visibleQueryIds() {
+  return [...new Set(allQueryRuns
+    .filter(r => activeQueryTypeFilter === 'all' || (r.queryCategory ?? 'GRAPH_PATTERN') === activeQueryTypeFilter)
+    .map(r => r.queryId)
+  )].sort((a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1]));
+}
+
+function _visibleQueryEngines() {
   const cardOrder = [...document.querySelectorAll('.query-engine-card[data-engine]')]
     .map(el => el.dataset.engine);
-  // Réordonner ET mettre à jour les couleurs
-  queryChart.data.datasets = cardOrder
-    .filter(e => queryChartDatasetsBase[e] &&
-      !hiddenEngines.has(e) &&
-      (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
-      (activeEngines.size === 0 || activeEngines.has(e))
-    )
-    .map(e => {
-      const ds = queryChartDatasetsBase[e];
-      const p  = pal(e);
-      return { ...ds,
-        backgroundColor: p.bg,
-        borderColor:     p.hex,
-      };
-    });
-  queryChart.update();
+  return cardOrder.filter(e =>
+    !hiddenEngines.has(e) &&
+    (activeQueryEngines.size === 0 || activeQueryEngines.has(e)) &&
+    (activeEngines.size === 0 || activeEngines.has(e))
+  );
+}
+
+function updateQueryChart() {
+  const qids    = _visibleQueryIds();
+  const engines = _visibleQueryEngines();
+
+  if (queryChart) {
+    const isTtfr = _activeQueryChartMode === 'ttfr';
+    const base   = isTtfr ? queryTtfrDatasetsBase : queryChartDatasetsBase;
+    queryChart.data.labels   = qids;
+    queryChart.data.datasets = engines
+      .filter(e => base[e])
+      .map(e => {
+        const p = pal(e);
+        return { ...base[e],
+          data: qids.map(qid => {
+            const r = allQueryRuns.find(r => r.engine === e && r.queryId === qid);
+            if (isTtfr) return r && r.medianTtfrMs != null && r.medianTtfrMs >= 0 ? r.medianTtfrMs : null;
+            return r && r.medianMs >= 0 ? r.medianMs : null;
+          }),
+          backgroundColor: p.bg, borderColor: p.hex,
+        };
+      });
+    queryChart.update();
+  }
 }
 
 function updateQueryTable() {
@@ -1410,9 +1464,7 @@ function updateQueryTable() {
     (activeEngines.size === 0 || activeEngines.has(e))
   );
 
-  const queryIds = [...new Set(allQueryRuns.map(r => r.queryId))].sort(
-    (a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1])
-  );
+  const queryIds = _visibleQueryIds();
 
   // Masquer les colonnes non visibles dans le thead
   table.querySelectorAll('thead th[data-engine]').forEach(th => {
@@ -1509,19 +1561,42 @@ function renderQuerySection(queryRuns) {
       <summary class="query-summary">
         <h2 class="section-heading" style="margin:0;display:inline">SPARQL Queries</h2>
         <span class="query-summary-meta">${queryIds.length} queries · ${engines.length} engines · ms, lower is better</span>
+        <div style="display:flex;gap:6px;margin-left:auto">
+          <button class="btn-download" onclick="event.preventDefault();exportQueryMarkdown()" title="Exporter le rapport en Markdown">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="12" y2="18"></line><line x1="15" y1="15" x2="12" y2="18"></line></svg>
+            <span>Export MD</span>
+          </button>
+          <button class="btn-download" onclick="event.preventDefault();exportQueryPdf()" title="Exporter le rapport en PDF">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="13" x2="9" y2="17"></line><line x1="12" y1="11" x2="12" y2="17"></line><line x1="15" y1="13" x2="15" y2="17"></line></svg>
+            <span>Export PDF</span>
+          </button>
+        </div>
       </summary>
     <div class="section-heading-row" style="margin-top:8px">
       <p class="section-note" style="margin:0">Median execution time per query — 3 repetitions &nbsp;·&nbsp; <span style="color:var(--text-faint)">— = timeout or error</span></p>
       <button id="clear-query-engines-btn" class="btn-clear-filter" onclick="clearQueryEngineFilter()" style="display:none">✕ Clear filter</button>
     </div>
     <div class="query-cards" id="query-cards-grid">${cards}</div>
-    <div class="chart-card" style="margin-top:16px">
+    <div class="query-type-filter-bar" id="query-type-filter-bar">
+      <span class="filter-label">Query type:</span>
+      <button class="query-type-pill active" data-type="all"           onclick="setQueryTypeFilter('all')">All</button>
+      <button class="query-type-pill"        data-type="GRAPH_PATTERN" onclick="setQueryTypeFilter('GRAPH_PATTERN')">Graph Pattern</button>
+      <button class="query-type-pill"        data-type="TEMPORAL"      onclick="setQueryTypeFilter('TEMPORAL')">Temporal</button>
+      <button class="query-type-pill"        data-type="GROUP_BY"      onclick="setQueryTypeFilter('GROUP_BY')">GROUP BY</button>
+      <button class="query-type-pill"        data-type="SUBQUERY"      onclick="setQueryTypeFilter('SUBQUERY')">Subquery</button>
+    </div>
+    <div class="chart-card" style="margin-top:8px">
       <div class="chart-header">
-        <span class="chart-title">Time per query</span>
+        <span class="chart-title" id="query-chart-title">Time per query</span>
         <span class="chart-unit">ms — lower is better</span>
+        <div id="query-chart-toggle" style="margin-left:auto;display:none;gap:4px">
+          <button class="query-type-pill active" id="toggle-exec" onclick="setQueryChartMode('exec')">Exec time</button>
+          <button class="query-type-pill"        id="toggle-ttfr" onclick="setQueryChartMode('ttfr')">TTFR</button>
+        </div>
       </div>
       <canvas id="chart-queries" height="80"></canvas>
     </div>
+
     <div class="table-surface" style="margin-top:16px">
       <div class="table-scroll">
       <table class="report-table" translate="no">
@@ -1574,22 +1649,62 @@ function renderQuerySection(queryRuns) {
   queryChartDatasetsBase = {};
   datasets.forEach(ds => { queryChartDatasetsBase[ds.label] = ds; });
 
-  // Render chart — store reference for filter updates
+  // Reset query type filter on re-render
+  activeQueryTypeFilter = 'all';
+  // Sync pills visibility after DOM is ready
+  requestAnimationFrame(() => _syncQueryTypePills());
+
+  const chartOpts = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, 0)} ms` } },
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+      y: { beginAtZero: true, ticks: { callback: v => fmt(v, 0) + ' ms' } },
+    },
+  };
+
+  // Render main execution time chart
   queryChart = new Chart(document.getElementById('chart-queries'), {
     type: 'bar',
     data: { labels: queryIds, datasets },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11, family: "'Inter'" } } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw, 0)} ms` } },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-        y: { beginAtZero: true, ticks: { callback: v => fmt(v, 0) + ' ms' } },
-      },
-    },
+    options: chartOpts,
   });
+
+  // Store TTFR datasets for toggle
+  queryTtfrDatasetsBase = {};
+  engines.forEach(engine => {
+    const p = pal(engine);
+    queryTtfrDatasetsBase[engine] = {
+      label: engine,
+      data: queryIds.map(qid => {
+        const r = queryRuns.find(r => r.engine === engine && r.queryId === qid);
+        return r && r.medianTtfrMs != null && r.medianTtfrMs >= 0 ? r.medianTtfrMs : null;
+      }),
+      backgroundColor: p.bg,
+      borderColor: p.hex,
+      borderWidth: 1,
+    };
+  });
+
+  const hasTtfr = queryRuns.some(r => r.medianTtfrMs != null && r.medianTtfrMs >= 0);
+  const toggle = document.getElementById('query-chart-toggle');
+  if (toggle) toggle.style.display = hasTtfr ? 'flex' : 'none';
+  _activeQueryChartMode = 'exec';
+
+}
+
+let _activeQueryChartMode = 'exec';
+
+function setQueryChartMode(mode) {
+  _activeQueryChartMode = mode;
+  document.getElementById('toggle-exec')?.classList.toggle('active', mode === 'exec');
+  document.getElementById('toggle-ttfr')?.classList.toggle('active', mode === 'ttfr');
+  const title = document.getElementById('query-chart-title');
+  if (title) title.textContent = mode === 'ttfr' ? 'Time to First Result (TTFR)' : 'Time per query';
+  updateQueryChart();
 }
 
 
@@ -1919,6 +2034,30 @@ async function main() {
   currentData = data;
   metadataQueries = data.metadata.queries ?? null;
 
+  // Back-fill queryCategory for JSON generated before this feature.
+  // Only classify from metadata.queries if there is exactly ONE dataset
+  // with queryRuns AND the number of embedded queries matches the unique query count.
+  // Otherwise the index mapping is unreliable (mixed-dataset JSON).
+  if (data.queryRuns) {
+    const datasets = [...new Set(data.queryRuns.map(r => r.dataset))];
+    const uniqueQids = [...new Set(data.queryRuns.map(r => r.queryId))];
+    const canBackfill = metadataQueries &&
+      datasets.length === 1 &&
+      metadataQueries.length === uniqueQids.length;
+
+    data.queryRuns.forEach(r => {
+      if (!r.queryCategory) {
+        if (canBackfill) {
+          const idx = parseInt((r.queryId ?? '').split('_')[1]) - 1;
+          const sparql = idx >= 0 ? (metadataQueries[idx] ?? '') : '';
+          r.queryCategory = _classifySparql(sparql);
+        } else {
+          r.queryCategory = 'GRAPH_PATTERN'; // unknown — hide type filter
+        }
+      }
+    });
+  }
+
   // Build color map from engines present in the data
   const engines = [...new Set(allRuns.map(r => r.engine))];
   buildColorMap(engines);
@@ -1951,6 +2090,7 @@ async function main() {
 
   // Query section (optional — only if queryRuns present in JSON)
   if (data.queryRuns && data.queryRuns.length > 0) {
+    _allQueryRunsGlobal = data.queryRuns;
     renderQuerySection(data.queryRuns);
   }
 
@@ -2056,6 +2196,183 @@ function applyUrlState() {
   // Reference engine
   const ref = params.get('ref');
   if (ref) userRefEngine = ref;
+}
+
+// ── Export Markdown comparison report ─────────────────────────────────────────
+
+function exportQueryMarkdown() {
+  const runs = (allQueryRuns ?? []).filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeQueryEngines.size === 0 || activeQueryEngines.has(r.engine)) &&
+    (activeEngines.size    === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size   === 0 || activeDatasets.has(r.dataset)) &&
+    (activeQueryTypeFilter === 'all' || (r.queryCategory ?? 'GRAPH_PATTERN') === activeQueryTypeFilter)
+  );
+  if (runs.length === 0) return;
+
+  const engines  = [...new Set(runs.map(r => r.engine))];
+  const qids     = [...new Set(runs.map(r => r.queryId))].sort(
+    (a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1])
+  );
+  const meta    = currentData?.metadata ?? {};
+  const dataset = runs[0]?.dataset ?? '';
+  const now     = new Date().toISOString().slice(0, 10);
+
+  const lines = [];
+  lines.push(`# SPARQL Benchmark Comparison`);
+  lines.push(``);
+  lines.push(`**Dataset:** ${dataset}  `);
+  lines.push(`**Generated:** ${meta.generatedAt ?? now}  `);
+  lines.push(`**Java:** ${meta.java ?? '—'}  `);
+  lines.push(`**OS:** ${meta.os ?? '—'}  `);
+  lines.push(`**Protocol:** warmup + ${meta.protocol?.queryRepetitions ?? 3} repetitions, median  `);
+  if (activeQueryTypeFilter !== 'all') lines.push(`**Query type filter:** ${activeQueryTypeFilter}  `);
+  lines.push(``);
+
+  const sep = `|---|${engines.map(() => '---:').join('|')}|---|`;
+
+  // Execution time table
+  lines.push(`## Median Execution Time (ms)`);
+  lines.push(``);
+  lines.push(`| Query | ${engines.join(' | ')} | Best |`);
+  lines.push(sep);
+  qids.forEach(qid => {
+    const vals   = engines.map(e => { const r = runs.find(r => r.engine === e && r.queryId === qid); return r && r.medianMs >= 0 ? r.medianMs : null; });
+    const minMs  = Math.min(...vals.filter(v => v !== null));
+    const winner = isFinite(minMs) ? engines[vals.indexOf(minMs)] : null;
+    lines.push(`| ${qid} | ${vals.map(v => v === null ? '—' : `${v.toLocaleString()} ms`).join(' | ')} | ${winner ?? '—'} |`);
+  });
+  lines.push(``);
+
+  // TTFR table (only if data present)
+  const hasTtfr = runs.some(r => r.medianTtfrMs != null && r.medianTtfrMs >= 0);
+  if (hasTtfr) {
+    lines.push(`## Time to First Result (TTFR, ms)`);
+    lines.push(``);
+    lines.push(`| Query | ${engines.join(' | ')} | Best |`);
+    lines.push(sep);
+    qids.forEach(qid => {
+      const vals   = engines.map(e => { const r = runs.find(r => r.engine === e && r.queryId === qid); return r && r.medianTtfrMs != null && r.medianTtfrMs >= 0 ? r.medianTtfrMs : null; });
+      const minMs  = Math.min(...vals.filter(v => v !== null));
+      const winner = isFinite(minMs) ? engines[vals.indexOf(minMs)] : null;
+      lines.push(`| ${qid} | ${vals.map(v => v === null ? '—' : `${v.toLocaleString()} ms`).join(' | ')} | ${winner ?? '—'} |`);
+    });
+    lines.push(``);
+  }
+
+  // Heap delta table
+  const hasHeap = runs.some(r => r.heapDeltaMb != null);
+  if (hasHeap) {
+    lines.push(`## Heap Memory Delta (MB)`);
+    lines.push(``);
+    lines.push(`| Query | ${engines.join(' | ')} |`);
+    lines.push(`|---|${engines.map(() => '---:').join('|')}|`);
+    qids.forEach(qid => {
+      const cells = engines.map(e => { const r = runs.find(r => r.engine === e && r.queryId === qid); return r && r.heapDeltaMb != null ? r.heapDeltaMb.toFixed(1) + ' MB' : '—'; });
+      lines.push(`| ${qid} | ${cells.join(' | ')} |`);
+    });
+    lines.push(``);
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `benchmark-${dataset}-${now}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Export PDF (print-ready HTML report) ─────────────────────────────────────
+
+function exportQueryPdf() {
+  const runs = (allQueryRuns ?? []).filter(r =>
+    !hiddenEngines.has(r.engine) &&
+    (activeQueryEngines.size === 0 || activeQueryEngines.has(r.engine)) &&
+    (activeEngines.size    === 0 || activeEngines.has(r.engine)) &&
+    (activeDatasets.size   === 0 || activeDatasets.has(r.dataset)) &&
+    (activeQueryTypeFilter === 'all' || (r.queryCategory ?? 'GRAPH_PATTERN') === activeQueryTypeFilter)
+  );
+  if (runs.length === 0) return;
+
+  const engines = [...new Set(runs.map(r => r.engine))];
+  const qids    = [...new Set(runs.map(r => r.queryId))].sort(
+    (a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1])
+  );
+  const meta    = currentData?.metadata ?? {};
+  const dataset = runs[0]?.dataset ?? '';
+  const now     = new Date().toISOString().slice(0, 10);
+  const hasTtfr = runs.some(r => r.medianTtfrMs != null && r.medianTtfrMs >= 0);
+  const hasHeap = runs.some(r => r.heapDeltaMb != null);
+
+  const ENGINE_COLORS = ['#4e79a7','#f28e2b','#59a14f','#e15759','#76b7b2','#edc948','#b07aa1','#ff9da7'];
+  const colorMap = {};
+  engines.forEach((e, i) => { colorMap[e] = ENGINE_COLORS[i % ENGINE_COLORS.length]; });
+
+  const thStyle  = `style="padding:6px 10px;text-align:right;border:1px solid #ddd;background:#f5f5f5;font-weight:600"`;
+  const th0Style = `style="padding:6px 10px;text-align:left;border:1px solid #ddd;background:#f5f5f5;font-weight:600"`;
+  const tdStyle  = `style="padding:5px 10px;text-align:right;border:1px solid #ddd"`;
+  const td0Style = `style="padding:5px 10px;text-align:left;border:1px solid #ddd;font-family:monospace"`;
+
+  function buildTable(title, getCellFn, showBest) {
+    const header = `<tr><th ${th0Style}>Query</th>${engines.map(e =>
+      `<th ${thStyle}><span style="color:${colorMap[e]}">${e}</span></th>`).join('')}${showBest ? `<th ${thStyle}>Best</th>` : ''}</tr>`;
+    const rows = qids.map(qid => {
+      const vals  = engines.map(e => getCellFn(runs.find(r => r.engine === e && r.queryId === qid)));
+      const nums  = vals.map(v => typeof v === 'number' ? v : null);
+      const minV  = Math.min(...nums.filter(v => v !== null));
+      const wiIdx = isFinite(minV) ? nums.indexOf(minV) : -1;
+      const cells = vals.map((v, i) => {
+        const isWin = showBest && i === wiIdx;
+        const disp  = v === null ? '—' : typeof v === 'number' ? v.toLocaleString() : v;
+        return `<td ${tdStyle}${isWin ? ' style="padding:5px 10px;text-align:right;border:1px solid #ddd;font-weight:700;background:#fffbe6"' : ''}>${disp}</td>`;
+      });
+      const bestCell = showBest ? `<td ${tdStyle}>${wiIdx >= 0 ? `<span style="color:${colorMap[engines[wiIdx]]}">${engines[wiIdx]}</span>` : '—'}</td>` : '';
+      return `<tr><td ${td0Style}>${qid}</td>${cells.join('')}${bestCell}</tr>`;
+    }).join('');
+    return `<h2 style="margin:28px 0 8px;font-size:15px;color:#333">${title}</h2>
+      <table style="border-collapse:collapse;width:100%;font-size:13px">${header}${rows}</table>`;
+  }
+
+  const execTable = buildTable('Median Execution Time (ms)',
+    r => (r && r.medianMs >= 0) ? r.medianMs : null, true);
+  const ttfrTable = hasTtfr ? buildTable('Time to First Result — TTFR (ms)',
+    r => (r && r.medianTtfrMs != null && r.medianTtfrMs >= 0) ? r.medianTtfrMs : null, true) : '';
+  const heapTable = hasHeap ? buildTable('Heap Memory Delta (MB)',
+    r => (r && r.heapDeltaMb != null) ? r.heapDeltaMb.toFixed(1) + ' MB' : null, false) : '';
+
+  const filterNote = activeQueryTypeFilter !== 'all'
+    ? `<p style="margin:4px 0;color:#555"><strong>Query type filter:</strong> ${activeQueryTypeFilter}</p>` : '';
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+    <title>SPARQL Benchmark — ${dataset} — ${now}</title>
+    <style>
+      @media print { @page { margin: 18mm 15mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      body { font-family: system-ui, sans-serif; font-size: 13px; color: #222; margin: 0; padding: 20px 30px; }
+      h1 { font-size: 18px; margin-bottom: 6px; }
+    </style>
+  </head><body>
+    <h1>SPARQL Benchmark Comparison</h1>
+    <p style="margin:4px 0;color:#555"><strong>Dataset:</strong> ${dataset}</p>
+    <p style="margin:4px 0;color:#555"><strong>Generated:</strong> ${meta.generatedAt ?? now}</p>
+    <p style="margin:4px 0;color:#555"><strong>Java:</strong> ${meta.java ?? '—'} &nbsp;·&nbsp; <strong>OS:</strong> ${meta.os ?? '—'}</p>
+    <p style="margin:4px 0;color:#555"><strong>Protocol:</strong> warmup + ${meta.protocol?.queryRepetitions ?? 3} repetitions, median</p>
+    ${filterNote}
+    ${execTable}${ttfrTable}${heapTable}
+    <p style="margin-top:28px;font-size:11px;color:#aaa">Generated by corese-benchmark dashboard — ${now}</p>
+  </body></html>`;
+
+  // Use a hidden iframe to avoid popup blocker issues
+  let iframe = document.getElementById('_pdf-print-frame');
+  if (iframe) iframe.remove();
+  iframe = document.createElement('iframe');
+  iframe.id = '_pdf-print-frame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 400);
 }
 
 // ── Export JSON (filtered view) ───────────────────────────────────────────────

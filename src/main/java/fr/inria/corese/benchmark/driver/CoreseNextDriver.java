@@ -1,5 +1,6 @@
 package fr.inria.corese.benchmark.driver;
 
+import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.core.next.data.api.io.format.RDFFormat;
 import fr.inria.corese.core.next.data.api.model.Model;
 import fr.inria.corese.core.next.io.CoreseIO;
@@ -126,6 +127,51 @@ public class CoreseNextDriver implements TripleStoreDriver {
             }
         }
         return System.currentTimeMillis() - start;
+    }
+
+    /**
+     * Executes a SPARQL query and returns full metrics including TTFR and heap delta.
+     * For SELECT/GRAPH queries the result is a lazy cursor — TTFR is recorded after
+     * the first {@code result.next()} call. For ASK, TTFR equals total time.
+     */
+    @Override
+    public QueryMetrics queryWithMetrics(String sparql) {
+        long heapBefore = MetricsCollector.usedHeapBytes();
+        long start = System.currentTimeMillis();
+        long ttfr;
+        long count = -1L;
+        switch (detectQueryType(sparql)) {
+            case SELECT -> {
+                try (TupleQueryResult result = connection.prepareTupleQuery(sparql).evaluate()) {
+                    count = 0;
+                    if (result.hasNext()) {
+                        result.next(); count++;
+                        ttfr = System.currentTimeMillis() - start;
+                        while (result.hasNext()) { result.next(); count++; }
+                    } else {
+                        ttfr = System.currentTimeMillis() - start;
+                    }
+                }
+            }
+            case ASK -> {
+                connection.prepareBooleanQuery(sparql).evaluate();
+                ttfr = System.currentTimeMillis() - start;
+            }
+            default -> {
+                try (GraphQueryResult result = connection.prepareGraphQuery(sparql).evaluate()) {
+                    count = 0;
+                    if (result.hasNext()) {
+                        result.next(); count++;
+                        ttfr = System.currentTimeMillis() - start;
+                        while (result.hasNext()) { result.next(); count++; }
+                    } else {
+                        ttfr = System.currentTimeMillis() - start;
+                    }
+                }
+            }
+        }
+        long total = System.currentTimeMillis() - start;
+        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore);
     }
 
     /** Executes a SPARQL query and returns {@code [timeMs, resultCount]} (SELECT only). */

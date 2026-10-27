@@ -94,7 +94,10 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
         # Must run from gen_dir so titlewords.txt is found
         subprocess.run(cmd, cwd=gen_dir, check=True)
 
+        # bsbmtools ignores -dir and writes dataset.nt in the current working dir (gen_dir)
         generated = os.path.join(tmp_dir, "dataset.nt")
+        if not os.path.exists(generated):
+            generated = os.path.join(gen_dir, "dataset.nt")
         if os.path.exists(generated):
             shutil.move(generated, out_file)
             print(f"  Generated: bsbm_{scale}.nt")

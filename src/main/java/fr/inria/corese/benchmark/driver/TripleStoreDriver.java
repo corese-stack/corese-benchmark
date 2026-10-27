@@ -26,6 +26,31 @@ public interface TripleStoreDriver {
         return new long[]{ query(sparql), -1L };
     }
 
+    /**
+     * Execute a SPARQL query and return a {@link QueryMetrics} snapshot containing
+     * total time, time-to-first-result (TTFR), result count, and heap delta.
+     *
+     * <p>Default implementation falls back to {@link #query(String)} with
+     * {@code ttfrMs = totalMs} and no heap/count measurement — suitable for
+     * engines that materialise results eagerly. Override to expose streaming TTFR.</p>
+     *
+     * @param sparql the SPARQL query string
+     * @return metrics for this execution
+     * @throws Exception if the driver raises an error during execution
+     */
+    default QueryMetrics queryWithMetrics(String sparql) throws Exception {
+        long heapBefore = usedHeapBytes();
+        long total = query(sparql);
+        long heapDelta = usedHeapBytes() - heapBefore;
+        return new QueryMetrics(total, total, -1L, heapDelta);
+    }
+
+    /** Returns current used heap in bytes without a forced GC. */
+    private static long usedHeapBytes() {
+        Runtime rt = Runtime.getRuntime();
+        return rt.totalMemory() - rt.freeMemory();
+    }
+
     /** Return the number of triples currently in the store. */
     long getGraphSize() throws Exception;
 

@@ -235,6 +235,8 @@ QUERIES_FILES = {
                              "Bowlogna_bench_data", "bowlogna-queries.txt"),
     "lubm":     os.path.join(project_dir, "src", "main", "resources",
                              "lubm", "lubm-queries.txt"),
+    "bsbm":     os.path.join(project_dir, "src", "main", "resources",
+                             "bsbm", "bsbm-queries.txt"),
 }
 
 

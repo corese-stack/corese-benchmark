@@ -1,9 +1,11 @@
 package fr.inria.corese.benchmark.harness;
 
+import fr.inria.corese.benchmark.driver.QueryMetrics;
 import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.benchmark.metrics.QueryResult;
+import fr.inria.corese.benchmark.metrics.SparqlAnalyser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +30,6 @@ import java.util.concurrent.*;
 public class BenchmarkHarness {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkHarness.class);
-    private static final int DEFAULT_REPETITIONS = 3;
     private final int repetitions;
     private static final int QUERY_REPS = 3;
     private static final long DEFAULT_QUERY_TIMEOUT_S = 30; // seconds per query execution
@@ -37,16 +38,6 @@ public class BenchmarkHarness {
     private final TripleStoreDriver driver;
     private final MetricsCollector metrics;
     private final String datasetName;
-
-    /**
-     * Constructs a harness for the given driver and dataset.
-     *
-     * @param driver      the triple-store driver to benchmark
-     * @param datasetName logical name of the dataset (recorded in result objects)
-     */
-    public BenchmarkHarness(TripleStoreDriver driver, String datasetName) {
-        this(driver, datasetName, DEFAULT_REPETITIONS, DEFAULT_QUERY_TIMEOUT_S);
-    }
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
         this(driver, datasetName, repetitions, DEFAULT_QUERY_TIMEOUT_S);
@@ -63,7 +54,7 @@ public class BenchmarkHarness {
     /**
      * Runs the load benchmark over all {@code .nt} files found in {@code datasetDir}.
      * Files are sorted alphabetically. For each file the harness performs one warmup
-     * load followed by {@value #REPETITIONS} measured repetitions, keeping the median.
+     * load followed by REPETITIONS measured repetitions, keeping the median.
      * The driver is initialised at the start and closed in a {@code finally} block.
      *
      * @param datasetDir path to the directory containing {@code .nt} files
@@ -144,29 +135,28 @@ public class BenchmarkHarness {
                 if (warmupSparql.isEmpty()) continue;
                 String warmupId = "query_" + (qi + 1);
                 final String wq = warmupSparql;
-                ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
+                try (ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
                     Thread t = new Thread(r, "warmup-" + warmupId);
                     t.setDaemon(true);
                     return t;
-                });
-                Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(wq));
-                try {
-                    long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
-                    long count = res[1];
-                    if (count == 0) {
-                        log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
-                    } else if (count > 0) {
-                        log.debug("  {} warmup: {} result(s)", warmupId, count);
+                })) {
+                    Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(wq));
+                    try {
+                        long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
+                        long count = res[1];
+                        if (count == 0) {
+                            log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
+                        } else if (count > 0) {
+                            log.debug("  {} warmup: {} result(s)", warmupId, count);
+                        }
+                    } catch (TimeoutException e) {
+                        wf.cancel(true);
+                        warmupExec.shutdownNow();
+                        log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
+                    } catch (Exception e) {
+                        log.warn("  {} warmup failed: {}", warmupId,
+                            e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
                     }
-                    warmupExec.shutdown();
-                } catch (TimeoutException e) {
-                    wf.cancel(true);
-                    warmupExec.shutdownNow();
-                    log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
-                } catch (Exception e) {
-                    warmupExec.shutdown();
-                    log.warn("  {} warmup failed: {}", warmupId,
-                        e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
                 }
             }
 
@@ -177,34 +167,51 @@ public class BenchmarkHarness {
                 String sparql = queries.get(qi).trim();
                 if (sparql.isEmpty()) continue;
                 String queryId = "query_" + (qi + 1);
+                String category = SparqlAnalyser.classify(sparql).name();
 
-                long[] times = new long[QUERY_REPS];
+                long[] times      = new long[QUERY_REPS];
+                long[] ttfrTimes  = new long[QUERY_REPS];
+                long[] heapDeltas = new long[QUERY_REPS];
+
                 for (int i = 0; i < QUERY_REPS; i++) {
                     final String q = sparql;
                     final int rep = i;
-                    ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+                    try (ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
                         Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
                         t.setDaemon(true); // JVM won't wait for this thread on exit
                         return t;
-                    });
-                    Future<Long> future = executor.submit(() -> driver.query(q));
-                    try {
-                        times[i] = future.get(queryTimeoutS, TimeUnit.SECONDS);
-                        executor.shutdown();
-                    } catch (TimeoutException e) {
-                        future.cancel(true);
-                        executor.shutdownNow(); // abandon — daemon thread won't block JVM
-                        log.warn("  {} rep {} timed out after {}s", queryId, i + 1, queryTimeoutS);
-                        times[i] = -1L;
-                    } catch (ExecutionException e) {
-                        executor.shutdown();
-                        log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
-                        times[i] = -1L;
+                    })) {
+                        Future<QueryMetrics> future = executor.submit(() -> driver.queryWithMetrics(q));
+                        try {
+                            QueryMetrics m = future.get(queryTimeoutS, TimeUnit.SECONDS);
+                            times[i]      = m.totalMs();
+                            ttfrTimes[i]  = m.ttfrMs();
+                            heapDeltas[i] = m.heapDeltaBytes();
+                        } catch (TimeoutException e) {
+                            future.cancel(true);
+                            executor.shutdownNow(); // abandon — daemon thread won't block JVM
+                            log.warn("  {} rep {} timed out after {}s", queryId, i + 1, queryTimeoutS);
+                            times[i]     = -1L;
+                            ttfrTimes[i] = -1L;
+                        } catch (ExecutionException e) {
+                            log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
+                            times[i]     = -1L;
+                            ttfrTimes[i] = -1L;
+                        }
                     }
                 }
-                long medianMs = MetricsCollector.median(times);
-                results.add(new QueryResult(driver.getName(), datasetName, queryId, medianMs, times));
-                log.info("  {} | {} ms", queryId, medianMs >= 0 ? medianMs : "TIMEOUT");
+                long medianMs     = MetricsCollector.median(times);
+                long medianTtfrMs = MetricsCollector.median(ttfrTimes);
+                double heapDeltaMb = medianLong(heapDeltas) / (1024.0 * 1024.0);
+                results.add(new QueryResult(
+                    driver.getName(), datasetName, queryId,
+                    category,
+                    medianMs, times,
+                    medianTtfrMs, ttfrTimes,
+                    heapDeltaMb));
+                log.info("  {} [{}] | {} ms | ttfr {} ms", queryId, category,
+                    medianMs >= 0 ? medianMs : "TIMEOUT",
+                    medianTtfrMs >= 0 ? medianTtfrMs : "TIMEOUT");
             }
         } finally {
             driver.close();
@@ -212,17 +219,17 @@ public class BenchmarkHarness {
         return results;
     }
 
-    /**
-     * Benchmarks a single N-Triples file: one warmup followed by
-     * {@value #REPETITIONS} measured load cycles. Memory is sampled before and
-     * after each load (with forced GC), and CPU usage is sampled immediately after.
-     * Median values are computed across the repetitions and returned as a
-     * {@link FileResult}.
-     *
-     * @param file the N-Triples file to benchmark
-     * @return the aggregated {@link FileResult} for this file
-     * @throws Exception if the driver raises an error during load or measurement
-     */
+    /** Median of raw long values (no -1 sentinel filtering — 0 is valid for heap delta). */
+    private static long medianLong(long[] values) {
+        if (values == null || values.length == 0) return 0L;
+        long[] sorted = values.clone();
+        Arrays.sort(sorted);
+        int mid = sorted.length / 2;
+        return sorted.length % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+    }
+
     private FileResult benchmarkFile(File file) throws Exception {
         String path = file.getAbsolutePath();
 

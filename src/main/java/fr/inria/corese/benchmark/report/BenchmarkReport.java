@@ -117,13 +117,14 @@ public class BenchmarkReport {
             if (queryResults != null && !queryResults.isEmpty()) {
                 pw.println();
                 pw.println("# QUERY BENCHMARK");
-                pw.println("engine,dataset,queryId,medianMs,rep1Ms,rep2Ms,rep3Ms");
+                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rep1Ms,rep2Ms,rep3Ms");
                 for (QueryResult r : queryResults) {
                     String reps = Arrays.stream(r.repetitionsMs())
                         .mapToObj(String::valueOf)
                         .collect(Collectors.joining(","));
-                    pw.printf(Locale.US, "%s,%s,%s,%d,%s%n",
-                        r.engine(), r.dataset(), r.queryId(), r.medianMs(), reps);
+                    pw.printf(Locale.US, "%s,%s,%s,%s,%d,%d,%.3f,%s%n",
+                        r.engine(), r.dataset(), r.queryId(), r.queryCategory(),
+                        r.medianMs(), r.medianTtfrMs(), r.heapDeltaMb(), reps);
                 }
             }
         }
