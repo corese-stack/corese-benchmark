@@ -20,6 +20,18 @@ if "JAVA_HOME" not in os.environ:
             os.environ["PATH"] = f"{_jdk_candidate}/bin:{os.environ.get('PATH', '')}"
             break
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_dir = os.path.dirname(current_dir)
+sys.path.insert(0, current_dir)
+
+from baseline import (
+    IMMUTABLE_ENGINES,
+    export_site_data,
+    load_baseline,
+    plan_engines,
+    save_baseline,
+)
+
 ####################################################################################
 # Step 0: Parse arguments
 ####################################################################################
@@ -87,6 +99,24 @@ parser.add_argument(
     help="Resume mode: run one engine×dataset at a time, skip if output already exists.",
 )
 parser.add_argument(
+    "--baseline",
+    type=str,
+    default=os.path.join(project_dir, "site", "data", "baseline.json"),
+    help="Path to frozen reference baseline JSON (default: site/data/baseline.json).",
+)
+parser.add_argument(
+    "--force-all-engines",
+    action="store_true",
+    default=False,
+    help="Ignore baseline and force fresh execution of all requested engines.",
+)
+parser.add_argument(
+    "--update-baseline",
+    action="store_true",
+    default=False,
+    help="Run baseline engines fresh and update baseline.json with the new results.",
+)
+parser.add_argument(
     "--cached-engines",
     type=str,
     default=None,
@@ -108,10 +138,6 @@ parser.add_argument(
     help="Per-query SPARQL timeout in seconds (default: 30). Overrides the Java harness default.",
 )
 args = parser.parse_args()
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_dir = os.path.dirname(current_dir)
-sys.path.insert(0, current_dir)
 
 # Resolve dataset list: --datasets takes priority over --dataset
 if args.datasets:
@@ -418,18 +444,57 @@ if args.engines:
             extra += [f"-Prdf4jVersion={versions['rdf4j']}"]
         return extra
 
-    cached_engine_set = set()
+    baseline_data = load_baseline(args.baseline)
+    execution_plan = plan_engines(
+        engines_list,
+        dataset_names,
+        baseline_data,
+        force_all=args.force_all_engines,
+        update_baseline=args.update_baseline,
+    )
+    print(f"[plan] Baseline cache engines: {execution_plan.cached_engines}")
+    print(f"[plan] Fresh execution engines: {execution_plan.fresh_engines}")
+
+    cached_engine_set = set(execution_plan.cached_engines)
     if args.cached_engines:
-        cached_engine_set = {e.strip() for e in args.cached_engines.split(",")}
+        cached_engine_set |= {e.strip() for e in args.cached_engines.split(",")}
     cache_dir = os.path.join(out_json_dir, "cache")
     os.makedirs(cache_dir, exist_ok=True)
+
+    def populate_cache_from_baseline(engine, ds):
+        """Populate local cache slice from frozen baseline.json if present."""
+        safe = engine.replace('.', '_')
+        dst = os.path.join(cache_dir, f"{safe}_{ds}.json")
+        runs = [
+            r for r in baseline_data.get("runs", [])
+            if r.get("engine") == engine and r.get("dataset") == ds
+        ]
+        qruns = [
+            q for q in baseline_data.get("queryRuns", [])
+            if q.get("engine") == engine and q.get("dataset") == ds
+        ]
+        if runs:
+            filtered = {
+                "metadata": baseline_data.get("metadata", {}),
+                "runs": runs,
+                "queryRuns": qruns,
+            }
+            if not filtered["queryRuns"]:
+                del filtered["queryRuns"]
+            with open(dst, "w") as _f:
+                _json_early.dump(filtered, _f, indent=2)
+            print(f"[baseline] Extracted {engine} × {ds} from baseline → {dst}")
+            return dst
+        return None
 
     def get_cached(engine, ds):
         """Return path to cached JSON for engine×dataset if valid, else None."""
         safe = engine.replace('.', '_')
         path = os.path.join(cache_dir, f"{safe}_{ds}.json")
         if not os.path.exists(path):
-            return None
+            path = populate_cache_from_baseline(engine, ds)
+            if not path or not os.path.exists(path):
+                return None
         try:
             with open(path) as _f:
                 _d = _json_early.load(_f)
@@ -626,22 +691,29 @@ else:
     latest = json_files[-1] if json_files else None
 
 if latest:
-
-    dest = os.path.join(site_data_dir, "benchmark-report.json")
-    shutil.copy(latest, dest)
-    print(f"\nReport copied to {dest}")
-
-    csv_files = sorted(glob.glob(os.path.join(out_csv_dir, "*.csv")), key=os.path.getmtime)
-    if csv_files:
-        csv_dest = os.path.join(site_data_dir, "benchmark-report.csv")
-        shutil.copy(csv_files[-1], csv_dest)
-        print(f"CSV copied to {csv_dest}")
-
     with open(latest) as f:
-        data = f.read()
-    with open(os.path.join(site_data_dir, "report-data.js"), "w") as f:
-        f.write(f"window.__BENCHMARK_DATA__ = {data};")
-    print("Generated report-data.js")
+        site_data = _json_early.load(f)
+
+    # Export all 3 dashboard files from the unified in-memory dataset
+    export_site_data(site_data, site_data_dir)
+
+    # If --update-baseline requested, persist fresh immutable engine runs into baseline.json
+    if getattr(args, "update_baseline", False):
+        immutable_runs = [
+            r for r in site_data.get("runs", [])
+            if r.get("engine") in IMMUTABLE_ENGINES
+        ]
+        immutable_qruns = [
+            q for q in site_data.get("queryRuns", [])
+            if q.get("engine") in IMMUTABLE_ENGINES
+        ]
+        if immutable_runs:
+            baseline_to_save = {
+                "metadata": site_data.get("metadata", {}),
+                "runs": immutable_runs,
+                "queryRuns": immutable_qruns,
+            }
+            save_baseline(baseline_to_save, args.baseline)
 
 else:
     print("No JSON report found in out/")

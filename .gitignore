@@ -29,4 +29,5 @@ site/data/history/
 __pycache__/
 *.pyc
 *.pyo
+python-utils/__pycache__/
 python-utils/datasets/__pycache__/

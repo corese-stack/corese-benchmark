@@ -1,0 +1,2874 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "description": "Frozen reference baseline for immutable engine releases (Corese 4.6.5, Apache Jena 6.2.0, Eclipse RDF4J 5.3.2)",
+    "generatedAt": "2026-10-28T12:00:00Z",
+    "engines": [
+      "corese.4.6.5",
+      "jena.6.2.0",
+      "rdf4j.5.3.2"
+    ],
+    "datasets": [
+      "bowlogna",
+      "bsbm",
+      "dbpedia",
+      "lubm"
+    ],
+    "datasetQueries": {
+      "bowlogna": [
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?MasterTheses)  WHERE {  ?X rdf:type bb:Master_Thesis }    ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?MasterThesesWithMention)     WHERE { ?X rdf:type bb:Master_Thesis .  ?Y rdf:type bb:Mention .  ?Y bb:mentionGivenTo ?X }      ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?studentsWithBachelorDegree)  WHERE {  ?X rdf:type bb:Student .  ?X bb:endsBachelorStudiesOn ?end .  Filter (xsd:dateTime(?end) < NOW()) }  ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?Y) as ?studentsEnrolledAtMaster)  WHERE {  ?Y rdf:type bb:Student .  ?Y bb:enrolledForMasterStudiesOn ?start . Filter (xsd:dateTime(?start) < NOW()) }  ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (SUM(?credits) as ?ECTSCredits)  WHERE {  ?X rdf:type bb:Student .    ?Y rdf:type bb:Evaluation .    ?Z rdf:type bb:Teaching_Unit .    ?X bb:hasFamilyName \"Department0StudentFamilyName0\"^^<http://www.w3.org/2001/XMLSchema#string> .     ?X bb:hasFirstName \"Department0StudentFirstName0\"^^<http://www.w3.org/2001/XMLSchema#string>  .    ?Y bb:performedByStudent ?X .    ?Y bb:evaluatesTeachingUnit ?Z .    ?Y bb:hasMark ?M  .    ?Z bb:hasNumberOfECTS ?credits }     ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?S  WHERE{  ?S rdf:type bb:Student .  ?S bb:hasFamilyName ?ln   FILTER (regex(?ln, \"^D\")) }        ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?P1 ?O1 ?P2 ?O2  WHERE {  ?S rdf:type bb:Student .  ?S bb:hasFamilyName \"Department0StudentFamilyName0\"^^<http://www.w3.org/2001/XMLSchema#string> .  ?S bb:hasFirstName \"Department0StudentFirstName0\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?S ?P1 ?O1 .  ?O1 ?P2 ?O2 }  ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT DISTINCT ?X (count(?E) as ?FailuresForTeachingUnit) WHERE {  ?X rdf:type bb:Teaching_Unit .  ?E rdf:type bb:Evaluation .\t  ?E bb:evaluatesTeachingUnit ?X .  ?E bb:hasMark ?Y . FILTER (?Y < 3) }  GROUP BY ?X    ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X (count(?E) as ?EvaluationsForTeachingUnit)  WHERE {  ?X rdf:type bb:Teaching_Unit .  ?E rdf:type bb:Evaluation .\t  ?E bb:evaluatesTeachingUnit ?X }  GROUP BY ?X      ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X (COUNT(?Y) as ?numOfThesisSupervised)  WHERE {   ?X rdf:type bb:Professor .   ?Y rdf:type ?tType .   ?Y bb:supervisedBy ?X .  FILTER REGEX (?tType, 'Thesis', 'i')  }  ORDER BY DESC(?numOfThesisSupervised)  LIMIT 1     ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X (AVG(?M) as ?avgMark)  WHERE {  ?X rdf:type bb:Student .   ?Y rdf:type bb:Evaluation .  ?T rdf:type bb:Study_Track .  ?S rdf:type bb:Semester .  ?T bb:hasName \"Department6Study_Track0\"^^<http://www.w3.org/2001/XMLSchema#string> .  ?S bb:hasName \"Semester0\"^^<http://www.w3.org/2001/XMLSchema#string> .  ?X bb:isInStudyTrack ?T.  ?Y bb:isForSemester ?S .  ?Y bb:performedByStudent ?X .  ?Y bb:hasMark ?M  }  GROUP BY ?X  ORDER BY DESC(?avgMark)  LIMIT 5   ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?T  (AVG(year(xsd:dateTime(?end))-year(xsd:dateTime(?start))) as ?CompletionTime)  WHERE {  ?T rdf:type bb:Study_Track .  ?X rdf:type bb:Student .  ?X bb:enrolledForBachelorStudiesOn ?start .  ?X bb:endsBachelorStudiesOn ?end .  ?X bb:isInStudyTrack ?T }  GROUP BY ?T ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (AVG(?mark) as ?AverageSemester1)  WHERE {  ?X rdf:type bb:Evaluation .  ?Y rdf:type bb:Teaching_Unit .  ?Z rdf:type bb:Semester .  ?X bb:evaluatesTeachingUnit ?Y .  ?X bb:isForSemester ?Z .  ?Z bb:hasName \"Semester1\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?X bb:hasMark ?mark }      ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?FamName ?FirstName  WHERE {  ?X rdf:type bb:Student .  ?Y rdf:type bb:Professor .  ?Z rdf:type bb:Evaluation .  ?D rdf:type bb:Department .  ?Z bb:performedByStudent ?X .  ?Z bb:evaluatedByProfessor ?Y .  ?Y bb:isAffiliatedWithDepartment ?D .  ?X bb:hasFamilyName ?FamName .  ?X bb:hasFirstName ?FirstName .  ?D bb:hasName \"Department0\"^^<http://www.w3.org/2001/XMLSchema#string>  }      ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT ?X  WHERE{  \t?X rdf:type bb:Teaching_Unit .  \t?X bb:isTaughtInLang \"EN\"^^<http://www.w3.org/2001/XMLSchema#string> .  \t?X bb:hasName \"Department0Teaching_Unit0\"^^<http://www.w3.org/2001/XMLSchema#string> }      ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?BachelorStudentsSemester0)  WHERE {  ?X rdf:type bb:Student .  ?S rdf:type bb:Semester .  ?S bb:hasName \"Semester0\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?S bb:beginsOnDate ?start .  ?S bb:endsOnDate ?end .  ?X bb:enrolledForBachelorStudiesOn ?Y .  FILTER (xsd:dateTime(?Y) <= xsd:dateTime(?end)  && xsd:dateTime(?Y) >= xsd:dateTime(?start)) }  ",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>  PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#>  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>  SELECT (COUNT(?X) as ?MasterStudentsSemester0)  WHERE {  ?X rdf:type bb:Student .  ?S rdf:type bb:Semester .  ?S bb:hasName \"Semester0\"^^<http://www.w3.org/2001/XMLSchema#string>  .  ?S bb:beginsOnDate ?start .  ?S bb:endsOnDate ?end .  ?X bb:enrolledForMasterStudiesOn ?Y .  FILTER (xsd:dateTime(?Y) <= xsd:dateTime(?end)  && xsd:dateTime(?Y) >= xsd:dateTime(?start)) }    "
+      ],
+      "bsbm": [
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT DISTINCT ?product ?label WHERE { ?product rdfs:label ?label . ?product a bsbm-inst:ProductType1 . ?product bsbm:productFeature bsbm-inst:ProductFeature1 . ?product bsbm:productFeature bsbm-inst:ProductFeature2 . ?product bsbm:productPropertyNumeric1 ?value1 . FILTER (?value1 > 100) } ORDER BY ?label LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?product ?label ?comment WHERE { ?product rdfs:label ?label . ?product rdfs:comment ?comment . ?product bsbm:productFeature bsbm-inst:ProductFeature1 . ?product bsbm:productFeature bsbm-inst:ProductFeature2 . ?product bsbm:productPropertyNumeric1 ?p1 . FILTER ( ?p1 > 100 ) ?product bsbm:productPropertyNumeric3 ?p3 . FILTER (?p3 < 500 ) } ORDER BY ?label LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT ?product ?label WHERE { ?product rdfs:label ?label . ?product bsbm:productFeature bsbm-inst:ProductFeature1 . ?product bsbm:productPropertyNumeric1 ?p1 . FILTER ( ?p1 > 300 ) ?product bsbm:productPropertyNumeric3 ?p3 . FILTER (?p3 < 400 ) } ORDER BY ?label LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> SELECT ?product ?label ?propertyTextual WHERE { ?product rdfs:label ?label . ?product rdfs:comment ?propertyTextual . ?product bsbm:productFeature bsbm-inst:ProductFeature1 . ?product rdf:type bsbm-inst:ProductType2 . ?product bsbm:productPropertyNumeric1 ?p1 . FILTER ( ?p1 > 600 ) } ORDER BY ?label LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX dc: <http://purl.org/dc/elements/1.1/> SELECT DISTINCT ?product ?productLabel WHERE { ?product rdfs:label ?productLabel . FILTER (?product != bsbm-inst:Product1) ?product bsbm:productFeature ?prodFeature . bsbm-inst:Product1 bsbm:productFeature ?prodFeature . ?product bsbm:productPropertyNumeric1 ?simProperty1 . bsbm-inst:Product1 bsbm:productPropertyNumeric1 ?origProperty1 . FILTER (?simProperty1 < (?origProperty1 + 120) && ?simProperty1 > (?origProperty1 - 120)) ?product bsbm:productPropertyNumeric2 ?simProperty2 . bsbm-inst:Product1 bsbm:productPropertyNumeric2 ?origProperty2 . FILTER (?simProperty2 < (?origProperty2 + 170) && ?simProperty2 > (?origProperty2 - 170)) } ORDER BY ?productLabel LIMIT 5",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX rev: <http://purl.org/stuff/rev#> SELECT ?product ?label ?comment ?reviewer ?reviewDate ?title ?text ?rating1 ?rating2 WHERE { bsbm-inst:Product1 rdfs:label ?label . bsbm-inst:Product1 rdfs:comment ?comment . ?review bsbm:reviewFor bsbm-inst:Product1 . ?review rev:reviewer ?reviewer . ?review dc:date ?reviewDate . ?review dc:title ?title . ?review rev:text ?text . OPTIONAL { ?review bsbm:rating1 ?rating1 . } OPTIONAL { ?review bsbm:rating2 ?rating2 . } } ORDER BY DESC(?reviewDate) LIMIT 20",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> PREFIX rev: <http://purl.org/stuff/rev#> SELECT ?productLabel ?offer ?price ?vendor ?vendorTitle ?reviewDate ?reviewer ?reviewTitle ?rating1 ?rating2 WHERE { bsbm-inst:Product1 rdfs:label ?productLabel . ?offer bsbm:product bsbm-inst:Product1 . ?offer bsbm:price ?price . ?offer bsbm:vendor ?vendor . ?vendor rdfs:label ?vendorTitle . OPTIONAL { ?review bsbm:reviewFor bsbm-inst:Product1 . ?review dc:date ?reviewDate . ?review rev:reviewer ?reviewer . ?review dc:title ?reviewTitle . OPTIONAL { ?review bsbm:rating1 ?rating1 . } OPTIONAL { ?review bsbm:rating2 ?rating2 . } } } ORDER BY ?price LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?offer ?price WHERE { ?offer bsbm:product bsbm-inst:Product1 . ?offer bsbm:vendor ?vendor . ?vendor bsbm:country <http://downlode.org/rdf/iso-3166/countries#DE> . ?offer bsbm:deliveryDays ?deliveryDays . FILTER (?deliveryDays <= 3) ?offer bsbm:price ?price . } ORDER BY ?price LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> PREFIX rev: <http://purl.org/stuff/rev#> SELECT DISTINCT ?reviewer WHERE { ?review bsbm:reviewFor bsbm-inst:Product1 . ?review bsbm:rating1 ?rating1 . ?review rev:reviewer ?reviewer . FILTER(?rating1 > 5) }",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT DISTINCT ?offer ?price WHERE { ?offer bsbm:product ?product . ?product a bsbm-inst:ProductType1 . ?offer bsbm:price ?price . ?offer bsbm:vendor ?vendor . ?vendor bsbm:country <http://downlode.org/rdf/iso-3166/countries#US> . } ORDER BY ?price LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> PREFIX rev: <http://purl.org/stuff/rev#> SELECT ?product ?label (AVG(?rating) AS ?avgRating) WHERE { ?review bsbm:reviewFor ?product . ?product rdfs:label ?label . ?product a bsbm-inst:ProductType1 . ?review bsbm:rating1 ?rating . } GROUP BY ?product ?label ORDER BY DESC(?avgRating) LIMIT 10",
+        "PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/> PREFIX bsbm-inst: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX dc: <http://purl.org/dc/elements/1.1/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> PREFIX rev: <http://purl.org/stuff/rev#> SELECT ?product ?label ?rating1 ?rating2 WHERE { { SELECT ?product (AVG(?rating1) AS ?rating1) (AVG(?rating2) AS ?rating2) WHERE { ?review bsbm:reviewFor ?product . OPTIONAL { ?review bsbm:rating1 ?rating1 . } OPTIONAL { ?review bsbm:rating2 ?rating2 . } } GROUP BY ?product } ?product rdfs:label ?label . ?product a bsbm-inst:ProductType1 . } ORDER BY DESC(?rating1) LIMIT 10"
+      ],
+      "lubm": [
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:GraduateStudent . ?X ub:takesCourse <http://www.Department0.University0.edu/GraduateCourse0> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X ?Y ?Z WHERE { ?X rdf:type ub:GraduateStudent . ?Y rdf:type ub:University . ?Z rdf:type ub:Department . ?X ub:memberOf ?Z . ?Z ub:subOrganizationOf ?Y . ?X ub:undergraduateDegreeFrom ?Y }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:Publication . ?X ub:publicationAuthor <http://www.Department0.University0.edu/AssistantProfessor0> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X ?Y1 ?Y2 ?Y3 WHERE { ?X rdf:type ub:Professor . ?X ub:worksFor <http://www.Department0.University0.edu> . ?X ub:name ?Y1 . ?X ub:emailAddress ?Y2 . ?X ub:telephone ?Y3 }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:Person . ?X ub:memberOf <http://www.Department0.University0.edu> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:Student . ?X ub:takesCourse <http://www.Department0.University0.edu/GraduateCourse0> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X ?Y WHERE { ?X rdf:type ub:Student . ?Y rdf:type ub:Department . ?X ub:memberOf ?Y . ?Y ub:subOrganizationOf <http://www.University0.edu> . ?X ub:emailAddress ?Z }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X ?Y ?Z WHERE { ?X rdf:type ub:Student . ?Y rdf:type ub:Department . ?Z rdf:type ub:Publication . ?X ub:memberOf ?Y . ?Y ub:subOrganizationOf <http://www.University0.edu> . ?Z ub:publicationAuthor ?X }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X ?Y ?Z WHERE { ?X rdf:type ub:Student . ?Y rdf:type ub:Faculty . ?Z rdf:type ub:Course . ?X ub:advisor ?Y . ?X ub:takesCourse ?Z . ?Y ub:teacherOf ?Z }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:Student . ?X ub:takesCourse <http://www.Department0.University0.edu/GraduateCourse0> . ?X ub:takesCourse <http://www.Department0.University0.edu/GraduateCourse1> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:ResearchGroup . ?X ub:subOrganizationOf <http://www.University0.edu> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X ?Y WHERE { ?X rdf:type ub:Chair . ?Y rdf:type ub:Department . ?X ub:worksFor ?Y . ?Y ub:subOrganizationOf <http://www.University0.edu> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:Person . ?X ub:hasAlumnus <http://www.University0.edu> }",
+        "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#> SELECT ?X WHERE { ?X rdf:type ub:Student . ?X ub:takesCourse <http://www.Department0.University0.edu/UndergraduateCourse0> }"
+      ]
+    },
+    "protocol": {
+      "warmup": 1,
+      "repetitions": 3,
+      "queryRepetitions": 3
+    }
+  },
+  "runs": [
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "file": "Department0.nt",
+      "triples": 1233512,
+      "loadingTimeMs": 22189,
+      "throughputTriplesPerSec": 55591.14876740727,
+      "memoryBeforeMb": 7.062347412109375,
+      "memoryAfterMb": 98.85079956054688,
+      "memoryDeltaMb": 91.7884521484375,
+      "cpuPercent": 13.041283374467131,
+      "repetitionsMs": [
+        22442,
+        22169,
+        22189
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "Department0.nt",
+      "triples": 1233512,
+      "loadingTimeMs": 4483,
+      "throughputTriplesPerSec": 275153.245594468,
+      "memoryBeforeMb": 14.462791442871094,
+      "memoryAfterMb": 154.21371459960938,
+      "memoryDeltaMb": 139.75092315673828,
+      "cpuPercent": 15.697963238946846,
+      "repetitionsMs": [
+        4445,
+        4483,
+        4510
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "Department0.nt",
+      "triples": 1233512,
+      "loadingTimeMs": 4686,
+      "throughputTriplesPerSec": 263233.46137430647,
+      "memoryBeforeMb": 12.607925415039062,
+      "memoryAfterMb": 225.08563232421875,
+      "memoryDeltaMb": 212.4777069091797,
+      "cpuPercent": 16.217564870259483,
+      "repetitionsMs": [
+        4686,
+        4527,
+        4908
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "file": "bsbm_small.nt",
+      "triples": 374911,
+      "loadingTimeMs": 8596,
+      "throughputTriplesPerSec": 43614.58818054909,
+      "memoryBeforeMb": 10.107162475585938,
+      "memoryAfterMb": 56.939414978027344,
+      "memoryDeltaMb": 46.832252502441406,
+      "cpuPercent": 0.0,
+      "repetitionsMs": [
+        8596
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "file": "bsbm_small.nt",
+      "triples": 374911,
+      "loadingTimeMs": 1344,
+      "throughputTriplesPerSec": 278951.6369047619,
+      "memoryBeforeMb": 8.53924560546875,
+      "memoryAfterMb": 149.64649200439453,
+      "memoryDeltaMb": 141.10724639892578,
+      "cpuPercent": 16.48982243395409,
+      "repetitionsMs": [
+        1344
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "file": "bsbm_small.nt",
+      "triples": 374911,
+      "loadingTimeMs": 1068,
+      "throughputTriplesPerSec": 351040.26217228465,
+      "memoryBeforeMb": 308.1038513183594,
+      "memoryAfterMb": 98.8679428100586,
+      "memoryDeltaMb": -209.23590850830078,
+      "cpuPercent": 31.0641110376735,
+      "repetitionsMs": [
+        1068
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "category_labels_en.nt",
+      "triples": 565108,
+      "loadingTimeMs": 14203,
+      "throughputTriplesPerSec": 39787.93212701542,
+      "memoryBeforeMb": 6.978599548339844,
+      "memoryAfterMb": 208.1640625,
+      "memoryDeltaMb": 201.18546295166016,
+      "cpuPercent": 13.848469643753136,
+      "repetitionsMs": [
+        15827,
+        13670,
+        14203
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "disambiguations_en.nt",
+      "triples": 768924,
+      "loadingTimeMs": 15171,
+      "throughputTriplesPerSec": 50683.80462724936,
+      "memoryBeforeMb": 7.1616668701171875,
+      "memoryAfterMb": 168.5301742553711,
+      "memoryDeltaMb": 161.3685073852539,
+      "cpuPercent": 13.486149360116636,
+      "repetitionsMs": [
+        15260,
+        15171,
+        15169
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "homepages_en.nt",
+      "triples": 394897,
+      "loadingTimeMs": 7378,
+      "throughputTriplesPerSec": 53523.583626999185,
+      "memoryBeforeMb": 7.162193298339844,
+      "memoryAfterMb": 135.44969177246094,
+      "memoryDeltaMb": 128.2874984741211,
+      "cpuPercent": 14.129548050252897,
+      "repetitionsMs": [
+        5523,
+        7752,
+        7378
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "persondata_en.nt",
+      "triples": 356996,
+      "loadingTimeMs": 5475,
+      "throughputTriplesPerSec": 65204.74885844749,
+      "memoryBeforeMb": 7.1819000244140625,
+      "memoryAfterMb": 53.2972412109375,
+      "memoryDeltaMb": 46.11534118652344,
+      "cpuPercent": 13.756494239891575,
+      "repetitionsMs": [
+        6044,
+        5475,
+        5393
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "dbpedia",
+      "file": "specific_mappingbased_properties_en.nt",
+      "triples": 184083,
+      "loadingTimeMs": 3387,
+      "throughputTriplesPerSec": 54349.86713906111,
+      "memoryBeforeMb": 7.185089111328125,
+      "memoryAfterMb": 43.16480255126953,
+      "memoryDeltaMb": 35.979713439941406,
+      "cpuPercent": 13.707945597709376,
+      "repetitionsMs": [
+        3300,
+        3433,
+        3387
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "category_labels_en.nt",
+      "triples": 565108,
+      "loadingTimeMs": 1357,
+      "throughputTriplesPerSec": 416439.2041267502,
+      "memoryBeforeMb": 40.257720947265625,
+      "memoryAfterMb": 310.99971771240234,
+      "memoryDeltaMb": 270.7419967651367,
+      "cpuPercent": 23.538011695906434,
+      "repetitionsMs": [
+        1316,
+        1357,
+        1361
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "disambiguations_en.nt",
+      "triples": 765124,
+      "loadingTimeMs": 1474,
+      "throughputTriplesPerSec": 519080.0542740841,
+      "memoryBeforeMb": 56.25794982910156,
+      "memoryAfterMb": 233.38075256347656,
+      "memoryDeltaMb": 177.122802734375,
+      "cpuPercent": 20.66234701223902,
+      "repetitionsMs": [
+        1447,
+        1477,
+        1474
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "homepages_en.nt",
+      "triples": 394897,
+      "loadingTimeMs": 843,
+      "throughputTriplesPerSec": 468442.46737841045,
+      "memoryBeforeMb": 56.266258239746094,
+      "memoryAfterMb": 184.36931610107422,
+      "memoryDeltaMb": 128.10305786132812,
+      "cpuPercent": 22.906976744186046,
+      "repetitionsMs": [
+        828,
+        845,
+        843
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "persondata_en.nt",
+      "triples": 356914,
+      "loadingTimeMs": 704,
+      "throughputTriplesPerSec": 506980.11363636365,
+      "memoryBeforeMb": 56.35273742675781,
+      "memoryAfterMb": 141.7273712158203,
+      "memoryDeltaMb": 85.3746337890625,
+      "cpuPercent": 21.87938288920056,
+      "repetitionsMs": [
+        655,
+        704,
+        718
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "dbpedia",
+      "file": "specific_mappingbased_properties_en.nt",
+      "triples": 182530,
+      "loadingTimeMs": 403,
+      "throughputTriplesPerSec": 452928.0397022332,
+      "memoryBeforeMb": 56.358154296875,
+      "memoryAfterMb": 111.53369140625,
+      "memoryDeltaMb": 55.175537109375,
+      "cpuPercent": 22.541966426858515,
+      "repetitionsMs": [
+        411,
+        403,
+        401
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "category_labels_en.nt",
+      "triples": 565108,
+      "loadingTimeMs": 1726,
+      "throughputTriplesPerSec": 327409.0382387022,
+      "memoryBeforeMb": 8.748420715332031,
+      "memoryAfterMb": 492.7288360595703,
+      "memoryDeltaMb": 483.9807357788086,
+      "cpuPercent": 24.525230602278896,
+      "repetitionsMs": [
+        1600,
+        1726,
+        1752
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "disambiguations_en.nt",
+      "triples": 765124,
+      "loadingTimeMs": 2071,
+      "throughputTriplesPerSec": 369446.6441332689,
+      "memoryBeforeMb": 8.75140380859375,
+      "memoryAfterMb": 492.3350601196289,
+      "memoryDeltaMb": 483.58365631103516,
+      "cpuPercent": 22.813688212927758,
+      "repetitionsMs": [
+        1964,
+        2071,
+        2080
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "homepages_en.nt",
+      "triples": 394590,
+      "loadingTimeMs": 2585,
+      "throughputTriplesPerSec": 152646.0348162476,
+      "memoryBeforeMb": 8.766502380371094,
+      "memoryAfterMb": 408.72888946533203,
+      "memoryDeltaMb": 399.96238708496094,
+      "cpuPercent": 22.13552361396304,
+      "repetitionsMs": [
+        2542,
+        2585,
+        2608
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "persondata_en.nt",
+      "triples": 356914,
+      "loadingTimeMs": 804,
+      "throughputTriplesPerSec": 443922.8855721393,
+      "memoryBeforeMb": 8.791969299316406,
+      "memoryAfterMb": 94.76078796386719,
+      "memoryDeltaMb": 85.96881866455078,
+      "cpuPercent": 20.561941251596423,
+      "repetitionsMs": [
+        814,
+        800,
+        804
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "dbpedia",
+      "file": "specific_mappingbased_properties_en.nt",
+      "triples": 182530,
+      "loadingTimeMs": 503,
+      "throughputTriplesPerSec": 362882.703777336,
+      "memoryBeforeMb": 8.793426513671875,
+      "memoryAfterMb": 109.1851806640625,
+      "memoryDeltaMb": 100.39175415039062,
+      "cpuPercent": 23.220973782771537,
+      "repetitionsMs": [
+        493,
+        504,
+        503
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "file": "lubm_small.nt",
+      "triples": 102737,
+      "loadingTimeMs": 1844,
+      "throughputTriplesPerSec": 55714.2082429501,
+      "memoryBeforeMb": 10.103630065917969,
+      "memoryAfterMb": 15.656852722167969,
+      "memoryDeltaMb": 5.55322265625,
+      "cpuPercent": 0.0,
+      "repetitionsMs": [
+        1844
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "file": "lubm_small.nt",
+      "triples": 100573,
+      "loadingTimeMs": 510,
+      "throughputTriplesPerSec": 197201.96078431373,
+      "memoryBeforeMb": 8.511390686035156,
+      "memoryAfterMb": 38.53459930419922,
+      "memoryDeltaMb": 30.023208618164062,
+      "cpuPercent": 24.195804195804193,
+      "repetitionsMs": [
+        510
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "file": "lubm_small.nt",
+      "triples": 100573,
+      "loadingTimeMs": 367,
+      "throughputTriplesPerSec": 274040.8719346049,
+      "memoryBeforeMb": 72.47615051269531,
+      "memoryAfterMb": 90.80664825439453,
+      "memoryDeltaMb": 18.33049774169922,
+      "cpuPercent": 45.9605026929982,
+      "repetitionsMs": [
+        367
+      ]
+    }
+  ],
+  "queryRuns": [
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "medianMs": 8,
+      "repetitionsMs": [
+        295,
+        8,
+        6
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 8,
+      "repetitionsTtfrMs": [
+        295,
+        8,
+        6
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_2",
+      "medianMs": 12,
+      "repetitionsMs": [
+        20,
+        12,
+        9
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 12,
+      "repetitionsTtfrMs": [
+        20,
+        12,
+        9
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_3",
+      "medianMs": 36,
+      "repetitionsMs": [
+        85,
+        36,
+        33
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 36,
+      "repetitionsTtfrMs": [
+        85,
+        36,
+        33
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_4",
+      "medianMs": 15,
+      "repetitionsMs": [
+        15,
+        15,
+        14
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 15,
+      "repetitionsTtfrMs": [
+        15,
+        15,
+        14
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_5",
+      "medianMs": 10,
+      "repetitionsMs": [
+        69,
+        10,
+        10
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 10,
+      "repetitionsTtfrMs": [
+        69,
+        10,
+        10
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_6",
+      "medianMs": 22,
+      "repetitionsMs": [
+        29,
+        22,
+        19
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 22,
+      "repetitionsTtfrMs": [
+        29,
+        22,
+        19
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_7",
+      "medianMs": 11,
+      "repetitionsMs": [
+        9,
+        15,
+        11
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 11,
+      "repetitionsTtfrMs": [
+        9,
+        15,
+        11
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "medianMs": 418,
+      "repetitionsMs": [
+        475,
+        418,
+        412
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 418,
+      "repetitionsTtfrMs": [
+        475,
+        418,
+        412
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_9",
+      "medianMs": 650,
+      "repetitionsMs": [
+        707,
+        650,
+        642
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 650,
+      "repetitionsTtfrMs": [
+        707,
+        650,
+        642
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "medianMs": 22,
+      "repetitionsMs": [
+        29,
+        22,
+        17
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 22,
+      "repetitionsTtfrMs": [
+        29,
+        22,
+        17
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_11",
+      "medianMs": 11,
+      "repetitionsMs": [
+        14,
+        11,
+        11
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 11,
+      "repetitionsTtfrMs": [
+        14,
+        11,
+        11
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_12",
+      "medianMs": 36,
+      "repetitionsMs": [
+        36,
+        43,
+        28
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 36,
+      "repetitionsTtfrMs": [
+        36,
+        43,
+        28
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_13",
+      "medianMs": 330,
+      "repetitionsMs": [
+        331,
+        330,
+        329
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 330,
+      "repetitionsTtfrMs": [
+        331,
+        330,
+        329
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_14",
+      "medianMs": 1378,
+      "repetitionsMs": [
+        1378,
+        1376,
+        1393
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 1378,
+      "repetitionsTtfrMs": [
+        1378,
+        1376,
+        1393
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_15",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        0,
+        1
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_16",
+      "medianMs": 67,
+      "repetitionsMs": [
+        71,
+        67,
+        64
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 67,
+      "repetitionsTtfrMs": [
+        71,
+        67,
+        64
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bowlogna",
+      "queryId": "query_17",
+      "medianMs": 12,
+      "repetitionsMs": [
+        12,
+        11,
+        12
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 12,
+      "repetitionsTtfrMs": [
+        12,
+        11,
+        12
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "medianMs": 8,
+      "repetitionsMs": [
+        136,
+        8,
+        3
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 8,
+      "repetitionsTtfrMs": [
+        136,
+        8,
+        3
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_2",
+      "medianMs": 15,
+      "repetitionsMs": [
+        20,
+        15,
+        11
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 15,
+      "repetitionsTtfrMs": [
+        20,
+        15,
+        11
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_3",
+      "medianMs": 94,
+      "repetitionsMs": [
+        137,
+        94,
+        89
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 94,
+      "repetitionsTtfrMs": [
+        137,
+        94,
+        89
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_4",
+      "medianMs": 51,
+      "repetitionsMs": [
+        72,
+        47,
+        51
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 51,
+      "repetitionsTtfrMs": [
+        72,
+        47,
+        51
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_5",
+      "medianMs": 5,
+      "repetitionsMs": [
+        5,
+        3,
+        6
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 5,
+      "repetitionsTtfrMs": [
+        5,
+        3,
+        6
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_6",
+      "medianMs": 67,
+      "repetitionsMs": [
+        109,
+        67,
+        35
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 67,
+      "repetitionsTtfrMs": [
+        109,
+        67,
+        35
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_7",
+      "medianMs": 2,
+      "repetitionsMs": [
+        5,
+        2,
+        2
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        5,
+        2,
+        2
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "medianMs": 472,
+      "repetitionsMs": [
+        619,
+        439,
+        472
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 472,
+      "repetitionsTtfrMs": [
+        619,
+        439,
+        472
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_9",
+      "medianMs": 397,
+      "repetitionsMs": [
+        486,
+        397,
+        381
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 397,
+      "repetitionsTtfrMs": [
+        486,
+        397,
+        381
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "medianMs": -1,
+      "repetitionsMs": [
+        -1,
+        -1,
+        -1
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": -1,
+      "repetitionsTtfrMs": [
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_11",
+      "medianMs": 3,
+      "repetitionsMs": [
+        7,
+        3,
+        2
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 3,
+      "repetitionsTtfrMs": [
+        7,
+        3,
+        2
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_12",
+      "medianMs": 124,
+      "repetitionsMs": [
+        161,
+        124,
+        89
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 124,
+      "repetitionsTtfrMs": [
+        161,
+        124,
+        89
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_13",
+      "medianMs": 38,
+      "repetitionsMs": [
+        38,
+        46,
+        37
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 38,
+      "repetitionsTtfrMs": [
+        38,
+        46,
+        37
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_14",
+      "medianMs": 622,
+      "repetitionsMs": [
+        946,
+        622,
+        597
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 622,
+      "repetitionsTtfrMs": [
+        946,
+        622,
+        597
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_15",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        4,
+        2
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        4,
+        2
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_16",
+      "medianMs": 67,
+      "repetitionsMs": [
+        68,
+        67,
+        67
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 67,
+      "repetitionsTtfrMs": [
+        68,
+        67,
+        67
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_17",
+      "medianMs": 16,
+      "repetitionsMs": [
+        16,
+        16,
+        16
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 16,
+      "repetitionsTtfrMs": [
+        16,
+        16,
+        16
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "medianMs": 5,
+      "repetitionsMs": [
+        104,
+        5,
+        4
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 5,
+      "repetitionsTtfrMs": [
+        104,
+        5,
+        4
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_2",
+      "medianMs": 16,
+      "repetitionsMs": [
+        35,
+        16,
+        7
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 16,
+      "repetitionsTtfrMs": [
+        35,
+        16,
+        7
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_3",
+      "medianMs": 39,
+      "repetitionsMs": [
+        100,
+        39,
+        33
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 39,
+      "repetitionsTtfrMs": [
+        100,
+        39,
+        33
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_4",
+      "medianMs": 11,
+      "repetitionsMs": [
+        17,
+        11,
+        10
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 11,
+      "repetitionsTtfrMs": [
+        17,
+        11,
+        10
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_5",
+      "medianMs": 9,
+      "repetitionsMs": [
+        10,
+        8,
+        9
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 9,
+      "repetitionsTtfrMs": [
+        10,
+        8,
+        9
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_6",
+      "medianMs": 30,
+      "repetitionsMs": [
+        61,
+        30,
+        27
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 30,
+      "repetitionsTtfrMs": [
+        61,
+        30,
+        27
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_7",
+      "medianMs": 4,
+      "repetitionsMs": [
+        7,
+        4,
+        3
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 4,
+      "repetitionsTtfrMs": [
+        7,
+        4,
+        3
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "medianMs": 220,
+      "repetitionsMs": [
+        442,
+        220,
+        199
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 220,
+      "repetitionsTtfrMs": [
+        442,
+        220,
+        199
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_9",
+      "medianMs": 113,
+      "repetitionsMs": [
+        118,
+        113,
+        106
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 113,
+      "repetitionsTtfrMs": [
+        118,
+        113,
+        106
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "medianMs": -1,
+      "repetitionsMs": [
+        -1,
+        -1,
+        -1
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": -1,
+      "repetitionsTtfrMs": [
+        -1,
+        -1,
+        -1
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_11",
+      "medianMs": 6,
+      "repetitionsMs": [
+        49,
+        6,
+        4
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 6,
+      "repetitionsTtfrMs": [
+        49,
+        6,
+        4
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_12",
+      "medianMs": 29,
+      "repetitionsMs": [
+        36,
+        29,
+        20
+      ],
+      "queryCategory": "GROUP_BY",
+      "medianTtfrMs": 29,
+      "repetitionsTtfrMs": [
+        36,
+        29,
+        20
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_13",
+      "medianMs": 22,
+      "repetitionsMs": [
+        30,
+        22,
+        14
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 22,
+      "repetitionsTtfrMs": [
+        30,
+        22,
+        14
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_14",
+      "medianMs": 443,
+      "repetitionsMs": [
+        443,
+        686,
+        322
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 443,
+      "repetitionsTtfrMs": [
+        443,
+        686,
+        322
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_15",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        2
+      ],
+      "queryCategory": "GRAPH_PATTERN",
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_16",
+      "medianMs": 29,
+      "repetitionsMs": [
+        33,
+        28,
+        29
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 29,
+      "repetitionsTtfrMs": [
+        33,
+        28,
+        29
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_17",
+      "medianMs": 5,
+      "repetitionsMs": [
+        5,
+        5,
+        5
+      ],
+      "queryCategory": "TEMPORAL",
+      "medianTtfrMs": 5,
+      "repetitionsTtfrMs": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_1",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 23,
+      "repetitionsMs": [
+        103,
+        23,
+        20
+      ],
+      "medianTtfrMs": 23,
+      "repetitionsTtfrMs": [
+        103,
+        23,
+        20
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_2",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 17,
+      "repetitionsMs": [
+        17,
+        16,
+        17
+      ],
+      "medianTtfrMs": 17,
+      "repetitionsTtfrMs": [
+        17,
+        16,
+        17
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_3",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 19,
+      "repetitionsMs": [
+        19,
+        17,
+        19
+      ],
+      "medianTtfrMs": 19,
+      "repetitionsTtfrMs": [
+        19,
+        17,
+        19
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_4",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 21,
+      "repetitionsMs": [
+        21,
+        21,
+        19
+      ],
+      "medianTtfrMs": 21,
+      "repetitionsTtfrMs": [
+        21,
+        21,
+        19
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_5",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 46,
+      "repetitionsMs": [
+        46,
+        47,
+        45
+      ],
+      "medianTtfrMs": 46,
+      "repetitionsTtfrMs": [
+        46,
+        47,
+        45
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_6",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        3,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        3,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_7",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        2,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_8",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_9",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        0,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        0,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_10",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 134,
+      "repetitionsMs": [
+        223,
+        134,
+        103
+      ],
+      "medianTtfrMs": 134,
+      "repetitionsTtfrMs": [
+        223,
+        134,
+        103
+      ],
+      "heapDeltaMb": 148.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_11",
+      "queryCategory": "GROUP_BY",
+      "medianMs": 75,
+      "repetitionsMs": [
+        75,
+        112,
+        57
+      ],
+      "medianTtfrMs": 75,
+      "repetitionsTtfrMs": [
+        75,
+        112,
+        57
+      ],
+      "heapDeltaMb": 80.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "bsbm",
+      "queryId": "query_12",
+      "queryCategory": "SUBQUERY",
+      "medianMs": 152,
+      "repetitionsMs": [
+        185,
+        152,
+        140
+      ],
+      "medianTtfrMs": 152,
+      "repetitionsTtfrMs": [
+        185,
+        152,
+        140
+      ],
+      "heapDeltaMb": 168.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_1",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 10,
+      "repetitionsMs": [
+        91,
+        6,
+        10
+      ],
+      "medianTtfrMs": 10,
+      "repetitionsTtfrMs": [
+        91,
+        6,
+        10
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_2",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 4,
+      "repetitionsMs": [
+        9,
+        3,
+        4
+      ],
+      "medianTtfrMs": 4,
+      "repetitionsTtfrMs": [
+        9,
+        3,
+        4
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_3",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 3,
+      "repetitionsMs": [
+        9,
+        3,
+        2
+      ],
+      "medianTtfrMs": 3,
+      "repetitionsTtfrMs": [
+        8,
+        3,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_4",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 3,
+      "repetitionsMs": [
+        5,
+        2,
+        3
+      ],
+      "medianTtfrMs": 3,
+      "repetitionsTtfrMs": [
+        5,
+        2,
+        3
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_5",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 72,
+      "repetitionsMs": [
+        106,
+        72,
+        58
+      ],
+      "medianTtfrMs": 72,
+      "repetitionsTtfrMs": [
+        106,
+        72,
+        58
+      ],
+      "heapDeltaMb": 32.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_6",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        5,
+        2,
+        1
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        5,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_7",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        1,
+        2,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        1,
+        2,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_8",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        2,
+        1
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_9",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        1,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_10",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 80,
+      "repetitionsMs": [
+        85,
+        80,
+        58
+      ],
+      "medianTtfrMs": 80,
+      "repetitionsTtfrMs": [
+        85,
+        80,
+        58
+      ],
+      "heapDeltaMb": 40.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_11",
+      "queryCategory": "GROUP_BY",
+      "medianMs": 40,
+      "repetitionsMs": [
+        46,
+        40,
+        24
+      ],
+      "medianTtfrMs": 40,
+      "repetitionsTtfrMs": [
+        46,
+        40,
+        24
+      ],
+      "heapDeltaMb": 24.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bsbm",
+      "queryId": "query_12",
+      "queryCategory": "SUBQUERY",
+      "medianMs": 76,
+      "repetitionsMs": [
+        97,
+        76,
+        66
+      ],
+      "medianTtfrMs": 76,
+      "repetitionsTtfrMs": [
+        97,
+        76,
+        66
+      ],
+      "heapDeltaMb": 60.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_1",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 3,
+      "repetitionsMs": [
+        60,
+        3,
+        3
+      ],
+      "medianTtfrMs": 3,
+      "repetitionsTtfrMs": [
+        60,
+        2,
+        3
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_2",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 3,
+      "repetitionsMs": [
+        5,
+        3,
+        3
+      ],
+      "medianTtfrMs": 3,
+      "repetitionsTtfrMs": [
+        5,
+        3,
+        3
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_3",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        3,
+        2,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        2,
+        2
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_4",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        1,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        2
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_5",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        1,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        2
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_6",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        5,
+        1,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        5,
+        1,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_7",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        3,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        3,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_8",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        1,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_9",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        2,
+        1
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_10",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 39,
+      "repetitionsMs": [
+        41,
+        39,
+        37
+      ],
+      "medianTtfrMs": 39,
+      "repetitionsTtfrMs": [
+        41,
+        39,
+        37
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_11",
+      "queryCategory": "GROUP_BY",
+      "medianMs": 43,
+      "repetitionsMs": [
+        60,
+        42,
+        43
+      ],
+      "medianTtfrMs": 43,
+      "repetitionsTtfrMs": [
+        60,
+        42,
+        43
+      ],
+      "heapDeltaMb": 12.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bsbm",
+      "queryId": "query_12",
+      "queryCategory": "SUBQUERY",
+      "medianMs": 45,
+      "repetitionsMs": [
+        49,
+        44,
+        45
+      ],
+      "medianTtfrMs": 45,
+      "repetitionsTtfrMs": [
+        48,
+        44,
+        45
+      ],
+      "heapDeltaMb": 20.0
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_1",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 13,
+      "repetitionsMs": [
+        92,
+        13,
+        7
+      ],
+      "medianTtfrMs": 13,
+      "repetitionsTtfrMs": [
+        92,
+        13,
+        7
+      ],
+      "heapDeltaMb": 5.280113220214844
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_2",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 11,
+      "repetitionsMs": [
+        13,
+        11,
+        9
+      ],
+      "medianTtfrMs": 11,
+      "repetitionsTtfrMs": [
+        13,
+        11,
+        9
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_3",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 11,
+      "repetitionsMs": [
+        11,
+        11,
+        12
+      ],
+      "medianTtfrMs": 11,
+      "repetitionsTtfrMs": [
+        11,
+        11,
+        12
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_4",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_5",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_6",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_7",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_8",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_9",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_10",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_11",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_12",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_13",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "corese.4.6.5",
+      "dataset": "lubm",
+      "queryId": "query_14",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        0,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        0,
+        1,
+        1
+      ],
+      "heapDeltaMb": 2.64007568359375
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_1",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        64,
+        2,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        64,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_2",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 36,
+      "repetitionsMs": [
+        43,
+        36,
+        33
+      ],
+      "medianTtfrMs": 35,
+      "repetitionsTtfrMs": [
+        43,
+        35,
+        33
+      ],
+      "heapDeltaMb": 16.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_3",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        2,
+        1
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_4",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        2,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        2,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_5",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 4,
+      "repetitionsMs": [
+        5,
+        4,
+        4
+      ],
+      "medianTtfrMs": 4,
+      "repetitionsTtfrMs": [
+        5,
+        4,
+        4
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_6",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_7",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 26,
+      "repetitionsMs": [
+        30,
+        26,
+        25
+      ],
+      "medianTtfrMs": 26,
+      "repetitionsTtfrMs": [
+        29,
+        26,
+        25
+      ],
+      "heapDeltaMb": 12.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_8",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 17,
+      "repetitionsMs": [
+        23,
+        17,
+        15
+      ],
+      "medianTtfrMs": 17,
+      "repetitionsTtfrMs": [
+        23,
+        17,
+        15
+      ],
+      "heapDeltaMb": 12.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_9",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_10",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_11",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_12",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 3,
+      "repetitionsMs": [
+        3,
+        3,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        3,
+        2,
+        2
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_13",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "lubm",
+      "queryId": "query_14",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        0
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        0
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_1",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        51,
+        2,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        51,
+        2,
+        2
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_2",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 3,
+      "repetitionsMs": [
+        5,
+        3,
+        2
+      ],
+      "medianTtfrMs": 3,
+      "repetitionsTtfrMs": [
+        5,
+        3,
+        2
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_3",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_4",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        2,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        1
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_5",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 2,
+      "repetitionsMs": [
+        2,
+        1,
+        2
+      ],
+      "medianTtfrMs": 2,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        2
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_6",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        2,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        2,
+        1,
+        1
+      ],
+      "heapDeltaMb": 8.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_7",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_8",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_9",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        2,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_10",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_11",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_12",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 0,
+      "repetitionsMs": [
+        1,
+        0,
+        0
+      ],
+      "medianTtfrMs": 0,
+      "repetitionsTtfrMs": [
+        1,
+        0,
+        0
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_13",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        0,
+        1,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        0,
+        1,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "lubm",
+      "queryId": "query_14",
+      "queryCategory": "GRAPH_PATTERN",
+      "medianMs": 1,
+      "repetitionsMs": [
+        1,
+        2,
+        1
+      ],
+      "medianTtfrMs": 1,
+      "repetitionsTtfrMs": [
+        1,
+        2,
+        1
+      ],
+      "heapDeltaMb": 4.0
+    }
+  ]
+}
