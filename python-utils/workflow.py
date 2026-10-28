@@ -86,6 +86,14 @@ parser.add_argument(
     help="Resume mode: run one engine×dataset at a time, skip if output already exists.",
 )
 parser.add_argument(
+    "--cached-engines",
+    type=str,
+    default=None,
+    metavar="ENGINES",
+    help="Comma-separated engines whose results are read from out/cache/ instead of re-running "
+         "(e.g. 'jena.6.2.0,rdf4j.5.3.2'). Cache miss → runs normally and saves result to cache.",
+)
+parser.add_argument(
     "--quick",
     action="store_true",
     default=False,
@@ -406,6 +414,34 @@ if args.engines:
             extra += [f"-Prdf4jVersion={versions['rdf4j']}"]
         return extra
 
+    cached_engine_set = set()
+    if args.cached_engines:
+        cached_engine_set = {e.strip() for e in args.cached_engines.split(",")}
+    cache_dir = os.path.join(out_json_dir, "cache")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    def get_cached(engine, ds):
+        """Return path to cached JSON for engine×dataset if valid, else None."""
+        safe = engine.replace('.', '_')
+        path = os.path.join(cache_dir, f"{safe}_{ds}.json")
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path) as _f:
+                _d = _json_early.load(_f)
+            if isinstance(_d.get("runs"), list) and len(_d["runs"]) > 0:
+                return path
+        except Exception:
+            pass
+        return None
+
+    def save_to_cache(engine, ds, src_file):
+        """Copy a fresh benchmark result into the cache."""
+        safe = engine.replace('.', '_')
+        dst  = os.path.join(cache_dir, f"{safe}_{ds}.json")
+        shutil.copy2(src_file, dst)
+        print(f"[cache] Saved {engine} × {ds} → {dst}")
+
     local_engines = [e for e in engines_list if needs_local_jar(e)]
     other_engines = [e for e in engines_list if not needs_local_jar(e)]
     engines_tag   = args.engines.replace(',', '_')
@@ -418,23 +454,60 @@ if args.engines:
         ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
         output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engines_tag}.json")
 
-        if local_engines and other_engines:
-            tmp1 = output_file.replace(".json", "_pass1.json")
-            tmp2 = output_file.replace(".json", "_pass2.json")
+        # Split engines into cached (reuse JSON) vs fresh (run benchmark)
+        cached_hits  = {}  # engine → cache file path
+        fresh_engines = []
+        for e in engines_list:
+            if e in cached_engine_set:
+                hit = get_cached(e, ds)
+                if hit:
+                    print(f"[cache] HIT  {e} × {ds} — {hit}")
+                    cached_hits[e] = hit
+                else:
+                    print(f"[cache] MISS {e} × {ds} — will run normally")
+                    fresh_engines.append(e)
+            else:
+                fresh_engines.append(e)
 
-            extra1 = ["-PcoreseVersion=local"]
-            gradle_build(extra1)
-            run_benchmark(",".join(local_engines), tmp1, ds, unzip_dir, gradle_props=extra1)
+        fresh_files = []
+        if fresh_engines:
+            fresh_local  = [e for e in fresh_engines if needs_local_jar(e)]
+            fresh_other  = [e for e in fresh_engines if not needs_local_jar(e)]
 
-            extra2 = build_gradle_props(other_engines)
-            gradle_build(extra2)
-            run_benchmark(",".join(other_engines), tmp2, ds, unzip_dir, gradle_props=extra2)
+            if fresh_local and fresh_other:
+                tmp1 = output_file.replace(".json", "_pass1.json")
+                tmp2 = output_file.replace(".json", "_pass2.json")
 
-            merge_json_files([tmp1, tmp2], output_file)
-        else:
-            extra = build_gradle_props(engines_list)
-            gradle_build(extra)
-            run_benchmark(args.engines, output_file, ds, unzip_dir, gradle_props=extra)
+                extra1 = ["-PcoreseVersion=local"]
+                gradle_build(extra1)
+                run_benchmark(",".join(fresh_local), tmp1, ds, unzip_dir, gradle_props=extra1)
+                for e in fresh_local:
+                    if e in cached_engine_set:
+                        save_to_cache(e, ds, tmp1)
+
+                extra2 = build_gradle_props(fresh_other)
+                gradle_build(extra2)
+                run_benchmark(",".join(fresh_other), tmp2, ds, unzip_dir, gradle_props=extra2)
+                for e in fresh_other:
+                    if e in cached_engine_set:
+                        save_to_cache(e, ds, tmp2)
+
+                fresh_files += [tmp1, tmp2]
+            else:
+                tmp = output_file.replace(".json", "_fresh.json") if cached_hits else output_file
+                extra = build_gradle_props(fresh_engines)
+                gradle_build(extra)
+                run_benchmark(",".join(fresh_engines), tmp, ds, unzip_dir, gradle_props=extra)
+                for e in fresh_engines:
+                    if e in cached_engine_set:
+                        save_to_cache(e, ds, tmp)
+                fresh_files.append(tmp)
+
+        all_parts = list(cached_hits.values()) + fresh_files
+        if len(all_parts) > 1:
+            merge_json_files(all_parts, output_file)
+        elif len(all_parts) == 1 and all_parts[0] != output_file:
+            shutil.copy2(all_parts[0], output_file)
 
         dataset_output_files.append(output_file)
 

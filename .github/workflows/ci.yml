@@ -37,6 +37,10 @@ on:
         required: false
         default: false
         type: boolean
+      cached_engines:
+        description: 'Engines dont les résultats sont lus depuis le cache (ex: jena.6.2.0,rdf4j.5.3.2). Vide = tout re-runner.'
+        required: false
+        default: ''
 
 jobs:
 
@@ -120,7 +124,8 @@ jobs:
           conda activate benchmarkenv
           python python-utils/workflow.py \
             --engines="corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
-            --datasets="dbpedia,bowlogna,lubm"
+            --datasets="dbpedia,bowlogna,lubm" \
+            --cached-engines="jena.6.2.0,rdf4j.5.3.2"
 
       - name: Check site/data output
         run: ls -la ./site/data/
@@ -176,6 +181,7 @@ jobs:
           SCALES: ${{ github.event.inputs.scales }}
           CORESE_COMMIT: ${{ github.event.inputs.corese_commit }}
           DO_INFERENCE: ${{ github.event.inputs.inference }}
+          CACHED_ENGINES: ${{ github.event.inputs.cached_engines }}
         run: |
           CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
@@ -183,6 +189,7 @@ jobs:
           EXTRA=""
           [ -n "$CORESE_COMMIT" ] && EXTRA="$EXTRA --coreseCommits=$CORESE_COMMIT"
           [ "$DO_INFERENCE" = "true" ] && EXTRA="$EXTRA --inference"
+          [ -n "$CACHED_ENGINES" ] && EXTRA="$EXTRA --cached-engines=$CACHED_ENGINES"
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \

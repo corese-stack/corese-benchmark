@@ -1942,13 +1942,17 @@ function renderW3CSection(data) {
 
   // ── Failed tests detail ──
   const failedTests = suites.flatMap(s =>
-    (s.tests ?? []).filter(t => t.status === 'FAILED' || t.outcome === 'FAILED')
+    (s.tests ?? [])
+      .filter(t => (t.status ?? t.outcome) === 'FAILED')
       .map(t => ({ suite: s.name ?? s.id, ...t }))
   );
+  const nCantTell = summary.cantTell ?? 0;
+
   const failedHtml = failedTests.length === 0 ? '' : `
     <details class="w3c-failed-details">
       <summary class="query-summary">
         <span style="color:#f85149;font-weight:600">${failedTests.length} failed test${failedTests.length > 1 ? 's' : ''}</span>
+        ${nCantTell > 0 ? `<span style="color:#d29922;font-weight:600;margin-left:8px">· ${nCantTell} cannot tell (suite-level)</span>` : ''}
       </summary>
       <div class="table-surface" style="margin-top:8px">
         <div class="table-scroll">
