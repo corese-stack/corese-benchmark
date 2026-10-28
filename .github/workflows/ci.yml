@@ -91,7 +91,7 @@ jobs:
       - name: Clean old artifacts (>30 days)
         run: |
           find out/ -name "*.json" -mtime +30 -delete 2>/dev/null || true
-          rm -rf build/ input/
+          rm -rf build/
 
       - name: Build corese.next JAR
         env:

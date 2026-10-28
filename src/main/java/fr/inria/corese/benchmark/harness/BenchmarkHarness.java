@@ -33,7 +33,8 @@ public class BenchmarkHarness {
     private static final Logger log = LoggerFactory.getLogger(BenchmarkHarness.class);
     private final int repetitions;
     private static final int QUERY_REPS = 3;
-    private static final long DEFAULT_QUERY_TIMEOUT_S = 30; // seconds per query execution
+    private static final long DEFAULT_QUERY_TIMEOUT_S  = 30; // seconds per query execution
+    private static final long LOAD_TIMEOUT_MINUTES     = 10; // minutes per file load
     private final long queryTimeoutS;
 
     private final TripleStoreDriver driver;
@@ -84,6 +85,10 @@ public class BenchmarkHarness {
                             String.format(Locale.US, "%-45s | %6d ms %s | %,9d triples | %8.1f MB | %,.0f triples/s",
                                     file.getName(), result.loadingTimeMs(), repStr,
                                     result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                } catch (java.util.concurrent.TimeoutException e) {
+                    log.error("  [{}/{}] {} — LOAD TIMEOUT ({}min, engine={}, dataset={}), skipping file",
+                        fi + 1, files.length, file.getName(),
+                        LOAD_TIMEOUT_MINUTES, driver.getName(), datasetName);
                 } catch (OutOfMemoryError e) {
                     System.gc();
                     log.error("  [{}/{}] {} — OUT OF MEMORY (engine={}, dataset={}, file={}), skipping file",
@@ -264,6 +269,32 @@ public class BenchmarkHarness {
             : sorted[mid];
     }
 
+    private void loadWithTimeout(String path) throws Exception {
+        try (ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "load-" + new File(path).getName());
+            t.setDaemon(true);
+            return t;
+        })) {
+            Future<?> future = exec.submit(() -> {
+                driver.load(path);
+                return null;
+            });
+            try {
+                future.get(LOAD_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                exec.shutdownNow();
+                throw new TimeoutException(
+                    "Load timed out after " + LOAD_TIMEOUT_MINUTES + " min: " + path);
+            } catch (InterruptedException e) {
+                future.cancel(true);
+                exec.shutdownNow();
+                Thread.currentThread().interrupt();
+                throw e;
+            }
+        }
+    }
+
     @SuppressWarnings("java:S1215")
     private FileResult benchmarkFile(File file) throws Exception {
         String path = file.getAbsolutePath();
@@ -272,7 +303,7 @@ public class BenchmarkHarness {
         if (repetitions > 1) {
             driver.clear();
             System.gc();
-            driver.load(path);
+            loadWithTimeout(path);
             driver.clear();
             System.gc();
         }
@@ -289,7 +320,7 @@ public class BenchmarkHarness {
             memBefore[i] = metrics.getUsedMemoryMb();
 
             long start = System.nanoTime();
-            driver.load(path);
+            loadWithTimeout(path);
             timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
 
             cpuSamples[i] = metrics.getCpuPercent();

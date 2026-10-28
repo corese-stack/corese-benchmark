@@ -19,6 +19,7 @@
     <div class="header-top-row">
       <div class="header-brand">
         <span class="brand-title">Corese Benchmark</span>
+        <span class="brand-run-date" id="header-run-date" style="display:none"></span>
       </div>
 
       <div class="comparator-bar">
@@ -139,6 +140,12 @@
 
     <!-- ── Main content ─────────────────────────────────────────────────── -->
     <main class="app-content">
+
+      <div id="empty-state" style="display:none;padding:60px 24px;text-align:center;color:var(--text-muted)">
+        <div style="font-size:40px;margin-bottom:16px">📭</div>
+        <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">Aucune donnée disponible</div>
+        <div style="font-size:13px">Le fichier <code>data/benchmark-report.json</code> est introuvable ou vide.<br>Lance un benchmark ou vérifie la connexion.</div>
+      </div>
 
       <!-- ── Overview ─────────────────────────────────────────────────── -->
       <section class="page-section" id="section-kpi">
