@@ -1,5 +1,6 @@
 package fr.inria.corese.benchmark.driver;
 
+import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
@@ -130,11 +131,38 @@ public class RDF4JDriver implements TripleStoreDriver {
         return System.currentTimeMillis() - start;
     }
 
+    /**
+     * Executes a SPARQL SELECT query and returns full metrics including TTFR and heap delta.
+     * RDF4J {@code TupleQueryResult} is a lazy cursor — TTFR is recorded after the first
+     * {@code result.next()} call.
+     */
+    @Override
+    public QueryMetrics queryWithMetrics(String sparql) {
+        long heapBefore = MetricsCollector.usedHeapBytes();
+        long start = System.currentTimeMillis();
+        long ttfr;
+        long count = 0;
+        try (RepositoryConnection conn = repository.getConnection()) {
+            TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
+            try (TupleQueryResult result = q.evaluate()) {
+                if (result.hasNext()) {
+                    result.next(); count++;
+                    ttfr = System.currentTimeMillis() - start;
+                    while (result.hasNext()) { result.next(); count++; }
+                } else {
+                    ttfr = System.currentTimeMillis() - start;
+                }
+            }
+        }
+        long total = System.currentTimeMillis() - start;
+        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore);
+    }
+
     /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
     @Override
     public long[] queryWithCount(String sparql) {
         long start = System.currentTimeMillis();
-        long count = -1L;
+        long count;
         try (RepositoryConnection conn = repository.getConnection()) {
             TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
             try (TupleQueryResult result = q.evaluate()) {

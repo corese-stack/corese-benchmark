@@ -57,23 +57,25 @@ def _owl_to_nt(owl_file: str, out_f) -> None:
 def prepare(input_dir: str, scales: list[str] | None = None) -> str:
     """
     Generate LUBM datasets for the requested scales.
-    Returns the directory containing the generated .nt files.
+    Returns a directory containing ONLY the .nt files for the requested scales,
+    so the benchmark harness does not accidentally load larger scale files.
     """
     scales = scales or ["small", "medium", "large"]
+    valid_scales = [s for s in scales if s in SCALES]
     tools_dir  = os.path.join(input_dir, "_tools")
-    output_dir = os.path.join(input_dir, "lubm", "unzip")
-    os.makedirs(tools_dir,  exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
+    store_dir  = os.path.join(input_dir, "lubm", "unzip")  # permanent per-scale storage
+    os.makedirs(tools_dir, exist_ok=True)
+    os.makedirs(store_dir, exist_ok=True)
 
     classes_dir = os.path.abspath(_download_uba(tools_dir))
 
-    for scale in scales:
+    for scale in valid_scales:
         if scale not in SCALES:
             print(f"  Unknown scale '{scale}', skipping.")
             continue
 
         n_univ   = SCALES[scale]
-        out_file = os.path.join(output_dir, f"lubm_{scale}.nt")
+        out_file = os.path.join(store_dir, f"lubm_{scale}.nt")
 
         if os.path.exists(out_file):
             print(f"  Already generated: lubm_{scale}.nt")
@@ -109,4 +111,24 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         print(f"  Generated: lubm_{scale}.nt")
 
-    return output_dir
+    # Return a view directory containing only the requested scale files.
+    # This prevents the harness from loading larger scale files that happen
+    # to sit in the same folder (e.g. lubm_large.nt when only small is needed).
+    if len(valid_scales) == len(SCALES):
+        # All scales requested — return the full store directory
+        return store_dir
+
+    view_dir = os.path.join(input_dir, "lubm", "view_" + "_".join(valid_scales))
+    os.makedirs(view_dir, exist_ok=True)
+    # Recreate symlinks / copies so the view always reflects current store
+    for f in os.listdir(view_dir):
+        os.remove(os.path.join(view_dir, f))
+    for scale in valid_scales:
+        src = os.path.join(store_dir, f"lubm_{scale}.nt")
+        dst = os.path.join(view_dir,  f"lubm_{scale}.nt")
+        if os.path.exists(src):
+            try:
+                os.symlink(src, dst)
+            except (OSError, NotImplementedError):
+                shutil.copy2(src, dst)
+    return view_dir

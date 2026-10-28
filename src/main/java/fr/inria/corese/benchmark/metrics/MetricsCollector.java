@@ -60,4 +60,10 @@ public class MetricsCollector {
         if (timeMs <= 0) return 0;
         return triples / (timeMs / 1000.0);
     }
+
+    /** Returns current used heap in bytes without a forced GC. */
+    public static long usedHeapBytes() {
+        Runtime rt = Runtime.getRuntime();
+        return rt.totalMemory() - rt.freeMemory();
+    }
 }

@@ -1,5 +1,6 @@
 package fr.inria.corese.benchmark.driver;
 
+import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.core.Graph;
 import fr.inria.corese.core.load.Load;
 import fr.inria.corese.core.api.Loader;
@@ -13,6 +14,7 @@ import fr.inria.corese.core.rule.RuleEngine;
  * <p>Engine names handled: {@code corese.<version>} and {@code corese.local}.
  * For Corese 5 (new Repositories API) see {@code CoreseNextDriver}.
  */
+@SuppressWarnings("unused")
 public class CoreseDriver implements TripleStoreDriver {
 
     private final String name;
@@ -61,6 +63,22 @@ public class CoreseDriver implements TripleStoreDriver {
         long start = System.currentTimeMillis();
         exec.query(sparql);
         return System.currentTimeMillis() - start;
+    }
+
+    /**
+     * Executes a SPARQL query and returns metrics.
+     * Corese 4.x {@code QueryProcess.query()} materialises all results eagerly,
+     * so TTFR equals total execution time.
+     */
+    @Override
+    public QueryMetrics queryWithMetrics(String sparql) throws Exception {
+        long heapBefore = MetricsCollector.usedHeapBytes();
+        QueryProcess exec = QueryProcess.create(graph);
+        long start = System.currentTimeMillis();
+        var maps = exec.query(sparql);
+        long total = System.currentTimeMillis() - start;
+        long count = maps != null ? maps.size() : -1L;
+        return new QueryMetrics(total, total, count, MetricsCollector.usedHeapBytes() - heapBefore);
     }
 
     /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */

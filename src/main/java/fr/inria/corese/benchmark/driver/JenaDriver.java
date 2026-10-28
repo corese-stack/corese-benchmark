@@ -1,5 +1,6 @@
 package fr.inria.corese.benchmark.driver;
 
+import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import org.apache.jena.query.*;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
@@ -70,6 +71,44 @@ public class JenaDriver implements TripleStoreDriver {
         }
         return System.currentTimeMillis() - start;
     }
+
+    /**
+     * Executes a SPARQL query and returns full metrics including TTFR and heap delta.
+     * For SELECT queries, TTFR is recorded after the first {@code ResultSet.next()} call.
+     * For other query forms, TTFR equals total time (no streaming API).
+     */
+    @Override
+    public QueryMetrics queryWithMetrics(String sparql) {
+        long heapBefore = MetricsCollector.usedHeapBytes();
+        long start = System.currentTimeMillis();
+        long ttfr  = -1L;
+        long count = -1L;
+        try (QueryExecution qe = QueryExecution.model(model).query(sparql).build()) {
+            if (qe.getQuery().isSelectType()) {
+                ResultSet rs = qe.execSelect();
+                count = 0;
+                if (rs.hasNext()) {
+                    rs.next(); count++;
+                    ttfr = System.currentTimeMillis() - start;
+                    while (rs.hasNext()) { rs.next(); count++; }
+                } else {
+                    ttfr = System.currentTimeMillis() - start;
+                }
+            } else if (qe.getQuery().isConstructType()) {
+                qe.execConstruct();
+                ttfr = System.currentTimeMillis() - start;
+            } else if (qe.getQuery().isAskType()) {
+                qe.execAsk();
+                ttfr = System.currentTimeMillis() - start;
+            } else if (qe.getQuery().isDescribeType()) {
+                qe.execDescribe();
+                ttfr = System.currentTimeMillis() - start;
+            }
+        }
+        long total = System.currentTimeMillis() - start;
+        return new QueryMetrics(total, ttfr < 0 ? total : ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore);
+    }
+
 
     /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
     @Override
