@@ -1871,6 +1871,13 @@ function closeAddEngineModal() {
 }
 
 // ── W3C Conformance ───────────────────────────────────────────────────────────
+function w3cShowTab(tab) {
+  document.getElementById('w3c-tab-failed').style.display  = tab === 'failed'  ? '' : 'none';
+  const ct = document.getElementById('w3c-tab-cannot');
+  if (ct) ct.style.display = tab === 'cannot' ? '' : 'none';
+  ['failed','cannot'].forEach(t => document.getElementById('w3c-pill-' + t)?.classList.toggle('active', t === tab));
+}
+
 async function loadW3CData() {
   try {
     const res = await fetch('https://corese-stack.github.io/corese-w3c/data/w3c-report.json');
@@ -1940,26 +1947,35 @@ function renderW3CSection(data) {
     </tr>`;
   }).join('');
 
-  // ── Failed tests detail ──
-  const failedTests = suites.flatMap(s =>
+  // ── Failed + Cannot tell detail ──
+  const cantTellTests = suites.flatMap(s =>
     (s.tests ?? [])
-      .filter(t => (t.status ?? t.outcome) === 'FAILED')
+      .filter(t => ['CANT_TELL', 'CANNOT_TELL', 'cantTell'].includes(t.outcome ?? ''))
       .map(t => ({ suite: s.name ?? s.id, ...t }))
   );
-  const nCantTell = summary.cantTell ?? 0;
+  const cantTellNames = new Set(cantTellTests.map(t => t.name ?? t.testUri));
+  const failedTests = suites.flatMap(s =>
+    (s.tests ?? [])
+      .filter(t => (t.status ?? t.outcome) === 'FAILED' && !cantTellNames.has(t.name ?? t.testUri))
+      .map(t => ({ suite: s.name ?? s.id, ...t }))
+  );
+  const nCantTell = cantTellTests.length || (summary.cantTell ?? 0);
+  const totalNonPassing = failedTests.length + nCantTell;
 
-  const failedHtml = failedTests.length === 0 ? '' : `
+  const failedHtml = totalNonPassing === 0 ? '' : `
     <details class="w3c-failed-details">
       <summary class="query-summary">
-        <span style="color:#f85149;font-weight:600">${failedTests.length} failed test${failedTests.length > 1 ? 's' : ''}</span>
-        ${nCantTell > 0 ? `<span style="color:#d29922;font-weight:600;margin-left:8px">· ${nCantTell} cannot tell (suite-level)</span>` : ''}
+        <span style="color:#f85149;font-weight:600">${failedTests.length} failed</span>
+        ${nCantTell > 0 ? `<span style="color:#d29922;font-weight:600;margin-left:8px">· ${nCantTell} cannot tell</span>` : ''}
       </summary>
-      <div class="table-surface" style="margin-top:8px">
+      <div style="display:flex;gap:6px;margin:8px 0 4px">
+        <button class="query-type-pill active" id="w3c-pill-failed" onclick="w3cShowTab('failed')">Failed (${failedTests.length})</button>
+        ${nCantTell > 0 ? `<button class="query-type-pill" id="w3c-pill-cannot" onclick="w3cShowTab('cannot')">Cannot tell (${nCantTell})</button>` : ''}
+      </div>
+      <div id="w3c-tab-failed" class="table-surface" style="margin-top:4px">
         <div class="table-scroll">
           <table class="report-table">
-            <thead><tr>
-              <th>Suite</th><th>Test</th><th>Description</th><th>Error</th>
-            </tr></thead>
+            <thead><tr><th>Suite</th><th>Test</th><th>Description</th><th>Error</th></tr></thead>
             <tbody>
               ${failedTests.map(t => `<tr>
                 <td style="font-size:11px;white-space:nowrap">${t.suite}</td>
@@ -1971,6 +1987,21 @@ function renderW3CSection(data) {
           </table>
         </div>
       </div>
+      ${nCantTell > 0 ? `
+      <div id="w3c-tab-cannot" style="display:none;margin-top:4px" class="table-surface">
+        <div class="table-scroll">
+          <table class="report-table">
+            <thead><tr><th>Suite</th><th>Test</th><th>Info</th></tr></thead>
+            <tbody>
+              ${cantTellTests.length > 0 ? cantTellTests.map(t => `<tr>
+                <td style="font-size:11px;white-space:nowrap">${t.suite}</td>
+                <td style="font-family:var(--font-mono);font-size:11px">${t.name ?? t.testUri ?? '—'}</td>
+                <td style="font-size:11px;color:#d29922">${t.errorMessage ?? t.info ?? t.description ?? '—'}</td>
+              </tr>`).join('') : `<tr><td colspan="3" style="color:#d29922;font-size:12px;padding:12px">Détail non disponible dans le rapport JSON.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
     </details>`;
 
   section.innerHTML = `
@@ -2021,16 +2052,8 @@ async function main() {
   try {
     data = await loadData();
   } catch (err) {
-    document.querySelector('.app-wrapper').innerHTML +=
-      `<div class="empty-state">
-        <div class="empty-state-icon">⚠</div>
-        <div class="empty-state-title">No benchmark data</div>
-        <div class="empty-state-msg">${err.message}</div>
-        <div class="empty-state-hint">
-          Run <code>make compare</code> or <code>make all</code> to generate a report,
-          then refresh this page.
-        </div>
-      </div>`;
+    const el = document.getElementById('empty-state');
+    if (el) el.style.display = '';
     return;
   }
 
@@ -2068,6 +2091,13 @@ async function main() {
 
   // Restore state from URL before rendering (shareable links)
   applyUrlState();
+
+  // Show last run date in header
+  const runDateEl = document.getElementById('header-run-date');
+  if (runDateEl && data.metadata?.generatedAt) {
+    runDateEl.textContent = 'Last run: ' + formatDate(data.metadata.generatedAt);
+    runDateEl.style.display = '';
+  }
 
   renderHeader(data.metadata, allRuns);
   // Pills scroll arrows — listen once after pills are rendered
