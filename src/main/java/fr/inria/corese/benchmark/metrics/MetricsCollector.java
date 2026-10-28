@@ -15,6 +15,7 @@ public class MetricsCollector {
     }
 
     /** Force garbage collection and return used heap memory in MB. */
+    @SuppressWarnings("java:S1215") // Intentional forced GC for benchmark memory delta baseline
     public double getUsedMemoryMb() {
         System.gc();
         System.gc();

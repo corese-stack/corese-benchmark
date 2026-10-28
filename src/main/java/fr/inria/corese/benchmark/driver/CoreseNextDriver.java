@@ -55,23 +55,36 @@ public class CoreseNextDriver implements TripleStoreDriver {
     }
 
     /**
-     * Loads an N-Triples file into the repository.
+     * Loads an RDF file (.nt, .nq, .ttl, .trig) into the repository.
      *
-     *
-     * <p>Fallback: if the fast path throws (e.g. invalid IRIs in DBpedia {@code homepages_en.nt}),
+     * <p>Fallback: for N-Triples, if the fast path throws (e.g. invalid IRIs in DBpedia {@code homepages_en.nt}),
      * the file is re-read line by line, skipping and counting invalid lines.</p>
      *
-     * @param filePath absolute path to the {@code .nt} file to load
+     * @param filePath absolute path to the RDF file to load
      * @throws IOException if the file cannot be read
      */
     @Override
     public void load(String filePath) throws IOException {
         Path path = Path.of(filePath);
-        try {
-            connection.load(path, RDFFormat.NTRIPLES);
-        } catch (Exception e) {
-            log.debug("corese.next: fast load failed for {} ({}), switching to line-by-line", path.getFileName(), e.getMessage());
-            loadLineByLine(path);
+        BenchmarkFormat benchFormat = BenchmarkFormat.fromPath(path)
+            .orElseThrow(() -> new IllegalArgumentException("Unsupported RDF format for file: " + filePath));
+
+        RDFFormat coreseFormat = switch (benchFormat) {
+            case NTRIPLES -> RDFFormat.NTRIPLES;
+            case NQUADS   -> RDFFormat.NQUADS;
+            case TURTLE   -> RDFFormat.TURTLE;
+            case TRIG     -> RDFFormat.TRIG;
+        };
+
+        if (benchFormat == BenchmarkFormat.NTRIPLES) {
+            try {
+                connection.load(path, RDFFormat.NTRIPLES);
+            } catch (Exception e) {
+                log.debug("corese.next: fast load failed for {} ({}), switching to line-by-line", path.getFileName(), e.getMessage());
+                loadLineByLine(path);
+            }
+        } else {
+            connection.load(path, coreseFormat);
         }
     }
 

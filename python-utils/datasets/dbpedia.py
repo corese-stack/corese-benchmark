@@ -3,7 +3,11 @@ DBpedia 3.5.1 dataset — 5 curated N-Triples files (~270K–770K triples each).
 Source: S3 hosted on the SLICES/P16 infrastructure.
 """
 
-import os, bz2, shutil, requests
+import bz2
+import os
+import shutil
+
+import requests
 
 BASE_URL = "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump"
 
@@ -34,8 +38,7 @@ def prepare(input_dir: str) -> str:
             r = requests.get(url, stream=True)
             r.raise_for_status()
             with open(archive_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                f.writelines(r.iter_content(chunk_size=8192))
 
         if not os.path.exists(nt_path):
             print(f"  Extracting {filename}...")

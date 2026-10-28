@@ -37,16 +37,24 @@ public class CoreseDriver implements TripleStoreDriver {
     }
 
     /**
-     * Loads an N-Triples file into the graph and, if inference is enabled,
+     * Loads an RDF file (.nt, .nq, .ttl, .trig) into the graph and, if inference is enabled,
      * applies OWL-RL rules via {@link RuleEngine}.
      *
-     * @param filePath absolute path to the {@code .nt} file
+     * @param filePath absolute path to the RDF file
      * @throws Exception if parsing or rule processing fails
      */
     @Override
     public void load(String filePath) throws Exception {
+        BenchmarkFormat format = BenchmarkFormat.fromFileName(filePath)
+            .orElseThrow(() -> new IllegalArgumentException("Unsupported RDF format for file: " + filePath));
+        Loader.format coreseFormat = switch (format) {
+            case NTRIPLES -> Loader.format.NT_FORMAT;
+            case NQUADS   -> Loader.format.NQUADS_FORMAT;
+            case TURTLE   -> Loader.format.TURTLE_FORMAT;
+            case TRIG     -> Loader.format.TRIG_FORMAT;
+        };
         Load loader = Load.create(graph);
-        loader.parse(filePath, Loader.format.NT_FORMAT);
+        loader.parse(filePath, coreseFormat);
         applyInference();
     }
 

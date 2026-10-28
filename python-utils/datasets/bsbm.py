@@ -9,7 +9,12 @@ Scale tiers (products):
 """
 
 from __future__ import annotations
-import os, subprocess, shutil, urllib.request, zipfile
+
+import os
+import shutil
+import subprocess
+import urllib.request
+import zipfile
 
 GENERATOR_URL  = "https://sourceforge.net/projects/bsbmtools/files/latest/download"
 GENERATOR_ZIP  = "bsbmtools-0.2.zip"
@@ -31,10 +36,10 @@ def _download_generator(tools_dir: str) -> str:
 
     zip_path = os.path.join(tools_dir, GENERATOR_ZIP)
     if not os.path.exists(zip_path):
-        print(f"  Downloading bsbmtools...")
+        print("  Downloading bsbmtools...")
         urllib.request.urlretrieve(GENERATOR_URL, zip_path)
 
-    print(f"  Extracting bsbmtools...")
+    print("  Extracting bsbmtools...")
     with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(tools_dir)
 
@@ -55,7 +60,7 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
     os.makedirs(tools_dir,  exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
 
-    jar = _download_generator(tools_dir)
+    _download_generator(tools_dir)
 
     for scale in scales:
         if scale not in SCALES:
@@ -106,4 +111,20 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
 
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return output_dir
+    valid_scales = [s for s in scales if s in SCALES]
+    if len(valid_scales) == len(SCALES):
+        return output_dir
+
+    view_dir = os.path.join(input_dir, "bsbm", "view_" + "_".join(valid_scales))
+    os.makedirs(view_dir, exist_ok=True)
+    for f in os.listdir(view_dir):
+        os.remove(os.path.join(view_dir, f))
+    for scale in valid_scales:
+        src = os.path.join(output_dir, f"bsbm_{scale}.nt")
+        dst = os.path.join(view_dir,   f"bsbm_{scale}.nt")
+        if os.path.exists(src):
+            try:
+                os.symlink(src, dst)
+            except (OSError, NotImplementedError):
+                shutil.copy2(src, dst)
+    return view_dir

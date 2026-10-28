@@ -1,10 +1,10 @@
-import os
-import sys
-import shutil
-import subprocess
 import argparse
 import glob
 import json as _json_early
+import os
+import shutil
+import subprocess
+import sys
 import traceback
 from datetime import datetime
 
@@ -333,7 +333,7 @@ class _Tee:
     def fileno(self):
         return self._streams[0].fileno()
 
-_log_fh     = open(_log_path, "w", buffering=1, encoding="utf-8")
+_log_fh     = open(_log_path, "w", buffering=1, encoding="utf-8")  # noqa: SIM115
 sys.stdout  = _Tee(sys.__stdout__, _log_fh)
 sys.stderr  = _Tee(sys.__stderr__, _log_fh)
 print(f"Logging to: {_log_path}")
@@ -377,7 +377,7 @@ if args.engines and args.resume:
                         continue
                     else:
                         print(f"[resume] REDO {engine} × {ds} — output exists but has no valid runs")
-                except Exception as _e:
+                except (ValueError, OSError) as _e:
                     print(f"[resume] REDO {engine} × {ds} — output invalid ({_e})")
             print(f"[resume] RUN  {engine} × {ds}")
             if gradle_props != last_build_props:
@@ -391,7 +391,7 @@ if args.engines and args.resume:
         final_output = os.path.join(out_json_dir, f"{timestamp}_resume_{engines_tag}.json")
         merge_json_files(list(collected), final_output)
         print(f"\n[resume] Rapport final : {final_output}")
-    import sys; sys.exit(0)
+    sys.exit(0)
 
 # Case A: --engines (single build, all engines)
 if args.engines:
@@ -435,8 +435,8 @@ if args.engines:
                 _d = _json_early.load(_f)
             if isinstance(_d.get("runs"), list) and len(_d["runs"]) > 0:
                 return path
-        except Exception:
-            pass
+        except (ValueError, OSError):
+            return None
         return None
 
     def save_to_cache(engine, ds, src_file):
@@ -527,7 +527,7 @@ if args.engines:
                 shutil.copy2(all_parts[0], output_file)
 
             dataset_output_files.append(output_file)
-        except Exception as _ds_err:
+        except Exception as _ds_err:  # noqa: BLE001
             print(f"[ERROR] Dataset '{ds}' failed: {_ds_err} — skipping", file=sys.stderr)
             traceback.print_exc()
             # Remove orphaned temp files so Step 3 doesn't pick up partial data
@@ -539,8 +539,8 @@ if args.engines:
                     if os.path.exists(_tmp):
                         os.remove(_tmp)
                         print(f"[cleanup] Removed orphaned temp file: {_tmp}")
-            except Exception:
-                pass
+            except OSError as _clean_err:
+                print(f"[cleanup] Failed to clean orphaned temp files: {_clean_err}", file=sys.stderr)
 
     # Merge all per-dataset files into one final report
     if len(dataset_output_files) > 1:

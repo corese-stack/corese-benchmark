@@ -15,7 +15,11 @@ Scale tiers (departments):
 """
 
 from __future__ import annotations
-import os, shutil, urllib.request, zipfile
+
+import os
+import shutil
+import urllib.request
+import zipfile
 
 DUMP_URL = "https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip"
 DUMP_ZIP = "bowlogna-dump.zip"
@@ -53,7 +57,7 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
     # Download the full dump zip if any file is missing
     zip_path = os.path.join(input_dir, "bowlogna", DUMP_ZIP)
     if not os.path.exists(zip_path):
-        print(f"  Downloading bowlogna-dump.zip (~86 MB)...")
+        print("  Downloading bowlogna-dump.zip (~86 MB)...")
         urllib.request.urlretrieve(DUMP_URL, zip_path)
         print("  Download complete.")
 

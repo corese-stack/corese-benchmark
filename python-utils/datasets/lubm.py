@@ -11,7 +11,12 @@ Note: UBA generates .owl (RDF/XML) files; we convert them to N-Triples with rdfl
 """
 
 from __future__ import annotations
-import os, subprocess, shutil, urllib.request, zipfile
+
+import os
+import shutil
+import subprocess
+import urllib.request
+import zipfile
 
 UBA_URL = "https://swat.cse.lehigh.edu/projects/lubm/uba1.7.zip"
 UBA_ZIP = "uba1.7.zip"
@@ -94,6 +99,20 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
             "-onto", "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl",
         ]
         subprocess.run(cmd, cwd=tmp_dir, check=True)
+
+        # UBA 1.7 hardcodes `System.getProperty("user.dir") + "\\"` in its bytecode.
+        # On Linux/macOS, this creates files in tools_dir literally named `lubm_gen_<scale>\University0_X.owl`.
+        # Collect and move them into tmp_dir with clean names.
+        prefix = f"lubm_gen_{scale}\\"
+        for f in os.listdir(tools_dir):
+            if f.startswith(prefix) and f.endswith(".owl"):
+                clean_name = f[len(prefix):]
+                shutil.move(os.path.join(tools_dir, f), os.path.join(tmp_dir, clean_name))
+
+        # Also remove any stray log.txt with backslash
+        stray_log = os.path.join(tools_dir, f"lubm_gen_{scale}\\log.txt")
+        if os.path.exists(stray_log):
+            os.remove(stray_log)
 
         owl_files = sorted(f for f in os.listdir(tmp_dir) if f.endswith(".owl"))
         if not owl_files:

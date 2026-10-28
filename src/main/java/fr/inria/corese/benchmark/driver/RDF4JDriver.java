@@ -11,8 +11,10 @@ import org.eclipse.rdf4j.rio.RDFFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -51,16 +53,38 @@ public class RDF4JDriver implements TripleStoreDriver {
     }
 
     /**
-     * Loads an N-Triples file into the repository using batched parsing.
-     * Batches of up to 10 000 lines are submitted together; any batch that triggers
-     * a parse error is retried line by line so that well-formed triples are preserved.
-     * Malformed individual lines are logged as warnings and skipped.
+     * Loads an RDF file (.nt, .nq, .ttl, .trig) into the repository.
+     * N-Triples files are parsed in batches with line-by-line fallback to tolerate malformed lines.
+     * Other formats are parsed via the corresponding RIO parser.
      *
-     * @param filePath absolute path to the {@code .nt} file to load
-     * @throws Exception if the file cannot be opened or the transaction cannot be committed
+     * @param filePath absolute path to the RDF file to load
+     * @throws Exception if the file cannot be opened or parsed
      */
     @Override
     public void load(String filePath) throws Exception {
+        BenchmarkFormat benchFormat = BenchmarkFormat.fromFileName(filePath)
+            .orElseThrow(() -> new IllegalArgumentException("Unsupported RDF format for file: " + filePath));
+
+        RDFFormat rioFormat = switch (benchFormat) {
+            case NTRIPLES -> RDFFormat.NTRIPLES;
+            case NQUADS   -> RDFFormat.NQUADS;
+            case TURTLE   -> RDFFormat.TURTLE;
+            case TRIG     -> RDFFormat.TRIG;
+        };
+
+        if (benchFormat == BenchmarkFormat.NTRIPLES) {
+            loadNtBatched(filePath);
+        } else {
+            try (RepositoryConnection conn = repository.getConnection();
+                 InputStream in = new BufferedInputStream(new FileInputStream(filePath))) {
+                conn.begin();
+                conn.add(in, "", rioFormat);
+                conn.commit();
+            }
+        }
+    }
+
+    private void loadNtBatched(String filePath) throws Exception {
         // Parse in batches; on failure fall back to line-by-line to skip malformed triples.
         // The NPE from GenericStatement (null IRI) is a RuntimeException and IS catchable.
         try (RepositoryConnection conn = repository.getConnection();

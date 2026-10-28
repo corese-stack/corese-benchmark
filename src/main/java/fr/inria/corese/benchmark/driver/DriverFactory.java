@@ -4,7 +4,9 @@ package fr.inria.corese.benchmark.driver;
  * Creates the appropriate TripleStoreDriver from an engine name.
  * Format: "corese.4.6.5", "corese.local", "corese.next", "jena.5.2.0", "rdf4j.5.1.3"
  */
-public class DriverFactory {
+public final class DriverFactory {
+
+    private DriverFactory() {}
 
     private static final String CORESE_NEXT_CLASS =
             "fr.inria.corese.benchmark.driver.CoreseNextDriver";
