@@ -1,5 +1,8 @@
 package fr.inria.corese.benchmark.metrics;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * Benchmark result for a single SPARQL query executed by a single engine.
  *
@@ -32,4 +35,41 @@ public record QueryResult(
     long   medianTtfrMs,
     long[] repetitionsTtfrMs,
     double heapDeltaMb
-) {}
+) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof QueryResult other)) return false;
+        return medianMs == other.medianMs &&
+                medianTtfrMs == other.medianTtfrMs &&
+                Double.compare(other.heapDeltaMb, heapDeltaMb) == 0 &&
+                Objects.equals(engine, other.engine) &&
+                Objects.equals(dataset, other.dataset) &&
+                Objects.equals(queryId, other.queryId) &&
+                Objects.equals(queryCategory, other.queryCategory) &&
+                Arrays.equals(repetitionsMs, other.repetitionsMs) &&
+                Arrays.equals(repetitionsTtfrMs, other.repetitionsTtfrMs);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(engine, dataset, queryId, queryCategory, medianMs, medianTtfrMs, heapDeltaMb);
+        result = 31 * result + Arrays.hashCode(repetitionsMs);
+        result = 31 * result + Arrays.hashCode(repetitionsTtfrMs);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "QueryResult[" +
+                "engine=" + engine + ", " +
+                "dataset=" + dataset + ", " +
+                "queryId=" + queryId + ", " +
+                "queryCategory=" + queryCategory + ", " +
+                "medianMs=" + medianMs + ", " +
+                "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
+                "medianTtfrMs=" + medianTtfrMs + ", " +
+                "repetitionsTtfrMs=" + Arrays.toString(repetitionsTtfrMs) + ", " +
+                "heapDeltaMb=" + heapDeltaMb + ']';
+    }
+}

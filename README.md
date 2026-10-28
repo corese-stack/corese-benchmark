@@ -2,7 +2,6 @@
 
 Benchmark framework for comparing RDF triple stores: **Corese**, **Apache Jena**, and **Eclipse RDF4J**.
 
-
 ## Description
 
 This repository benchmarks Java-based RDF triple stores on loading and SPARQL query performance. Goals:
@@ -13,6 +12,7 @@ This repository benchmarks Java-based RDF triple stores on loading and SPARQL qu
 - Produce JSON + CSV reports consumed by an interactive web dashboard
 
 **Principles:**
+
 - Java 21 harness with a rigorous measurement protocol (warmup + 3 repetitions + median)
 - Memory measured as delta before/after loading with forced GC
 - SPARQL query benchmark with per-query timeout and warmup
@@ -33,6 +33,7 @@ make site   # serves at http://localhost:8080
 ```
 
 **Dashboard features:**
+
 - **Scalability charts** — when a single dataset is selected, Performance charts switch to line charts (X = graph size in triples) showing how each engine scales
 - **W3C Conformance** — live pass/fail results fetched from [corese-stack.github.io/corese-w3c](https://corese-stack.github.io/corese-w3c/data/w3c-report.json) (All mode only)
 - **Shareable URLs** — state (dataset, engine filter, reference engine) is encoded in the URL (`?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5`)
@@ -41,7 +42,6 @@ make site   # serves at http://localhost:8080
 - **SPARQL section** — per-engine latency cards, median per query, color-coded comparison table
 
 ---
-
 
 ## How to Run
 
@@ -61,14 +61,15 @@ conda activate benchmarkenv
 
 Main use case: compare your local branch against the stable release.
 
-**1. Build corese-core locally**
+#### 1. Build corese-core locally
 
 Inside the `corese-core` repository:
+
 ```bash
 ./gradlew shadowJar
 ```
 
-**2. Run the benchmark**
+#### 2. Run the benchmark
 
 If `corese-core` is in the sibling directory (`../corese-core/`), the JAR is detected automatically:
 
@@ -86,11 +87,12 @@ python python-utils/workflow.py \
   --coreseLocalPath C:\path\to\corese-core
 ```
 
-**3. Read the result**
+#### 3. Read the result
 
 Open `site/index.html`. The `corese.local` card shows:
-- ` +X% improvement` (green)
-- ` −X% regression` (red)
+
+- `+X% improvement` (green)
+- `−X% regression` (red)
 
 relative to `corese.4.6.5` as the fixed reference (100/100).
 
@@ -139,6 +141,7 @@ python python-utils/workflow.py --engines corese.local,corese.4.6.5 --dataset bo
 ```
 
 The **SPARQL Queries** section appears in the dashboard with:
+
 - Per-engine latency cards: avg, p50, p95, p99
 - Median time per query and per engine
 - Color-coded comparison table (green = best, orange = ×5–19, red = ×20+)
@@ -164,7 +167,7 @@ Partial or empty JSON files are automatically re-run (not skipped).
 ### Workflow options
 
 | Option | Default | Description |
-|--------|---------|-------------|
+| -------- | --------- | ------------- |
 | `--engines` | — | Comma-separated engine list (e.g. `corese.4.6.5,jena.6.2.0`) |
 | `--dataset` | `dbpedia` | Single dataset: `dbpedia`, `bowlogna`, `bsbm`, `lubm` |
 | `--datasets` | — | Multiple datasets in one run (e.g. `dbpedia,bowlogna`) |
@@ -201,7 +204,7 @@ Partial or empty JSON files are automatically re-run (not skipped).
 Each run automatically generates:
 
 | File | Description |
-|------|-------------|
+| ------ | ------------- |
 | `out/json/<timestamp>_<engines>.json` | Full report (loaded by the dashboard) |
 | `out/csv/<timestamp>_<engines>.csv` | Same data in CSV format (Excel, etc.) |
 | `site/data/benchmark-report.json` | Copy of the latest report (current dashboard) |
@@ -241,7 +244,7 @@ This protocol ensures reproducible results by eliminating JIT compilation bias a
 ## Metrics
 
 | Metric | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `loadingTimeMs` | Median loading time over 3 repetitions (ms) |
 | `throughputTriplesPerSec` | Triples loaded per second |
 | `memoryDeltaMb` | Memory consumed by loading (after − before GC, MB) |
@@ -255,6 +258,7 @@ This protocol ensures reproducible results by eliminating JIT compilation bias a
 ### DBpedia sample
 
 5 files sampled from the [DBpedia 3.5.1 dump](https://downloads.dbpedia.org/3.5.1/en/):
+
 - `category_labels_en.nt`
 - `disambiguations_en.nt`
 - `homepages_en.nt`
@@ -272,7 +276,7 @@ Synthetic dataset describing student/university relations. Includes associated *
 Dashboard note: Bowlogna shows only the **SPARQL** section (no Performance/Load charts — the dataset is optimised for query benchmarking).
 
 | Scale | Departments | Triples (approx.) |
-|-------|-------------|-------------------|
+| ------- | ------------- | ------------------- |
 | `small` | 1 | ~1.2 M |
 | `medium` | 5 | ~6 M |
 | `large` | 10 | ~12 M |
@@ -290,7 +294,7 @@ python python-utils/workflow.py --dataset bsbm --scales small,medium --engines c
 Lehigh University Benchmark — university domain with RDFS reasoning potential. Generated with [UBA 1.7](https://swat.cse.lehigh.edu/projects/lubm/).
 
 | Scale | Universities | Triples (approx.) |
-|-------|-----------|-------------------|
+| ------- | ----------- | ------------------- |
 | `small` | 1 | ~100 K |
 | `medium` | 10 | ~1 M |
 | `large` | 100 | ~10 M |
@@ -304,7 +308,7 @@ python python-utils/workflow.py --dataset lubm --scales small --engines corese.4
 ## Engines
 
 | Engine | Default version | Notes |
-|--------|----------------|-------|
+| -------- | ---------------- | ------- |
 | Corese | 4.6.5 | Use `corese.local` to benchmark a local branch |
 | Corese 5 (next) | local JAR | `corese.next` — uses the new `Repositories`/`RepositoryConnection` API. Requires a Corese 5 JAR in `libs/` and `--coreseLocalPath` or sibling `corese-core/`. |
 | Apache Jena | 6.2.0 | |

@@ -23,7 +23,9 @@ import java.util.stream.Collectors;
 /**
  * Generates benchmark-report.json consumed by the dashboard.
  */
-public class BenchmarkReport {
+public final class BenchmarkReport {
+
+    private BenchmarkReport() {}
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkReport.class);
 

@@ -1,15 +1,38 @@
 package fr.inria.corese.benchmark.driver;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.util.EnumSet;
+import java.util.Set;
+
 /**
  * Generic interface for all triple store benchmark drivers.
  * Each implementation wraps a specific triple store (Corese, Jena, RDF4J).
  */
+@SuppressWarnings("java:S112") // Generic Exception declarations accommodate disparate third-party driver APIs
 public interface TripleStoreDriver {
+
+    /** Formats supported by this driver. Defaults to all BenchmarkFormats. */
+    default Set<BenchmarkFormat> getSupportedFormats() {
+        return EnumSet.allOf(BenchmarkFormat.class);
+    }
+
+    /** Checks whether the file is supported based on its format. */
+    default boolean supports(Path path) {
+        return BenchmarkFormat.fromPath(path)
+                .map(f -> getSupportedFormats().contains(f))
+                .orElse(false);
+    }
+
+    /** Checks whether the file is supported based on its format. */
+    default boolean supports(File file) {
+        return file != null && supports(file.toPath());
+    }
 
     /** Initialize the triple store (create repository, allocate resources). */
     void init() throws Exception;
 
-    /** Load an RDF file (N-Triples format) into the store. */
+    /** Load an RDF file into the store (format detected from file extension). */
     void load(String filePath) throws Exception;
 
     /** Execute a SPARQL query and return execution time in milliseconds. */

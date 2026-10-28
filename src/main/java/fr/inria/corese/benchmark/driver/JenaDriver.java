@@ -2,48 +2,56 @@ package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import org.apache.jena.query.*;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
-import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.Lang;
+import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.system.Txn;
 
 /**
- * Benchmark driver for Apache Jena 5.
+ * Benchmark driver for Apache Jena.
  *
- * <p>Stores triples in a Jena in-memory {@link Model} and executes SPARQL queries
- * via {@link QueryExecution}. All four SPARQL query forms (SELECT, CONSTRUCT, ASK,
- * DESCRIBE) are supported.</p>
+ * <p>Stores triples and quads in a Jena in-memory transactional {@link Dataset}
+ * ({@link DatasetFactory#createTxnMem()}) and executes SPARQL queries via
+ * {@link QueryExecution}. All four SPARQL query forms (SELECT, CONSTRUCT, ASK,
+ * DESCRIBE) are supported over default and named graphs.</p>
  */
 public class JenaDriver implements TripleStoreDriver {
 
     private final String name;
-    private Model model;
+    private Dataset dataset;
 
     /**
      * Constructs a new driver with the given engine name.
      *
-     * @param name human-readable engine name reported in benchmark results (e.g. {@code "jena.5.2.0"})
+     * @param name human-readable engine name reported in benchmark results (e.g. {@code "jena.6.2.0"})
      */
     public JenaDriver(String name) {
         this.name = name;
     }
 
     /**
-     * Initialises a fresh Jena default (in-memory) model.
+     * Initialises a fresh Jena in-memory transactional dataset.
      */
     @Override
     public void init() {
-        this.model = ModelFactory.createDefaultModel();
+        this.dataset = DatasetFactory.createTxnMem();
     }
 
     /**
-     * Loads an N-Triples file into the Jena model using RIOT streaming parsing.
+     * Loads an RDF file (.nt, .nq, .ttl, .trig) into the Jena dataset using RIOT.
      *
-     * @param filePath absolute path to the {@code .nt} file to load
+     * @param filePath absolute path to the RDF file to load
      */
     @Override
     public void load(String filePath) {
-        RDFDataMgr.read(model, filePath, Lang.NT);
+        BenchmarkFormat benchFormat = BenchmarkFormat.fromFileName(filePath)
+            .orElseThrow(() -> new IllegalArgumentException("Unsupported RDF format for file: " + filePath));
+        Lang lang = switch (benchFormat) {
+            case NTRIPLES -> Lang.NT;
+            case NQUADS   -> Lang.NQ;
+            case TURTLE   -> Lang.TURTLE;
+            case TRIG     -> Lang.TRIG;
+        };
+        Txn.executeWrite(dataset, () -> RDFDataMgr.read(dataset, filePath, lang));
     }
 
     /**
@@ -57,18 +65,20 @@ public class JenaDriver implements TripleStoreDriver {
     @Override
     public long query(String sparql) {
         long start = System.currentTimeMillis();
-        try (QueryExecution qe = QueryExecution.model(model).query(sparql).build()) {
-            if (qe.getQuery().isSelectType()) {
-                ResultSet rs = qe.execSelect();
-                while (rs.hasNext()) rs.next();
-            } else if (qe.getQuery().isConstructType()) {
-                qe.execConstruct();
-            } else if (qe.getQuery().isAskType()) {
-                qe.execAsk();
-            } else if (qe.getQuery().isDescribeType()) {
-                qe.execDescribe();
+        Txn.executeRead(dataset, () -> {
+            try (QueryExecution qe = QueryExecution.dataset(dataset).query(sparql).build()) {
+                if (qe.getQuery().isSelectType()) {
+                    ResultSet rs = qe.execSelect();
+                    while (rs.hasNext()) rs.next();
+                } else if (qe.getQuery().isConstructType()) {
+                    qe.execConstruct();
+                } else if (qe.getQuery().isAskType()) {
+                    qe.execAsk();
+                } else if (qe.getQuery().isDescribeType()) {
+                    qe.execDescribe();
+                }
             }
-        }
+        });
         return System.currentTimeMillis() - start;
     }
 
@@ -81,81 +91,117 @@ public class JenaDriver implements TripleStoreDriver {
     public QueryMetrics queryWithMetrics(String sparql) {
         long heapBefore = MetricsCollector.usedHeapBytes();
         long start = System.currentTimeMillis();
-        long ttfr  = -1L;
-        long count = -1L;
-        try (QueryExecution qe = QueryExecution.model(model).query(sparql).build()) {
-            if (qe.getQuery().isSelectType()) {
-                ResultSet rs = qe.execSelect();
-                count = 0;
-                if (rs.hasNext()) {
-                    rs.next(); count++;
-                    ttfr = System.currentTimeMillis() - start;
-                    while (rs.hasNext()) { rs.next(); count++; }
-                } else {
-                    ttfr = System.currentTimeMillis() - start;
-                }
-            } else if (qe.getQuery().isConstructType()) {
-                qe.execConstruct();
-                ttfr = System.currentTimeMillis() - start;
-            } else if (qe.getQuery().isAskType()) {
-                qe.execAsk();
-                ttfr = System.currentTimeMillis() - start;
-            } else if (qe.getQuery().isDescribeType()) {
-                qe.execDescribe();
-                ttfr = System.currentTimeMillis() - start;
-            }
-        }
-        long total = System.currentTimeMillis() - start;
-        return new QueryMetrics(total, ttfr < 0 ? total : ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore);
-    }
+        long[] resultHolder = new long[]{-1L, -1L}; // [ttfr, count]
 
+        Txn.executeRead(dataset, () -> {
+            try (QueryExecution qe = QueryExecution.dataset(dataset).query(sparql).build()) {
+                if (qe.getQuery().isSelectType()) {
+                    ResultSet rs = qe.execSelect();
+                    long count = 0;
+                    if (rs.hasNext()) {
+                        rs.next();
+                        count++;
+                        resultHolder[0] = System.currentTimeMillis() - start;
+                        while (rs.hasNext()) {
+                            rs.next();
+                            count++;
+                        }
+                    } else {
+                        resultHolder[0] = System.currentTimeMillis() - start;
+                    }
+                    resultHolder[1] = count;
+                } else if (qe.getQuery().isConstructType()) {
+                    qe.execConstruct();
+                    resultHolder[0] = System.currentTimeMillis() - start;
+                } else if (qe.getQuery().isAskType()) {
+                    qe.execAsk();
+                    resultHolder[0] = System.currentTimeMillis() - start;
+                } else if (qe.getQuery().isDescribeType()) {
+                    qe.execDescribe();
+                    resultHolder[0] = System.currentTimeMillis() - start;
+                }
+            }
+        });
+
+        long total = System.currentTimeMillis() - start;
+        long ttfr = resultHolder[0] < 0 ? total : resultHolder[0];
+        long count = resultHolder[1];
+        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore);
+    }
 
     /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
     @Override
     public long[] queryWithCount(String sparql) {
         long start = System.currentTimeMillis();
-        long count = -1L;
-        try (QueryExecution qe = QueryExecution.model(model).query(sparql).build()) {
-            if (qe.getQuery().isSelectType()) {
-                ResultSet rs = qe.execSelect();
-                count = 0;
-                while (rs.hasNext()) { rs.next(); count++; }
-            } else if (qe.getQuery().isConstructType()) {
-                qe.execConstruct();
-            } else if (qe.getQuery().isAskType()) {
-                qe.execAsk();
-            } else if (qe.getQuery().isDescribeType()) {
-                qe.execDescribe();
+        long[] countHolder = new long[]{-1L};
+
+        Txn.executeRead(dataset, () -> {
+            try (QueryExecution qe = QueryExecution.dataset(dataset).query(sparql).build()) {
+                if (qe.getQuery().isSelectType()) {
+                    ResultSet rs = qe.execSelect();
+                    long count = 0;
+                    while (rs.hasNext()) {
+                        rs.next();
+                        count++;
+                    }
+                    countHolder[0] = count;
+                } else if (qe.getQuery().isConstructType()) {
+                    qe.execConstruct();
+                } else if (qe.getQuery().isAskType()) {
+                    qe.execAsk();
+                } else if (qe.getQuery().isDescribeType()) {
+                    qe.execDescribe();
+                }
             }
-        }
-        return new long[]{ System.currentTimeMillis() - start, count };
+        });
+
+        return new long[]{ System.currentTimeMillis() - start, countHolder[0] };
     }
 
     /**
-     * Returns the number of statements currently held in the Jena model.
+     * Returns the total number of statements held in the Jena dataset across
+     * both the default model and all named models.
      *
-     * @return triple count
+     * @return statement count
      */
     @Override
     public long getGraphSize() {
-        return model.size();
+        if (dataset == null) return 0L;
+        return Txn.calculateRead(dataset, () -> {
+            long count = dataset.getDefaultModel().size();
+            var iter = dataset.listNames();
+            while (iter.hasNext()) {
+                count += dataset.getNamedModel(iter.next()).size();
+            }
+            return count;
+        });
     }
 
     /**
-     * Removes all statements from the model.
+     * Removes all statements from both the default model and all named models.
      */
     @Override
     public void clear() {
-        model.removeAll();
+        if (dataset != null) {
+            Txn.executeWrite(dataset, () -> {
+                dataset.getDefaultModel().removeAll();
+                var iter = dataset.listNames();
+                while (iter.hasNext()) {
+                    dataset.getNamedModel(iter.next()).removeAll();
+                }
+            });
+        }
     }
 
     /**
-     * Closes and discards the Jena model, releasing all associated resources.
+     * Closes and discards the Jena dataset, releasing all associated resources.
      */
     @Override
     public void close() {
-        model.close();
-        this.model = null;
+        if (dataset != null) {
+            dataset.close();
+            this.dataset = null;
+        }
     }
 
     @Override
