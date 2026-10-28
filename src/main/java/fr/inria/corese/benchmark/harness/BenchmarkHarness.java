@@ -140,28 +140,28 @@ public class BenchmarkHarness {
                 if (warmupSparql.isEmpty()) continue;
                 String warmupId = "query_" + (qi + 1);
                 final String wq = warmupSparql;
-                try (ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
+                ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
                     Thread t = new Thread(r, "warmup-" + warmupId);
                     t.setDaemon(true);
                     return t;
-                })) {
-                    Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(wq));
-                    try {
-                        long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
-                        long count = res[1];
-                        if (count == 0) {
-                            log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
-                        } else if (count > 0) {
-                            log.debug("  {} warmup: {} result(s)", warmupId, count);
-                        }
-                    } catch (TimeoutException e) {
-                        wf.cancel(true);
-                        warmupExec.shutdownNow();
-                        log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
-                    } catch (Exception e) {
-                        log.warn("  {} warmup failed: {}", warmupId,
-                            e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                });
+                Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(wq));
+                try {
+                    long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
+                    long count = res[1];
+                    if (count == 0) {
+                        log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
+                    } else if (count > 0) {
+                        log.debug("  {} warmup: {} result(s)", warmupId, count);
                     }
+                } catch (TimeoutException e) {
+                    wf.cancel(true);
+                    log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
+                } catch (Exception e) {
+                    log.warn("  {} warmup failed: {}", warmupId,
+                        e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                } finally {
+                    warmupExec.shutdownNow(); // abandon stuck thread — daemon won't block JVM exit
                 }
             }
 
@@ -181,28 +181,28 @@ public class BenchmarkHarness {
                 for (int i = 0; i < QUERY_REPS; i++) {
                     final String q = sparql;
                     final int rep = i;
-                    try (ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+                    ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
                         Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
                         t.setDaemon(true); // JVM won't wait for this thread on exit
                         return t;
-                    })) {
-                        Future<QueryMetrics> future = executor.submit(() -> driver.queryWithMetrics(q));
-                        try {
-                            QueryMetrics m = future.get(queryTimeoutS, TimeUnit.SECONDS);
-                            times[i]      = m.totalMs();
-                            ttfrTimes[i]  = m.ttfrMs();
-                            heapDeltas[i] = m.heapDeltaBytes();
-                        } catch (TimeoutException e) {
-                            future.cancel(true);
-                            executor.shutdownNow(); // abandon — daemon thread won't block JVM
-                            log.warn("  {} rep {} timed out after {}s", queryId, i + 1, queryTimeoutS);
-                            times[i]     = -1L;
-                            ttfrTimes[i] = -1L;
-                        } catch (ExecutionException e) {
-                            log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
-                            times[i]     = -1L;
-                            ttfrTimes[i] = -1L;
-                        }
+                    });
+                    Future<QueryMetrics> future = executor.submit(() -> driver.queryWithMetrics(q));
+                    try {
+                        QueryMetrics m = future.get(queryTimeoutS, TimeUnit.SECONDS);
+                        times[i]      = m.totalMs();
+                        ttfrTimes[i]  = m.ttfrMs();
+                        heapDeltas[i] = m.heapDeltaBytes();
+                    } catch (TimeoutException e) {
+                        future.cancel(true);
+                        log.warn("  {} rep {} timed out after {}s", queryId, i + 1, queryTimeoutS);
+                        times[i]     = -1L;
+                        ttfrTimes[i] = -1L;
+                    } catch (ExecutionException e) {
+                        log.warn("  {} rep {} failed: {}", queryId, i + 1, e.getCause().getMessage());
+                        times[i]     = -1L;
+                        ttfrTimes[i] = -1L;
+                    } finally {
+                        executor.shutdownNow(); // abandon stuck thread — daemon won't block JVM exit
                     }
                 }
                 long medianMs     = MetricsCollector.median(times);

@@ -5,6 +5,7 @@ import subprocess
 import argparse
 import glob
 import json as _json_early
+import traceback
 from datetime import datetime
 
 # Ensure Java 21 is used if JAVA_HOME is not already configured
@@ -274,10 +275,11 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
         raise
 
 
-def merge_json_files(file_list, output_file):
+def merge_json_files(file_list, output_file, no_delete=None):
     """Merge multiple JSON reports into one, combining runs and queryRuns arrays.
     metadata.queries is taken from whichever report contains them (queries are
     dataset-specific, so only one report per dataset will have them).
+    Files listed in no_delete are read but not removed after merging (e.g. cache files).
     """
     merged = None
     merged_queries = None  # SPARQL query texts from metadata
@@ -305,8 +307,10 @@ def merge_json_files(file_list, output_file):
             del merged["queryRuns"]
     with open(output_file, "w") as f:
         _json_early.dump(merged, f, indent=2)
+    _keep = set(no_delete or [])
     for path in file_list:
-        os.remove(path)
+        if path not in _keep:
+            os.remove(path)
     print(f"Merged report: {output_file}")
 
 
@@ -436,10 +440,20 @@ if args.engines:
         return None
 
     def save_to_cache(engine, ds, src_file):
-        """Copy a fresh benchmark result into the cache."""
+        """Save a fresh benchmark result into the cache, keeping only data for this engine."""
         safe = engine.replace('.', '_')
         dst  = os.path.join(cache_dir, f"{safe}_{ds}.json")
-        shutil.copy2(src_file, dst)
+        with open(src_file) as _f:
+            _data = _json_early.load(_f)
+        filtered = {
+            "metadata": _data.get("metadata", {}),
+            "runs": [r for r in _data.get("runs", []) if r.get("engine") == engine],
+            "queryRuns": [r for r in _data.get("queryRuns", []) if r.get("engine") == engine],
+        }
+        if not filtered["queryRuns"]:
+            del filtered["queryRuns"]
+        with open(dst, "w") as _f:
+            _json_early.dump(filtered, _f, indent=2)
         print(f"[cache] Saved {engine} × {ds} → {dst}")
 
     local_engines = [e for e in engines_list if needs_local_jar(e)]
@@ -448,74 +462,94 @@ if args.engines:
 
     # Collect one output file per dataset (then merge if multi-dataset)
     dataset_output_files = []
+    _report_for_site = None
 
     for ds in dataset_names:
-        unzip_dir   = dataset_dirs[ds]
-        ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
-        output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engines_tag}.json")
+        try:
+            unzip_dir   = dataset_dirs[ds]
+            ds_tag      = f"_{ds}" if len(dataset_names) > 1 else ""
+            output_file = os.path.join(out_json_dir, f"{timestamp}{ds_tag}_{engines_tag}.json")
 
-        # Split engines into cached (reuse JSON) vs fresh (run benchmark)
-        cached_hits  = {}  # engine → cache file path
-        fresh_engines = []
-        for e in engines_list:
-            if e in cached_engine_set:
-                hit = get_cached(e, ds)
-                if hit:
-                    print(f"[cache] HIT  {e} × {ds} — {hit}")
-                    cached_hits[e] = hit
+            # Split engines into cached (reuse JSON) vs fresh (run benchmark)
+            cached_hits  = {}  # engine → cache file path
+            fresh_engines = []
+            for e in engines_list:
+                if e in cached_engine_set:
+                    hit = get_cached(e, ds)
+                    if hit:
+                        print(f"[cache] HIT  {e} × {ds} — {hit}")
+                        cached_hits[e] = hit
+                    else:
+                        print(f"[cache] MISS {e} × {ds} — will run normally")
+                        fresh_engines.append(e)
                 else:
-                    print(f"[cache] MISS {e} × {ds} — will run normally")
                     fresh_engines.append(e)
-            else:
-                fresh_engines.append(e)
 
-        fresh_files = []
-        if fresh_engines:
-            fresh_local  = [e for e in fresh_engines if needs_local_jar(e)]
-            fresh_other  = [e for e in fresh_engines if not needs_local_jar(e)]
+            fresh_files = []
+            if fresh_engines:
+                fresh_local  = [e for e in fresh_engines if needs_local_jar(e)]
+                fresh_other  = [e for e in fresh_engines if not needs_local_jar(e)]
 
-            if fresh_local and fresh_other:
-                tmp1 = output_file.replace(".json", "_pass1.json")
-                tmp2 = output_file.replace(".json", "_pass2.json")
+                if fresh_local and fresh_other:
+                    tmp1 = output_file.replace(".json", "_pass1.json")
+                    tmp2 = output_file.replace(".json", "_pass2.json")
 
-                extra1 = ["-PcoreseVersion=local"]
-                gradle_build(extra1)
-                run_benchmark(",".join(fresh_local), tmp1, ds, unzip_dir, gradle_props=extra1)
-                for e in fresh_local:
-                    if e in cached_engine_set:
-                        save_to_cache(e, ds, tmp1)
+                    extra1 = ["-PcoreseVersion=local"]
+                    gradle_build(extra1)
+                    run_benchmark(",".join(fresh_local), tmp1, ds, unzip_dir, gradle_props=extra1)
+                    for e in fresh_local:
+                        if e in cached_engine_set:
+                            save_to_cache(e, ds, tmp1)
 
-                extra2 = build_gradle_props(fresh_other)
-                gradle_build(extra2)
-                run_benchmark(",".join(fresh_other), tmp2, ds, unzip_dir, gradle_props=extra2)
-                for e in fresh_other:
-                    if e in cached_engine_set:
-                        save_to_cache(e, ds, tmp2)
+                    extra2 = build_gradle_props(fresh_other)
+                    gradle_build(extra2)
+                    run_benchmark(",".join(fresh_other), tmp2, ds, unzip_dir, gradle_props=extra2)
+                    for e in fresh_other:
+                        if e in cached_engine_set:
+                            save_to_cache(e, ds, tmp2)
 
-                fresh_files += [tmp1, tmp2]
-            else:
-                tmp = output_file.replace(".json", "_fresh.json") if cached_hits else output_file
-                extra = build_gradle_props(fresh_engines)
-                gradle_build(extra)
-                run_benchmark(",".join(fresh_engines), tmp, ds, unzip_dir, gradle_props=extra)
-                for e in fresh_engines:
-                    if e in cached_engine_set:
-                        save_to_cache(e, ds, tmp)
-                fresh_files.append(tmp)
+                    fresh_files += [tmp1, tmp2]
+                else:
+                    tmp = output_file.replace(".json", "_fresh.json") if cached_hits else output_file
+                    extra = build_gradle_props(fresh_engines)
+                    gradle_build(extra)
+                    run_benchmark(",".join(fresh_engines), tmp, ds, unzip_dir, gradle_props=extra)
+                    for e in fresh_engines:
+                        if e in cached_engine_set:
+                            save_to_cache(e, ds, tmp)
+                    fresh_files.append(tmp)
 
-        all_parts = list(cached_hits.values()) + fresh_files
-        if len(all_parts) > 1:
-            merge_json_files(all_parts, output_file)
-        elif len(all_parts) == 1 and all_parts[0] != output_file:
-            shutil.copy2(all_parts[0], output_file)
+            all_parts   = list(cached_hits.values()) + fresh_files
+            cache_paths = set(cached_hits.values())
+            if len(all_parts) > 1:
+                merge_json_files(all_parts, output_file, no_delete=cache_paths)
+            elif len(all_parts) == 1 and all_parts[0] != output_file:
+                shutil.copy2(all_parts[0], output_file)
 
-        dataset_output_files.append(output_file)
+            dataset_output_files.append(output_file)
+        except Exception as _ds_err:
+            print(f"[ERROR] Dataset '{ds}' failed: {_ds_err} — skipping", file=sys.stderr)
+            traceback.print_exc()
+            # Remove orphaned temp files so Step 3 doesn't pick up partial data
+            try:
+                _ds_tag  = f"_{ds}" if len(dataset_names) > 1 else ""
+                _base    = os.path.join(out_json_dir, f"{timestamp}{_ds_tag}_{engines_tag}")
+                for _sfx in ("_pass1.json", "_pass2.json", "_fresh.json"):
+                    _tmp = _base + _sfx
+                    if os.path.exists(_tmp):
+                        os.remove(_tmp)
+                        print(f"[cleanup] Removed orphaned temp file: {_tmp}")
+            except Exception:
+                pass
 
-    # If multiple datasets, merge all into one final report
+    # Merge all per-dataset files into one final report
     if len(dataset_output_files) > 1:
-        final_output = os.path.join(out_json_dir, f"{timestamp}_all_{engines_tag}.json")
-        merge_json_files(dataset_output_files, final_output)
-    # (single dataset file already at output_file)
+        _report_for_site = os.path.join(out_json_dir, f"{timestamp}_all_{engines_tag}.json")
+        merge_json_files(dataset_output_files, _report_for_site)
+    elif len(dataset_output_files) == 1:
+        _report_for_site = dataset_output_files[0]
+    else:
+        print("[ERROR] All datasets failed — no report to deploy", file=sys.stderr)
 
 # Case B: --coreseVersions (one build per version)
 if args.coreseVersions:
@@ -583,9 +617,15 @@ if args.coreseCommits:
 # Step 3: Copy latest report to site/data/
 ####################################################################################
 
-json_files = sorted(glob.glob(os.path.join(out_json_dir, "*.json")), key=os.path.getmtime)
-if json_files:
-    latest = json_files[-1]
+# Use the explicitly tracked report (Case A); fall back to newest file for Cases B/C.
+_explicit = locals().get("_report_for_site")
+if _explicit and os.path.exists(_explicit):
+    latest = _explicit
+else:
+    json_files = sorted(glob.glob(os.path.join(out_json_dir, "*.json")), key=os.path.getmtime)
+    latest = json_files[-1] if json_files else None
+
+if latest:
 
     dest = os.path.join(site_data_dir, "benchmark-report.json")
     shutil.copy(latest, dest)
