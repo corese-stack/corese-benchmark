@@ -64,21 +64,17 @@ def dispatch_via_gh(
     event_type: str,
     payload: dict[str, str],
 ) -> bool:
-    """Attempt dispatch using GitHub CLI (gh)."""
-    client_payload_json = json.dumps(payload)
+    """Attempt dispatch using GitHub CLI (gh) with JSON body via stdin."""
+    data = json.dumps({"event_type": event_type, "client_payload": payload})
     cmd = [
         "gh",
         "api",
         f"repos/{repo}/dispatches",
-        "-X",
-        "POST",
-        "-F",
-        f"event_type={event_type}",
-        "-F",
-        f"client_payload={client_payload_json}",
+        "--input",
+        "-",
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(cmd, input=data, capture_output=True, text=True, check=False)
         if proc.returncode == 0:
             print(f"[trigger] Dispatched '{event_type}' via gh CLI successfully.")
             return True
