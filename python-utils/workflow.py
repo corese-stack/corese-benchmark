@@ -332,6 +332,7 @@ def merge_json_files(file_list, output_file, no_delete=None):
             merged["metadata"]["queries"] = merged_queries
         if not merged["queryRuns"]:
             del merged["queryRuns"]
+        merged["metadata"]["generatedAt"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
     with open(output_file, "w") as f:
         _json_early.dump(merged, f, indent=2)
     _keep = set(no_delete or [])
