@@ -41,6 +41,16 @@ on:
         description: 'Engines dont les résultats sont lus depuis le cache (ex: jena.6.2.0,rdf4j.5.3.2). Vide = tout re-runner.'
         required: false
         default: ''
+      force_all_engines:
+        description: 'Ignore baseline and force fresh execution of all engines'
+        required: false
+        default: false
+        type: boolean
+      update_baseline:
+        description: 'Update site/data/baseline.json with newly measured immutable engine runs'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
 
@@ -124,8 +134,8 @@ jobs:
           conda activate benchmarkenv
           python python-utils/workflow.py \
             --engines="corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
-            --datasets="dbpedia,bowlogna,lubm" \
-            --cached-engines="jena.6.2.0,rdf4j.5.3.2"
+            --datasets="dbpedia,bowlogna,lubm,bsbm" \
+            --baseline="site/data/baseline.json"
 
       - name: Check site/data output
         run: ls -la ./site/data/
@@ -182,6 +192,8 @@ jobs:
           CORESE_COMMIT: ${{ github.event.inputs.corese_commit }}
           DO_INFERENCE: ${{ github.event.inputs.inference }}
           CACHED_ENGINES: ${{ github.event.inputs.cached_engines }}
+          FORCE_ALL: ${{ github.event.inputs.force_all_engines }}
+          UPDATE_BASELINE: ${{ github.event.inputs.update_baseline }}
         run: |
           CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
@@ -190,10 +202,13 @@ jobs:
           [ -n "$CORESE_COMMIT" ] && EXTRA="$EXTRA --coreseCommits=$CORESE_COMMIT"
           [ "$DO_INFERENCE" = "true" ] && EXTRA="$EXTRA --inference"
           [ -n "$CACHED_ENGINES" ] && EXTRA="$EXTRA --cached-engines=$CACHED_ENGINES"
+          [ "$FORCE_ALL" = "true" ] && EXTRA="$EXTRA --force-all-engines"
+          [ "$UPDATE_BASELINE" = "true" ] && EXTRA="$EXTRA --update-baseline"
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \
             --scales="$SCALES" \
+            --baseline="site/data/baseline.json" \
             $EXTRA
 
       - name: Check site/data output

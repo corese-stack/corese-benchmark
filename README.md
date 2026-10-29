@@ -162,7 +162,30 @@ python python-utils/workflow.py \
 
 Partial or empty JSON files are automatically re-run (not skipped).
 
----
+### G) Baseline reference mode (< 5-min CI runs)
+
+To eliminate redundant re-computation of immutable Maven releases (Corese 4.6.5, Apache Jena 6.2.0, Eclipse RDF4J 5.3.2), benchmark measurements are frozen in `site/data/baseline.json`.
+
+During development, `workflow.py` automatically detects baseline-eligible engines and reuses their frozen scores, evaluating only the dynamic in-development engine (`corese.next` or `corese.local`):
+
+```bash
+# Evaluates ONLY corese.next, merging baseline engines in < 5 minutes
+python python-utils/workflow.py \
+  --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
+  --datasets dbpedia,bowlogna,lubm,bsbm
+
+# Force full re-run of all engines from scratch (bypassing baseline)
+python python-utils/workflow.py \
+  --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
+  --datasets dbpedia,bowlogna,lubm,bsbm \
+  --force-all-engines
+
+# Re-evaluate immutable engines and update site/data/baseline.json
+python python-utils/workflow.py \
+  --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
+  --datasets dbpedia,bowlogna,lubm,bsbm \
+  --update-baseline
+```
 
 ### Workflow options
 
@@ -172,6 +195,9 @@ Partial or empty JSON files are automatically re-run (not skipped).
 | `--dataset` | `dbpedia` | Single dataset: `dbpedia`, `bowlogna`, `bsbm`, `lubm` |
 | `--datasets` | — | Multiple datasets in one run (e.g. `dbpedia,bowlogna`) |
 | `--scales` | `small,medium,large` | Scale tiers for synthetic datasets |
+| `--baseline` | `site/data/baseline.json` | Path to frozen reference baseline JSON |
+| `--force-all-engines` | off | Bypass baseline and force fresh execution of all engines |
+| `--update-baseline` | off | Update baseline.json with newly measured engine scores |
 | `--resume` | off | Skip already-completed engine × dataset pairs |
 | `--quick` | off | 1 repetition instead of 3 (faster, less accurate) |
 | `--query-timeout` | `30` | Per-query SPARQL timeout in seconds |
