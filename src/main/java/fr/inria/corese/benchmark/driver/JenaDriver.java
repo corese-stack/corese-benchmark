@@ -178,18 +178,14 @@ public class JenaDriver implements TripleStoreDriver {
     }
 
     /**
-     * Removes all statements from both the default model and all named models.
+     * Resets the dataset by closing it and re-creating a fresh in-memory transactional dataset.
+     * A full reinit releases internal indexes instantaneously without iterating statements.
      */
     @Override
     public void clear() {
         if (dataset != null) {
-            Txn.executeWrite(dataset, () -> {
-                dataset.getDefaultModel().removeAll();
-                var iter = dataset.listNames();
-                while (iter.hasNext()) {
-                    dataset.getNamedModel(iter.next()).removeAll();
-                }
-            });
+            dataset.close();
+            dataset = DatasetFactory.createTxnMem();
         }
     }
 

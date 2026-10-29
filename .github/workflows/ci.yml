@@ -135,6 +135,7 @@ jobs:
           python python-utils/workflow.py \
             --engines="corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
             --datasets="dbpedia,bowlogna,lubm,bsbm" \
+            --scales="small" \
             --baseline="site/data/baseline.json"
 
       - name: Check site/data output
