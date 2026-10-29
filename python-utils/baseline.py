@@ -13,8 +13,9 @@ import json
 import os
 import re
 import sys
+import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 IMMUTABLE_ENGINES = ("corese.4.6.5", "jena.6.2.0", "rdf4j.5.3.2")
 
@@ -189,7 +190,7 @@ def merge_reports(
 
     meta["baselineEngines"] = sorted(cached_set)
     if "generatedAt" not in fresh_meta:
-        meta["generatedAt"] = datetime.now(UTC).isoformat()
+        meta["generatedAt"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017 (Python 3.9 compatibility)
 
     return {
         "metadata": meta,
@@ -204,28 +205,43 @@ def save_baseline(baseline_data: dict, destination_path: str) -> None:
     if not runs:
         raise ValueError("Refusing to save empty baseline")
 
-    # Strictly check that no dynamic or snapshot engines are saved into immutable baseline
+    # Strictly check that ONLY immutable engines are saved into baseline
     for r in runs:
         eng = r.get("engine", "")
-        if "next" in eng or "local" in eng or "commit" in eng:
+        if eng not in IMMUTABLE_ENGINES:
             raise ValueError(f"Refusing to save non-immutable engine into baseline: {eng}")
 
     dest_dir = os.path.dirname(destination_path)
     if dest_dir:
         os.makedirs(dest_dir, exist_ok=True)
 
-    tmp_path = destination_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile("w", dir=dest_dir or ".", delete=False, encoding="utf-8") as f:
+        tmp_path = f.name
         json.dump(baseline_data, f, indent=2)
 
-    # Validation: re-read to ensure valid JSON
-    with open(tmp_path, encoding="utf-8") as f:
-        validated = json.load(f)
-        if not isinstance(validated, dict) or "runs" not in validated:
-            raise ValueError("Baseline validation failed on temp file")
+    try:
+        # Validation: re-read to ensure valid JSON
+        with open(tmp_path, encoding="utf-8") as f:
+            validated = json.load(f)
+            if not isinstance(validated, dict) or "runs" not in validated:
+                raise ValueError("Baseline validation failed on temp file")
 
-    os.replace(tmp_path, destination_path)
-    print(f"[baseline] Successfully wrote and validated baseline: {destination_path}")
+        os.replace(tmp_path, destination_path)
+        print(f"[baseline] Successfully wrote and validated baseline: {destination_path}")
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
+def _fmt_float(val: float | None) -> str:
+    """Safely format float value to 2 decimals, returning empty string for None."""
+    if val is None:
+        return ""
+    try:
+        return f"{float(val):.2f}"
+    except (ValueError, TypeError):
+        return ""
 
 
 def export_site_data(merged_data: dict, site_data_dir: str) -> None:
@@ -258,11 +274,11 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
                 r.get("file", ""),
                 r.get("triples", 0),
                 r.get("loadingTimeMs", 0),
-                f"{r.get('throughputTriplesPerSec', 0.0):.2f}",
-                f"{r.get('memoryBeforeMb', 0.0):.2f}",
-                f"{r.get('memoryAfterMb', 0.0):.2f}",
-                f"{r.get('memoryDeltaMb', 0.0):.2f}",
-                f"{r.get('cpuPercent', 0.0):.2f}",
+                _fmt_float(r.get("throughputTriplesPerSec")),
+                _fmt_float(r.get("memoryBeforeMb")),
+                _fmt_float(r.get("memoryAfterMb")),
+                _fmt_float(r.get("memoryDeltaMb")),
+                _fmt_float(r.get("cpuPercent")),
             ])
         writer.writerow([])
         # 2. Query runs table
@@ -278,6 +294,6 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
                 q.get("queryCategory", ""),
                 q.get("medianMs", -1),
                 q.get("medianTtfrMs", -1),
-                f"{q.get('heapDeltaMb', 0.0):.2f}" if "heapDeltaMb" in q else "",
+                _fmt_float(q.get("heapDeltaMb")),
             ])
     print(f"[site] Wrote unified CSV {csv_path}")

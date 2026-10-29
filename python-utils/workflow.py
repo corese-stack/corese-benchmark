@@ -28,6 +28,7 @@ from baseline import (
     IMMUTABLE_ENGINES,
     export_site_data,
     load_baseline,
+    merge_reports,
     plan_engines,
     save_baseline,
 )
@@ -699,6 +700,7 @@ if latest:
 
     # If --update-baseline requested, persist fresh immutable engine runs into baseline.json
     if getattr(args, "update_baseline", False):
+        existing_baseline = load_baseline(args.baseline)
         immutable_runs = [
             r for r in site_data.get("runs", [])
             if r.get("engine") in IMMUTABLE_ENGINES
@@ -708,12 +710,13 @@ if latest:
             if q.get("engine") in IMMUTABLE_ENGINES
         ]
         if immutable_runs:
-            baseline_to_save = {
+            fresh_slice = {
                 "metadata": site_data.get("metadata", {}),
                 "runs": immutable_runs,
                 "queryRuns": immutable_qruns,
             }
-            save_baseline(baseline_to_save, args.baseline)
+            merged_baseline = merge_reports(existing_baseline, fresh_slice, cached_engines=IMMUTABLE_ENGINES)
+            save_baseline(merged_baseline, args.baseline)
 
 else:
     print("No JSON report found in out/")
