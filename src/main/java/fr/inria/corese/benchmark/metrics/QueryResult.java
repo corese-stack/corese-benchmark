@@ -24,6 +24,9 @@ import java.util.Objects;
  * @param repetitionsTtfrMs   raw per-repetition TTFR values; same sentinel convention as above
  * @param heapDeltaMb         median heap memory delta in MB during query execution (may be negative
  *                            if GC ran during the measurement window)
+ * @param rowCount            number of result rows returned (-1 if not counted or error)
+ * @param resultHash          canonical SHA-256 hash of result bindings (empty string if unavailable)
+ * @param status              evaluation status ("PASS", "MISMATCH", "TIMEOUT", "ERROR")
  */
 public record QueryResult(
     String engine,
@@ -34,26 +37,46 @@ public record QueryResult(
     long[] repetitionsMs,
     long   medianTtfrMs,
     long[] repetitionsTtfrMs,
-    double heapDeltaMb
+    double heapDeltaMb,
+    long   rowCount,
+    String resultHash,
+    String status
 ) {
+    public QueryResult(
+        String engine,
+        String dataset,
+        String queryId,
+        String queryCategory,
+        long   medianMs,
+        long[] repetitionsMs,
+        long   medianTtfrMs,
+        long[] repetitionsTtfrMs,
+        double heapDeltaMb
+    ) {
+        this(engine, dataset, queryId, queryCategory, medianMs, repetitionsMs, medianTtfrMs, repetitionsTtfrMs, heapDeltaMb, -1L, "", medianMs >= 0 ? "PASS" : "TIMEOUT");
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof QueryResult other)) return false;
         return medianMs == other.medianMs &&
                 medianTtfrMs == other.medianTtfrMs &&
+                rowCount == other.rowCount &&
                 Double.compare(other.heapDeltaMb, heapDeltaMb) == 0 &&
                 Objects.equals(engine, other.engine) &&
                 Objects.equals(dataset, other.dataset) &&
                 Objects.equals(queryId, other.queryId) &&
                 Objects.equals(queryCategory, other.queryCategory) &&
+                Objects.equals(resultHash, other.resultHash) &&
+                Objects.equals(status, other.status) &&
                 Arrays.equals(repetitionsMs, other.repetitionsMs) &&
                 Arrays.equals(repetitionsTtfrMs, other.repetitionsTtfrMs);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(engine, dataset, queryId, queryCategory, medianMs, medianTtfrMs, heapDeltaMb);
+        int result = Objects.hash(engine, dataset, queryId, queryCategory, medianMs, medianTtfrMs, heapDeltaMb, rowCount, resultHash, status);
         result = 31 * result + Arrays.hashCode(repetitionsMs);
         result = 31 * result + Arrays.hashCode(repetitionsTtfrMs);
         return result;
@@ -70,6 +93,9 @@ public record QueryResult(
                 "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
                 "medianTtfrMs=" + medianTtfrMs + ", " +
                 "repetitionsTtfrMs=" + Arrays.toString(repetitionsTtfrMs) + ", " +
-                "heapDeltaMb=" + heapDeltaMb + ']';
+                "heapDeltaMb=" + heapDeltaMb + ", " +
+                "rowCount=" + rowCount + ", " +
+                "resultHash=" + resultHash + ", " +
+                "status=" + status + ']';
     }
 }

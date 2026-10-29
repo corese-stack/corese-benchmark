@@ -1,5 +1,7 @@
 package fr.inria.corese.benchmark;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.inria.corese.benchmark.driver.DriverFactory;
 import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.harness.BenchmarkHarness;
@@ -15,13 +17,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Entry point for the benchmark harness.
+ * Supports running multiple engines sequentially in isolated child JVM processes
+ * to prevent JIT and GC cross-contamination.
  */
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
+    private static final long CHILD_TIMEOUT_MINUTES = 30;
 
     private record BenchmarkOptions(
         String datasetDir,
@@ -31,7 +37,8 @@ public class Main {
         String queriesFile,
         boolean inference,
         boolean quick,
-        int queryTimeoutSecs
+        int queryTimeoutSecs,
+        boolean isolateProcess
     ) {}
 
     private Main() {}
@@ -49,6 +56,7 @@ public class Main {
      *   <li>{@code queriesFile}  — (optional) path to a file with one SPARQL query per line</li>
      *   <li>{@code --inference}  — (optional flag) enables RDFS inference for Corese drivers</li>
      *   <li>{@code --quick}      — (optional flag) quick mode (1 repetition)</li>
+     *   <li>{@code --no-isolate} — (optional flag) disable subprocess JVM isolation</li>
      * </ol>
      *
      * @param args command-line arguments as described above
@@ -65,15 +73,65 @@ public class Main {
         List<FileResult> allFileResults = new ArrayList<>();
         List<QueryResult> allQueryResults = new ArrayList<>();
 
+        boolean shouldIsolate = opts.isolateProcess() && opts.engines().size() > 1;
         for (String engineName : opts.engines()) {
-            runEngine(engineName.trim(), opts, queries, allFileResults, allQueryResults);
+            String cleanName = engineName.trim();
+            if (shouldIsolate) {
+                runChild(cleanName, opts, allFileResults, allQueryResults);
+            } else {
+                runEngine(cleanName, opts, queries, allFileResults, allQueryResults);
+            }
         }
+
+        crossValidateQueries(allQueryResults);
 
         try {
             BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile());
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
             System.exit(1);
+        }
+    }
+
+    private static void crossValidateQueries(List<QueryResult> queryResults) {
+        if (queryResults == null || queryResults.isEmpty()) {
+            return;
+        }
+        java.util.Map<String, List<QueryResult>> grouped = new java.util.HashMap<>();
+        for (QueryResult qr : queryResults) {
+            String key = qr.dataset() + "::" + qr.queryId();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(qr);
+        }
+
+        for (int i = 0; i < queryResults.size(); i++) {
+            QueryResult qr = queryResults.get(i);
+            if (!"PASS".equals(qr.status()) || qr.resultHash().isEmpty()) {
+                continue;
+            }
+            String key = qr.dataset() + "::" + qr.queryId();
+            List<QueryResult> peers = grouped.get(key);
+            if (peers == null || peers.size() <= 1) {
+                continue;
+            }
+            boolean mismatch = false;
+            for (QueryResult peer : peers) {
+                if (peer == qr || !"PASS".equals(peer.status()) || peer.resultHash().isEmpty()) {
+                    continue;
+                }
+                if (!peer.resultHash().equals(qr.resultHash()) || peer.rowCount() != qr.rowCount()) {
+                    mismatch = true;
+                    break;
+                }
+            }
+            if (mismatch) {
+                log.warn("Cross-engine mismatch detected for query {} on dataset {}: engine {} produced hash {} (rows: {})",
+                    qr.queryId(), qr.dataset(), qr.engine(), qr.resultHash().substring(0, Math.min(8, qr.resultHash().length())), qr.rowCount());
+                queryResults.set(i, new QueryResult(
+                    qr.engine(), qr.dataset(), qr.queryId(), qr.queryCategory(),
+                    qr.medianMs(), qr.repetitionsMs(), qr.medianTtfrMs(), qr.repetitionsTtfrMs(),
+                    qr.heapDeltaMb(), qr.rowCount(), qr.resultHash(), "MISMATCH"
+                ));
+            }
         }
     }
 
@@ -87,6 +145,7 @@ public class Main {
         boolean inference    = false;
         boolean quick        = false;
         int queryTimeoutSecs = -1;
+        boolean isolate      = true;
 
         int i = 4;
         while (i < args.length) {
@@ -96,6 +155,9 @@ public class Main {
                 i++;
             } else if ("--quick".equals(arg)) {
                 quick = true;
+                i++;
+            } else if ("--no-isolate".equals(arg)) {
+                isolate = false;
                 i++;
             } else if ("--query-timeout".equals(arg) && i + 1 < args.length) {
                 queryTimeoutSecs = parseTimeout(args[i + 1]);
@@ -110,7 +172,7 @@ public class Main {
 
         return new BenchmarkOptions(
             datasetDir, outputFile, engines, datasetName,
-            queriesFile, inference, quick, queryTimeoutSecs
+            queriesFile, inference, quick, queryTimeoutSecs, isolate
         );
     }
 
@@ -166,5 +228,99 @@ public class Main {
         } catch (Exception e) {
             log.error("Engine {} failed: {} — skipping to next engine", engineName, e.getMessage(), e);
         }
+    }
+
+    private static void runChild(
+        String engineName,
+        BenchmarkOptions opts,
+        List<FileResult> allFileResults,
+        List<QueryResult> allQueryResults
+    ) {
+        log.info("Launching isolated child JVM for engine: {}", engineName);
+        Path tmp = null;
+        Process p = null;
+        try {
+            tmp = Files.createTempFile("corese-bench-" + engineName.replaceAll("[^a-zA-Z0-9.-]", "_") + "-", ".json");
+            List<String> cmd = buildChildCommand(opts, engineName, tmp);
+            p = new ProcessBuilder(cmd).inheritIO().start();
+            boolean completed = p.waitFor(CHILD_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            if (!completed) {
+                p.destroyForcibly();
+                log.error("Engine {} timed out in isolated subprocess after {} minutes", engineName, CHILD_TIMEOUT_MINUTES);
+                return;
+            }
+            if (p.exitValue() != 0) {
+                log.error("Engine {} failed in isolated subprocess with exit code {}", engineName, p.exitValue());
+                return;
+            }
+            readChildReport(tmp, allFileResults, allQueryResults);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Isolated execution interrupted for engine: {}", engineName);
+        } catch (Exception e) {
+            log.error("Failed to run isolated subprocess for engine {}: {}", engineName, e.getMessage(), e);
+        } finally {
+            if (p != null && p.isAlive()) {
+                p.destroyForcibly();
+            }
+            if (tmp != null) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (Exception ignored) {
+                    // Ignore temp file cleanup failure
+                }
+            }
+        }
+    }
+
+    private static void readChildReport(
+        Path tmp,
+        List<FileResult> allFileResults,
+        List<QueryResult> allQueryResults
+    ) throws Exception {
+        if (!Files.exists(tmp)) {
+            return;
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(tmp.toFile());
+        if (root.has("runs")) {
+            FileResult[] frs = mapper.treeToValue(root.get("runs"), FileResult[].class);
+            allFileResults.addAll(Arrays.asList(frs));
+        }
+        if (root.has("queryRuns")) {
+            QueryResult[] qrs = mapper.treeToValue(root.get("queryRuns"), QueryResult[].class);
+            allQueryResults.addAll(Arrays.asList(qrs));
+        }
+    }
+
+    private static List<String> buildChildCommand(BenchmarkOptions opts, String engineName, Path tempOutput) {
+        List<String> cmd = new ArrayList<>();
+        String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        cmd.add(javaBin);
+        cmd.add("-Xms4g");
+        cmd.add("-Xmx8g");
+        cmd.add("-XX:+UseG1GC");
+        cmd.add("-cp");
+        cmd.add(System.getProperty("java.class.path"));
+        cmd.add("fr.inria.corese.benchmark.Main");
+        cmd.add(opts.datasetDir());
+        cmd.add(tempOutput.toString());
+        cmd.add(engineName);
+        cmd.add(opts.datasetName());
+        if (opts.queriesFile() != null) {
+            cmd.add(opts.queriesFile());
+        }
+        if (opts.inference()) {
+            cmd.add("--inference");
+        }
+        if (opts.quick()) {
+            cmd.add("--quick");
+        }
+        if (opts.queryTimeoutSecs() > 0) {
+            cmd.add("--query-timeout");
+            cmd.add(String.valueOf(opts.queryTimeoutSecs()));
+        }
+        cmd.add("--no-isolate");
+        return cmd;
     }
 }

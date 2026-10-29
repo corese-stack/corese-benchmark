@@ -1,11 +1,18 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import fr.inria.corese.core.Graph;
+import fr.inria.corese.core.kgram.api.core.Node;
+import fr.inria.corese.core.kgram.core.Mapping;
+import fr.inria.corese.core.kgram.core.Mappings;
 import fr.inria.corese.core.load.Load;
 import fr.inria.corese.core.api.Loader;
 import fr.inria.corese.core.query.QueryProcess;
 import fr.inria.corese.core.rule.RuleEngine;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * {@link TripleStoreDriver} implementation for Corese 4.x using the classic
@@ -83,10 +90,30 @@ public class CoreseDriver implements TripleStoreDriver {
         long heapBefore = MetricsCollector.usedHeapBytes();
         QueryProcess exec = QueryProcess.create(graph);
         long start = System.currentTimeMillis();
-        var maps = exec.query(sparql);
+        var res = exec.query(sparql);
         long total = System.currentTimeMillis() - start;
-        long count = maps != null ? maps.size() : -1L;
-        return new QueryMetrics(total, total, count, MetricsCollector.usedHeapBytes() - heapBefore);
+        long count = -1L;
+        String hash = "";
+
+        if (res instanceof Mappings maps) {
+            count = maps.size();
+            SparqlResultHasher hasher = new SparqlResultHasher();
+            List<String> varNames = new ArrayList<>();
+            for (Node varNode : maps.getSelect()) {
+                varNames.add(varNode.getLabel());
+            }
+            java.util.Collections.sort(varNames);
+            for (Mapping m : maps) {
+                List<String> row = new ArrayList<>(varNames.size());
+                for (String var : varNames) {
+                    Node val = m.getNode(var);
+                    row.add(val != null ? val.getLabel() : null);
+                }
+                hasher.addRow(row);
+            }
+            hash = hasher.computeHash();
+        }
+        return new QueryMetrics(total, total, count, MetricsCollector.usedHeapBytes() - heapBefore, hash);
     }
 
     /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */

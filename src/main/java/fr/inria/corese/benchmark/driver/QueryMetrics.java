@@ -10,5 +10,16 @@ package fr.inria.corese.benchmark.driver;
  * @param resultCount    number of result rows/triples returned; {@code -1} if not applicable or not counted
  * @param heapDeltaBytes heap memory delta in bytes (used-after minus used-before, without forced GC);
  *                       may be negative if GC ran during query execution
+ * @param resultHash     canonical SHA-256 hash of result bindings (empty string if not computed)
  */
-public record QueryMetrics(long totalMs, long ttfrMs, long resultCount, long heapDeltaBytes) {}
+public record QueryMetrics(
+    long totalMs,
+    long ttfrMs,
+    long resultCount,
+    long heapDeltaBytes,
+    String resultHash
+) {
+    public QueryMetrics(long totalMs, long ttfrMs, long resultCount, long heapDeltaBytes) {
+        this(totalMs, ttfrMs, resultCount, heapDeltaBytes, "");
+    }
+}
