@@ -1,0 +1,234 @@
+{
+  "metadata": {
+    "version": "2.0",
+    "generatedAt": "2026-10-29T16:00:00Z",
+    "git": {
+      "benchmarkCommit": "360e097",
+      "coreseCommit": "3a7b8e1",
+      "branch": "main"
+    },
+    "environment": {
+      "cpuModel": "AMD EPYC 7763 64-Core Processor",
+      "cpuArchitecture": "x86_64",
+      "cpuSockets": 1,
+      "cpuCores": 16,
+      "cpuThreads": 32,
+      "cpuFrequencyMhz": 2450.0,
+      "cpuGovernor": "performance",
+      "ramTotalGb": 64.0,
+      "swapTotalGb": 8.0,
+      "swappiness": 1,
+      "osDistribution": "Ubuntu 24.04.1 LTS",
+      "osKernel": "6.8.0-45-generic",
+      "jvmVendor": "Ubuntu",
+      "jvmVersion": "21.0.4+7-Ubuntu-1ubuntu224.04",
+      "jvmFlags": [
+        "-Xms4g",
+        "-Xmx8g",
+        "-XX:+UseG1GC"
+      ]
+    },
+    "protocol": {
+      "warmup": 1,
+      "repetitions": 3,
+      "queryRepetitions": 3,
+      "queryTimeoutMs": 60000,
+      "loadTimeoutMs": 120000,
+      "metric": "median"
+    },
+    "engines": [
+      { "id": "corese.next", "family": "corese", "version": "5.0.0-SNAPSHOT", "label": "Corese v5 (Next)" },
+      { "id": "jena.6.2.0", "family": "jena", "version": "6.2.0", "label": "Apache Jena 6.2.0" },
+      { "id": "rdf4j.5.3.2", "family": "rdf4j", "version": "5.3.2", "label": "Eclipse RDF4J 5.3.2" }
+    ],
+    "datasetQueries": {
+      "bowlogna": [
+        { "id": "query_1", "category": "GRAPH_PATTERN", "label": "Count Master Theses", "sparql": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#> SELECT (COUNT(?X) as ?MasterTheses) WHERE { ?X rdf:type bb:Master_Thesis }", "expectedRowCount": 1, "expectedHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+        { "id": "query_8", "category": "AGGREGATION", "label": "Failures for teaching unit (GROUP BY)", "sparql": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#> SELECT DISTINCT ?X (count(?E) as ?Failures) WHERE { ?X rdf:type bb:Teaching_Unit . ?E bb:evaluatesTeachingUnit ?X . ?E bb:hasMark ?Y . FILTER (?Y < 3) } GROUP BY ?X", "expectedRowCount": 42, "expectedHash": "8f3e2a0459a1c8996fb92427ae41e4649b934ca495991b7852b8554a7b9c1e11" },
+        { "id": "query_10", "category": "REGEX_TEMPORAL", "label": "Supervised theses ranking (REGEX, LIMIT)", "sparql": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> PREFIX bb: <http://www.owl-ontologies.com/Ontology1324312315.owl#> SELECT ?X (COUNT(?Y) as ?num) WHERE { ?X rdf:type bb:Professor . ?Y bb:supervisedBy ?X . ?Y rdf:type ?t . FILTER REGEX (?t, 'Thesis', 'i') } GROUP BY ?X ORDER BY DESC(?num) LIMIT 1", "expectedRowCount": 1, "expectedHash": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae" }
+      ]
+    }
+  },
+  "loadingRuns": [
+    {
+      "engine": "corese.next",
+      "dataset": "bowlogna",
+      "file": "bowlogna.ttl",
+      "triples": 1234567,
+      "loadingTimeMs": 2450,
+      "repetitionsMs": [2610, 2450, 2430],
+      "throughputTriplesPerSec": 503904.8,
+      "memoryBeforeMb": 42.1,
+      "memoryAfterMb": 387.3,
+      "memoryDeltaMb": 345.2,
+      "cpuPercent": 85.4,
+      "timeSeries": [
+        { "elapsedMs": 0, "triplesLoaded": 0, "heapUsedMb": 42.1 },
+        { "elapsedMs": 500, "triplesLoaded": 310000, "heapUsedMb": 115.4 },
+        { "elapsedMs": 1000, "triplesLoaded": 650000, "heapUsedMb": 198.0 },
+        { "elapsedMs": 1500, "triplesLoaded": 980000, "heapUsedMb": 280.2 },
+        { "elapsedMs": 2000, "triplesLoaded": 1234567, "heapUsedMb": 387.3 }
+      ]
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "file": "bowlogna.ttl",
+      "triples": 1234567,
+      "loadingTimeMs": 2180,
+      "repetitionsMs": [2250, 2180, 2160],
+      "throughputTriplesPerSec": 566315.1,
+      "memoryBeforeMb": 45.0,
+      "memoryAfterMb": 412.0,
+      "memoryDeltaMb": 367.0,
+      "cpuPercent": 92.1,
+      "timeSeries": [
+        { "elapsedMs": 0, "triplesLoaded": 0, "heapUsedMb": 45.0 },
+        { "elapsedMs": 500, "triplesLoaded": 350000, "heapUsedMb": 130.0 },
+        { "elapsedMs": 1000, "triplesLoaded": 720000, "heapUsedMb": 220.0 },
+        { "elapsedMs": 1500, "triplesLoaded": 1050000, "heapUsedMb": 315.0 },
+        { "elapsedMs": 2000, "triplesLoaded": 1234567, "heapUsedMb": 412.0 }
+      ]
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "file": "bowlogna.ttl",
+      "triples": 1234567,
+      "loadingTimeMs": 3150,
+      "repetitionsMs": [3300, 3150, 3120],
+      "throughputTriplesPerSec": 391926.0,
+      "memoryBeforeMb": 40.5,
+      "memoryAfterMb": 510.5,
+      "memoryDeltaMb": 470.0,
+      "cpuPercent": 78.5,
+      "timeSeries": [
+        { "elapsedMs": 0, "triplesLoaded": 0, "heapUsedMb": 40.5 },
+        { "elapsedMs": 500, "triplesLoaded": 220000, "heapUsedMb": 110.0 },
+        { "elapsedMs": 1000, "triplesLoaded": 480000, "heapUsedMb": 210.0 },
+        { "elapsedMs": 1500, "triplesLoaded": 750000, "heapUsedMb": 320.0 },
+        { "elapsedMs": 2000, "triplesLoaded": 1020000, "heapUsedMb": 430.0 },
+        { "elapsedMs": 2500, "triplesLoaded": 1234567, "heapUsedMb": 510.5 }
+      ]
+    }
+  ],
+  "queryRuns": [
+    {
+      "engine": "corese.next",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "status": "PASS",
+      "medianMs": 8,
+      "repetitionsMs": [12, 8, 7],
+      "medianTtfrMs": 6,
+      "repetitionsTtfrMs": [9, 6, 5],
+      "rowCount": 1,
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errorMessage": null
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "status": "PASS",
+      "medianMs": 9,
+      "repetitionsMs": [14, 9, 8],
+      "medianTtfrMs": 7,
+      "repetitionsTtfrMs": [10, 7, 6],
+      "rowCount": 1,
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errorMessage": null
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_1",
+      "status": "PASS",
+      "medianMs": 11,
+      "repetitionsMs": [16, 11, 10],
+      "medianTtfrMs": 9,
+      "repetitionsTtfrMs": [13, 9, 8],
+      "rowCount": 1,
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errorMessage": null
+    },
+    {
+      "engine": "corese.next",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "status": "PASS",
+      "medianMs": 280,
+      "repetitionsMs": [310, 280, 275],
+      "medianTtfrMs": 15,
+      "repetitionsTtfrMs": [20, 15, 14],
+      "rowCount": 42,
+      "hash": "8f3e2a0459a1c8996fb92427ae41e4649b934ca495991b7852b8554a7b9c1e11",
+      "errorMessage": null
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "status": "PASS",
+      "medianMs": 320,
+      "repetitionsMs": [345, 320, 318],
+      "medianTtfrMs": 45,
+      "repetitionsTtfrMs": [50, 45, 43],
+      "rowCount": 42,
+      "hash": "8f3e2a0459a1c8996fb92427ae41e4649b934ca495991b7852b8554a7b9c1e11",
+      "errorMessage": null
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_8",
+      "status": "PASS",
+      "medianMs": 410,
+      "repetitionsMs": [430, 410, 405],
+      "medianTtfrMs": 60,
+      "repetitionsTtfrMs": [65, 60, 58],
+      "rowCount": 42,
+      "hash": "8f3e2a0459a1c8996fb92427ae41e4649b934ca495991b7852b8554a7b9c1e11",
+      "errorMessage": null
+    },
+    {
+      "engine": "corese.next",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "status": "PASS",
+      "medianMs": 45,
+      "repetitionsMs": [50, 45, 44],
+      "medianTtfrMs": 12,
+      "repetitionsTtfrMs": [15, 12, 11],
+      "rowCount": 1,
+      "hash": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+      "errorMessage": null
+    },
+    {
+      "engine": "jena.6.2.0",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "status": "PASS",
+      "medianMs": 48,
+      "repetitionsMs": [52, 48, 47],
+      "medianTtfrMs": 14,
+      "repetitionsTtfrMs": [17, 14, 13],
+      "rowCount": 1,
+      "hash": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+      "errorMessage": null
+    },
+    {
+      "engine": "rdf4j.5.3.2",
+      "dataset": "bowlogna",
+      "queryId": "query_10",
+      "status": "TIMEOUT",
+      "medianMs": 60000,
+      "repetitionsMs": [60000, 60000, 60000],
+      "medianTtfrMs": -1,
+      "repetitionsTtfrMs": [-1, -1, -1],
+      "rowCount": 0,
+      "hash": "",
+      "errorMessage": "Query execution exceeded timeout of 60000 ms"
+    }
+  ]
+}
