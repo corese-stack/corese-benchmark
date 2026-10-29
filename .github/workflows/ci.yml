@@ -1,23 +1,19 @@
 name: Benchmark & Deploy to GitHub Pages
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 2 * * 0' # Weekly, Sunday 02:00 UTC
+  repository_dispatch:
+    # client_payload: { corese_commit, release_tag, datasets, scales }
+    types: [corese-release, benchmark-trigger]
   workflow_dispatch:
     inputs:
       datasets:
-        description: 'Datasets à benchmarker (séparés par virgule : dbpedia,bowlogna,bsbm,lubm)'
+        description: 'Datasets (comma-separated: dbpedia,bowlogna,bsbm,lubm)'
         required: false
         default: 'dbpedia,bowlogna,lubm'
       engines:
@@ -25,11 +21,11 @@ on:
         required: false
         default: 'corese.4.6.5,jena.6.2.0,rdf4j.5.3.2'
       scales:
-        description: 'Dataset scales'
+        description: 'Dataset scales (comma-separated)'
         required: false
         default: 'small,medium,large'
       corese_commit:
-        description: 'Commit Corese à benchmarker (ex: b8dbc158). Laisse vide pour ignorer.'
+        description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = ignore.'
         required: false
         default: ''
       inference:
@@ -38,7 +34,7 @@ on:
         default: false
         type: boolean
       cached_engines:
-        description: 'Engines dont les résultats sont lus depuis le cache (ex: jena.6.2.0,rdf4j.5.3.2). Vide = tout re-runner.'
+        description: 'Engines whose results are read from cache (e.g. jena.6.2.0,rdf4j.5.3.2). Empty = re-run all.'
         required: false
         default: ''
       force_all_engines:
@@ -51,6 +47,28 @@ on:
         required: false
         default: false
         type: boolean
+      quick:
+        description: 'Quick mode: 1 repetition instead of 3 (faster, less accurate)'
+        required: false
+        default: false
+        type: boolean
+      query_timeout:
+        description: 'Per-query SPARQL timeout in seconds (empty = harness default)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# Distinct namespace prevents PR branches (e.g. named 'main' in a fork) from colliding with production
+concurrency:
+  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DEFAULT_CORESE_NEXT_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
+  BASE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
+  ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm
 
 jobs:
 
@@ -58,6 +76,7 @@ jobs:
   smoke-test:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -80,17 +99,24 @@ jobs:
         shell: bash -l {0}
         run: |
           python python-utils/workflow.py \
-            --engines="corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
-            --dataset="dbpedia" \
-            --scales="small"
+            --engines="$BASE_ENGINES" \
+            --datasets="dbpedia" \
+            --scales="small" \
+            --quick
 
       - name: Check site/data output
         run: ls -la ./site/data/
 
-  # ─── Full benchmark on merge to main (P16 self-hosted) ────────────────────
-  benchmark-node:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # ─── Benchmark (self-hosted): push / cron / dispatch / manual ─────────────
+  benchmark-run:
+    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, corese-benchmark]
+    timeout-minutes: 720
+    outputs:
+      engines: ${{ steps.params.outputs.engines }}
+      datasets: ${{ steps.params.outputs.datasets }}
+      scales: ${{ steps.params.outputs.scales }}
+      trigger: ${{ steps.params.outputs.trigger }}
 
     steps:
       - name: Checkout
@@ -98,14 +124,124 @@ jobs:
         with:
           clean: false
 
-      - name: Clean old artifacts (>30 days)
+      # Event-controlled values go through env and are strictly validated
+      - name: Resolve parameters
+        id: params
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_ACTION: ${{ github.event.action }}
+          IN_DATASETS: ${{ github.event.inputs.datasets }}
+          IN_ENGINES: ${{ github.event.inputs.engines }}
+          IN_SCALES: ${{ github.event.inputs.scales }}
+          IN_COMMIT: ${{ github.event.inputs.corese_commit }}
+          IN_INFERENCE: ${{ github.event.inputs.inference }}
+          IN_CACHED: ${{ github.event.inputs.cached_engines }}
+          IN_FORCE: ${{ github.event.inputs.force_all_engines }}
+          IN_UPDATE_BASELINE: ${{ github.event.inputs.update_baseline }}
+          IN_QUICK: ${{ github.event.inputs.quick }}
+          IN_TIMEOUT: ${{ github.event.inputs.query_timeout }}
+          PL_COMMIT: ${{ github.event.client_payload.corese_commit }}
+          PL_TAG: ${{ github.event.client_payload.release_tag }}
+          PL_DATASETS: ${{ github.event.client_payload.datasets }}
+          PL_SCALES: ${{ github.event.client_payload.scales }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          check_list()   { [[ "$2" =~ ^[A-Za-z0-9._,-]*$ ]] || fail "Invalid $1: '$2'"; }
+          check_commit() { [[ -z "$1" || "$1" =~ ^[0-9a-fA-F]{7,40}$ ]] || fail "Invalid corese_commit: '$1'"; }
+
+          ENGINES="corese.next,$BASE_ENGINES"
+          DATASETS="$ALL_DATASETS"
+          SCALES="small"
+          COMMIT=""; INFERENCE=false; CACHED=""; FORCE=false
+          UPDATE_BASELINE=false; QUICK=false; TIMEOUT=""
+          TRIGGER="$EVENT"
+
+          case "$EVENT" in
+            push)
+              ;;
+            schedule)
+              SCALES="small,medium,large"
+              ;;
+            repository_dispatch)
+              TRIGGER="repository_dispatch:$DISPATCH_ACTION"
+              [ -n "$PL_DATASETS" ] && DATASETS="$PL_DATASETS"
+              [ -n "$PL_SCALES" ] && SCALES="$PL_SCALES"
+              COMMIT="$PL_COMMIT"
+              if [ -n "$PL_TAG" ]; then
+                [[ "$PL_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.]+)?$ ]] \
+                  || fail "Invalid release_tag: '$PL_TAG'"
+                ENGINES="corese.next,corese.${PL_TAG#v},jena.6.2.0,rdf4j.5.3.2"
+                TRIGGER="$TRIGGER ($PL_TAG)"
+              fi
+              ;;
+            workflow_dispatch)
+              DATASETS="$IN_DATASETS"; ENGINES="$IN_ENGINES"; SCALES="$IN_SCALES"
+              COMMIT="$IN_COMMIT"; INFERENCE="$IN_INFERENCE"; CACHED="$IN_CACHED"
+              FORCE="$IN_FORCE"; UPDATE_BASELINE="$IN_UPDATE_BASELINE"
+              QUICK="$IN_QUICK"; TIMEOUT="$IN_TIMEOUT"
+              ;;
+            *)
+              fail "Unsupported event $EVENT"
+              ;;
+          esac
+
+          check_list datasets "$DATASETS"
+          check_list engines "$ENGINES"
+          check_list scales "$SCALES"
+          check_list cached_engines "$CACHED"
+          check_commit "$COMMIT"
+          [[ -z "$TIMEOUT" || "$TIMEOUT" =~ ^[0-9]+$ ]] || fail "Invalid query_timeout: '$TIMEOUT'"
+          [ -n "$DATASETS" ] && [ -n "$ENGINES" ] && [ -n "$SCALES" ] \
+            || fail "datasets, engines and scales must not be empty"
+
+          EXTRA=()
+          [ -n "$COMMIT" ]                 && EXTRA+=("--coreseCommits=$COMMIT")
+          [ "$INFERENCE" = "true" ]        && EXTRA+=("--inference")
+          [ -n "$CACHED" ]                 && EXTRA+=("--cached-engines=$CACHED")
+          [ "$FORCE" = "true" ]            && EXTRA+=("--force-all-engines")
+          [ "$UPDATE_BASELINE" = "true" ]  && EXTRA+=("--update-baseline")
+          [ "$QUICK" = "true" ]            && EXTRA+=("--quick")
+          [ -n "$TIMEOUT" ]                && EXTRA+=("--query-timeout=$TIMEOUT")
+
+          {
+            echo "engines=$ENGINES"
+            echo "datasets=$DATASETS"
+            echo "scales=$SCALES"
+            echo "trigger=$TRIGGER"
+            echo "extra_args=${EXTRA[*]:-}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "### Benchmark parameters" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "- **Trigger:** $TRIGGER"
+            echo "- **Engines:** $ENGINES"
+            echo "- **Datasets:** $DATASETS"
+            echo "- **Scales:** $SCALES"
+            echo "- **Extra args:** ${EXTRA[*]:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean old artifacts (>30 days) and staging
         run: |
           find out/ -name "*.json" -mtime +30 -delete 2>/dev/null || true
           rm -rf build/
+          rm -f libs/corese-core-local.jar
+
+      - name: Locate conda
+        run: |
+          CONDA_SH=$(find "$HOME" -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
+          [ -n "$CONDA_SH" ] || { echo "::error::conda.sh not found on runner"; exit 1; }
+          echo "CONDA_SH=$CONDA_SH" >> "$GITHUB_ENV"
+
+      - name: Set up conda environment
+        run: |
+          source "$CONDA_SH"
+          conda env update -f python-utils/environment.yml --prune
 
       - name: Build corese.next JAR
+        if: contains(steps.params.outputs.engines, 'corese.next')
         env:
-          CORESE_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
+          CORESE_COMMIT: ${{ env.DEFAULT_CORESE_NEXT_COMMIT }}
         run: |
           CORESE_DIR="$HOME/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then
@@ -115,102 +251,30 @@ jobs:
           git fetch origin feature/corese-next
           git checkout "$CORESE_COMMIT"
           chmod +x gradlew
-          ./gradlew shadowJar --no-daemon -q
+          ./gradlew clean shadowJar --no-daemon -q
           JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
-          mkdir -p "$GITHUB_WORKSPACE/libs"
-          cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
-          echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
-
-      - name: Set up conda environment
-        run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
-          source "$CONDA_SH"
-          conda env update -f python-utils/environment.yml --prune
-
-      - name: Run full benchmark
-        run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
-          source "$CONDA_SH"
-          conda activate benchmarkenv
-          python python-utils/workflow.py \
-            --engines="corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2" \
-            --datasets="dbpedia,bowlogna,lubm,bsbm" \
-            --scales="small" \
-            --baseline="site/data/baseline.json"
-
-      - name: Check site/data output
-        run: ls -la ./site/data/
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./site
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
-
-  # ─── Manual run (workflow_dispatch) ───────────────────────────────────────
-  benchmark-manual:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, corese-benchmark]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          clean: false
-
-      - name: Set up conda environment
-        run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
-          source "$CONDA_SH"
-          conda env update -f python-utils/environment.yml --prune
-
-      - name: Build corese.next JAR
-        if: contains(github.event.inputs.engines, 'corese.next')
-        env:
-          CORESE_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
-        run: |
-          CORESE_DIR="$HOME/corese-next-build"
-          if [ ! -d "$CORESE_DIR/.git" ]; then
-            git clone https://github.com/corese-stack/corese-core.git "$CORESE_DIR"
-          fi
-          cd "$CORESE_DIR"
-          git fetch origin feature/corese-next
-          git checkout "$CORESE_COMMIT"
-          chmod +x gradlew
-          ./gradlew shadowJar --no-daemon -q
-          JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
+          [ -f "$JAR" ] || { echo "::error::corese-core shadowJar not found"; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/libs"
           cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
           echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
 
       - name: Run benchmark
         env:
-          ENGINES: ${{ github.event.inputs.engines }}
-          DATASETS: ${{ github.event.inputs.datasets }}
-          SCALES: ${{ github.event.inputs.scales }}
-          CORESE_COMMIT: ${{ github.event.inputs.corese_commit }}
-          DO_INFERENCE: ${{ github.event.inputs.inference }}
-          CACHED_ENGINES: ${{ github.event.inputs.cached_engines }}
-          FORCE_ALL: ${{ github.event.inputs.force_all_engines }}
-          UPDATE_BASELINE: ${{ github.event.inputs.update_baseline }}
+          ENGINES: ${{ steps.params.outputs.engines }}
+          DATASETS: ${{ steps.params.outputs.datasets }}
+          SCALES: ${{ steps.params.outputs.scales }}
+          EXTRA_ARGS: ${{ steps.params.outputs.extra_args }}
         run: |
-          CONDA_SH=$(find $HOME -name "conda.sh" -path "*/profile.d/conda.sh" -not -path "*/pkgs/*" 2>/dev/null | head -1)
           source "$CONDA_SH"
           conda activate benchmarkenv
-          EXTRA=""
-          [ -n "$CORESE_COMMIT" ] && EXTRA="$EXTRA --coreseCommits=$CORESE_COMMIT"
-          [ "$DO_INFERENCE" = "true" ] && EXTRA="$EXTRA --inference"
-          [ -n "$CACHED_ENGINES" ] && EXTRA="$EXTRA --cached-engines=$CACHED_ENGINES"
-          [ "$FORCE_ALL" = "true" ] && EXTRA="$EXTRA --force-all-engines"
-          [ "$UPDATE_BASELINE" = "true" ] && EXTRA="$EXTRA --update-baseline"
+          # EXTRA_ARGS contains validated safe flags; word splitting intended
+          # shellcheck disable=SC2086
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \
             --scales="$SCALES" \
             --baseline="site/data/baseline.json" \
-            $EXTRA
+            $EXTRA_ARGS
 
       - name: Check site/data output
         run: ls -la ./site/data/
@@ -220,5 +284,53 @@ jobs:
         with:
           path: ./site
 
+  # ─── Deploy to GitHub Pages (main branch only) ───────────────────────────
+  deploy-pages:
+    needs: benchmark-run
+    if: ${{ needs.benchmark-run.result == 'success' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
+
+  # ─── Health-check of the deployed site ────────────────────────────────────
+  pages-health-check:
+    needs: deploy-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check site is reachable
+        env:
+          PAGE_URL: ${{ needs.deploy-pages.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          [ -n "${PAGE_URL:-}" ] || { echo "::error::PAGE_URL is empty"; exit 1; }
+          BASE="${PAGE_URL%/}"
+          check() {
+            local url="$1"
+            for attempt in 1 2 3 4 5 6; do
+              local code
+              code=$(curl -sS -o /dev/null -L --max-time 20 -w '%{http_code}' "$url" 2>/dev/null || echo "000")
+              if [ "$code" = "200" ]; then
+                echo "OK   $url (HTTP 200)"
+                return 0
+              fi
+              echo "Attempt $attempt: $url returned HTTP $code, retrying in 15s..."
+              [ "$attempt" -lt 6 ] && sleep 15
+            done
+            echo "::error::Health-check failed for $url (last HTTP code $code)"
+            return 1
+          }
+          check "$BASE/"
+          check "$BASE/data/baseline.json"
