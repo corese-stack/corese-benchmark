@@ -82,12 +82,19 @@ public final class BenchmarkReport {
         mapper.writeValue(jsonPath.toFile(), report);
         log.info("Report written to: {}", outputPath);
 
-        // CSV — sibling csv/ directory alongside json/
-        Path csvDir = jsonPath.getParent().getParent().resolve("csv");
-        Files.createDirectories(csvDir);
-        Path csvPath = csvDir.resolve(jsonPath.getFileName().toString().replace(".json", ".csv"));
-        writeCsv(results, queryResults, csvPath.toString());
-        log.info("CSV written to: {}", csvPath);
+        // CSV — sibling csv/ directory alongside json/ if possible, otherwise alongside the json file
+        try {
+            Path parent = jsonPath.getParent();
+            Path csvDir = (parent != null && parent.getParent() != null)
+                ? parent.getParent().resolve("csv")
+                : (parent != null ? parent.resolve("csv") : Path.of("csv"));
+            Files.createDirectories(csvDir);
+            Path csvPath = csvDir.resolve(jsonPath.getFileName().toString().replace(".json", ".csv"));
+            writeCsv(results, queryResults, csvPath.toString());
+            log.info("CSV written to: {}", csvPath);
+        } catch (Exception e) {
+            log.warn("Could not generate sibling CSV for {}: {}", outputPath, e.getMessage());
+        }
     }
 
     /**
@@ -119,14 +126,15 @@ public final class BenchmarkReport {
             if (queryResults != null && !queryResults.isEmpty()) {
                 pw.println();
                 pw.println("# QUERY BENCHMARK");
-                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rep1Ms,rep2Ms,rep3Ms");
+                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rowCount,resultHash,status,rep1Ms,rep2Ms,rep3Ms");
                 for (QueryResult r : queryResults) {
                     String reps = Arrays.stream(r.repetitionsMs())
                         .mapToObj(String::valueOf)
                         .collect(Collectors.joining(","));
-                    pw.printf(Locale.US, "%s,%s,%s,%s,%d,%d,%.3f,%s%n",
+                    pw.printf(Locale.US, "%s,%s,%s,%s,%d,%d,%.3f,%d,%s,%s,%s%n",
                         r.engine(), r.dataset(), r.queryId(), r.queryCategory(),
-                        r.medianMs(), r.medianTtfrMs(), r.heapDeltaMb(), reps);
+                        r.medianMs(), r.medianTtfrMs(), r.heapDeltaMb(),
+                        r.rowCount(), r.resultHash(), r.status(), reps);
                 }
             }
         }

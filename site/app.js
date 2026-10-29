@@ -1618,10 +1618,17 @@ function renderQuerySection(queryRuns) {
             const winner = minMs !== null ? engines[rowData.indexOf(minMs)] : null;
             const allFailed = validTimes.length === 0;
 
-            const cells = engines.map((engine, i) => {
-              const ms = rowData[i];
-              if (ms === null) return `<td class="text-right query-fail">—</td>`;
-              return `<td class="text-right">${fmt(ms)} ms</td>`;
+            const cells = engines.map(engine => {
+              const r = queryRuns.find(item => item.engine === engine && item.queryId === qid);
+              if (!r || r.medianMs < 0) {
+                const title = r && r.status ? `Status: ${r.status}` : 'No result';
+                return `<td class="text-right query-fail" title="${title}">—</td>`;
+              }
+              const rowInfo = r.rowCount != null && r.rowCount >= 0 ? ` · ${r.rowCount} rows` : '';
+              const hashInfo = r.resultHash ? ` [${r.resultHash.substring(0, 8)}]` : '';
+              const title = `${r.status || 'PASS'}${rowInfo}${hashInfo}`;
+              const mismatchBadge = r.status === 'MISMATCH' ? ' <span style="color:#f85149;font-size:10px;font-weight:bold" title="Result mismatch">⚠️</span>' : '';
+              return `<td class="text-right" title="${title}">${fmt(r.medianMs)} ms${mismatchBadge}</td>`;
             }).join('');
 
             const bestCell = winner

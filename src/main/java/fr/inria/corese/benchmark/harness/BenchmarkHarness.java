@@ -182,31 +182,41 @@ public class BenchmarkHarness {
         long[] times      = new long[QUERY_REPS];
         long[] ttfrTimes  = new long[QUERY_REPS];
         long[] heapDeltas = new long[QUERY_REPS];
+        long[] rowCounts  = new long[QUERY_REPS];
+        String[] hashes   = new String[QUERY_REPS];
+        String[] statuses = new String[QUERY_REPS];
 
         for (int i = 0; i < QUERY_REPS; i++) {
-            executeSingleRepetition(sparql, queryId, i, times, ttfrTimes, heapDeltas);
+            executeSingleRepetition(sparql, queryId, i, times, ttfrTimes, heapDeltas, rowCounts, hashes, statuses);
         }
 
         long medianMs     = MetricsCollector.median(times);
         long medianTtfrMs = MetricsCollector.median(ttfrTimes);
         double heapDeltaMb = medianLong(heapDeltas) / (1024.0 * 1024.0);
+        long count = rowCounts[0];
+        String hash = hashes[0] != null ? hashes[0] : "";
+        String status = medianMs >= 0 ? "PASS" : (statuses[0] != null ? statuses[0] : "ERROR");
 
-        log.info("  {} [{}] | {} ms | ttfr {} ms", queryId, category,
+        log.info("  {} [{}] | {} ms | ttfr {} ms | rows {} | status {}", queryId, category,
             medianMs >= 0 ? medianMs : "TIMEOUT",
-            medianTtfrMs >= 0 ? medianTtfrMs : "TIMEOUT");
+            medianTtfrMs >= 0 ? medianTtfrMs : "TIMEOUT",
+            count >= 0 ? count : "-",
+            status);
 
         return new QueryResult(
             driver.getName(), datasetName, queryId,
             category,
             medianMs, times,
             medianTtfrMs, ttfrTimes,
-            heapDeltaMb
+            heapDeltaMb,
+            count, hash, status
         );
     }
 
     private void executeSingleRepetition(
         String sparql, String queryId, int rep,
-        long[] times, long[] ttfrTimes, long[] heapDeltas
+        long[] times, long[] ttfrTimes, long[] heapDeltas,
+        long[] rowCounts, String[] hashes, String[] statuses
     ) {
         try (ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
@@ -219,21 +229,33 @@ public class BenchmarkHarness {
                 times[rep]      = m.totalMs();
                 ttfrTimes[rep]  = m.ttfrMs();
                 heapDeltas[rep] = m.heapDeltaBytes();
+                rowCounts[rep]  = m.resultCount();
+                hashes[rep]     = m.resultHash();
+                statuses[rep]   = "PASS";
             } catch (TimeoutException e) {
                 future.cancel(true);
                 executor.shutdownNow();
                 log.warn("  {} rep {} timed out after {}s", queryId, rep + 1, queryTimeoutS);
                 times[rep]     = -1L;
                 ttfrTimes[rep] = -1L;
+                rowCounts[rep] = -1L;
+                hashes[rep]    = "";
+                statuses[rep]  = "TIMEOUT";
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("  {} rep {} interrupted", queryId, rep + 1);
                 times[rep]     = -1L;
                 ttfrTimes[rep] = -1L;
+                rowCounts[rep] = -1L;
+                hashes[rep]    = "";
+                statuses[rep]  = "ERROR";
             } catch (ExecutionException e) {
                 log.warn("  {} rep {} failed: {}", queryId, rep + 1, e.getCause().getMessage());
                 times[rep]     = -1L;
                 ttfrTimes[rep] = -1L;
+                rowCounts[rep] = -1L;
+                hashes[rep]    = "";
+                statuses[rep]  = "ERROR";
             }
         }
     }

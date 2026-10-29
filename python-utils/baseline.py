@@ -284,7 +284,7 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
         # 2. Query runs table
         writer.writerow([
             "engine", "dataset", "queryId", "queryCategory", "medianMs",
-            "medianTtfrMs", "heapDeltaMb"
+            "medianTtfrMs", "heapDeltaMb", "rowCount", "resultHash", "status"
         ])
         for q in merged_data.get("queryRuns", []):
             writer.writerow([
@@ -295,5 +295,8 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
                 q.get("medianMs", -1),
                 q.get("medianTtfrMs", -1),
                 _fmt_float(q.get("heapDeltaMb")),
+                q.get("rowCount", -1),
+                q.get("resultHash", ""),
+                q.get("status", "PASS" if q.get("medianMs", -1) >= 0 else "TIMEOUT"),
             ])
     print(f"[site] Wrote unified CSV {csv_path}")

@@ -1,6 +1,9 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.SparqlResultHasher;
+import org.eclipse.rdf4j.model.Value;
+import org.eclipse.rdf4j.query.BindingSet;
 import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
@@ -18,6 +21,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Benchmark driver for Eclipse RDF4J 5.
@@ -166,20 +171,40 @@ public class RDF4JDriver implements TripleStoreDriver {
         long start = System.currentTimeMillis();
         long ttfr;
         long count = 0;
+        String hash = "";
         try (RepositoryConnection conn = repository.getConnection()) {
             TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
             try (TupleQueryResult result = q.evaluate()) {
+                List<String> bindingNames = new ArrayList<>(result.getBindingNames());
+                java.util.Collections.sort(bindingNames);
+                SparqlResultHasher hasher = new SparqlResultHasher();
                 if (result.hasNext()) {
-                    result.next(); count++;
+                    BindingSet bs = result.next();
+                    count++;
+                    addRdf4jRow(hasher, bs, bindingNames);
                     ttfr = System.currentTimeMillis() - start;
-                    while (result.hasNext()) { result.next(); count++; }
+                    while (result.hasNext()) {
+                        bs = result.next();
+                        count++;
+                        addRdf4jRow(hasher, bs, bindingNames);
+                    }
                 } else {
                     ttfr = System.currentTimeMillis() - start;
                 }
+                hash = hasher.computeHash();
             }
         }
         long total = System.currentTimeMillis() - start;
-        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore);
+        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore, hash);
+    }
+
+    private static void addRdf4jRow(SparqlResultHasher hasher, BindingSet bs, List<String> bindingNames) {
+        List<String> values = new ArrayList<>(bindingNames.size());
+        for (String name : bindingNames) {
+            Value val = bs.getValue(name);
+            values.add(val != null ? val.stringValue() : null);
+        }
+        hasher.addRow(values);
     }
 
     /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
