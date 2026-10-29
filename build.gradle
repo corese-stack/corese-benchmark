@@ -100,6 +100,13 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
+    // The corese-next fat JAR bundles its own SLF4J classes (2.x) which conflict
+    // with the project's logback-classic (SLF4J 1.x) at test runtime, causing
+    // Jena/RDF4J class-loading failures. Remove it from the test classpath; its
+    // tests (CoreseDriver-based) are already excluded in local mode above.
+    if (useLocalCorese && !localJars.isEmpty()) {
+        classpath -= localJars
+    }
 }
 
 application {
