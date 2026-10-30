@@ -5,7 +5,6 @@ import state from '../state.js';
 import { getLoadingRuns } from '../data-loader.js';
 import { getEngineColor, getEngineLabel } from '../data-loader.js';
 import { buildLoadingTableWithFilter } from '../components/result-table.js';
-import { fmtMemory } from '../formatters.js';
 import { addExpandButton } from '../chart-expand.js';
 import { renderCpuChart } from '../charts/cpu-chart.js';
 
