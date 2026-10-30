@@ -1,6 +1,9 @@
 package fr.inria.corese.benchmark.metrics;
 
+import fr.inria.corese.benchmark.telemetry.TelemetryPoint;
+
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -18,6 +21,7 @@ import java.util.Objects;
  * @param memoryDeltaMb          median heap increase during loading ({@code after - before}), in MB
  * @param cpuPercent             median JVM CPU usage during loading (0–100)
  * @param repetitionsMs          raw per-repetition load times in milliseconds (length = 3)
+ * @param timeSeries             real-time telemetry samples captured during ingestion
  */
 public record FileResult(
     String engine,
@@ -38,8 +42,28 @@ public record FileResult(
     double cpuPercent,
 
     // Raw repetition values (for transparency)
-    long[] repetitionsMs
+    long[] repetitionsMs,
+
+    // Real-time telemetry samples during loading
+    List<TelemetryPoint> timeSeries
 ) {
+    public FileResult(
+        String engine,
+        String dataset,
+        String file,
+        long triples,
+        long loadingTimeMs,
+        double throughputTriplesPerSec,
+        double memoryBeforeMb,
+        double memoryAfterMb,
+        double memoryDeltaMb,
+        double cpuPercent,
+        long[] repetitionsMs
+    ) {
+        this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, List.of());
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -54,13 +78,14 @@ public record FileResult(
                 Objects.equals(engine, other.engine) &&
                 Objects.equals(dataset, other.dataset) &&
                 Objects.equals(file, other.file) &&
-                Arrays.equals(repetitionsMs, other.repetitionsMs);
+                Arrays.equals(repetitionsMs, other.repetitionsMs) &&
+                Objects.equals(timeSeries, other.timeSeries);
     }
 
     @Override
     public int hashCode() {
         int result = Objects.hash(engine, dataset, file, triples, loadingTimeMs,
-                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent);
+                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries);
         result = 31 * result + Arrays.hashCode(repetitionsMs);
         return result;
     }
@@ -78,6 +103,7 @@ public record FileResult(
                 "memoryAfterMb=" + memoryAfterMb + ", " +
                 "memoryDeltaMb=" + memoryDeltaMb + ", " +
                 "cpuPercent=" + cpuPercent + ", " +
-                "repetitionsMs=" + Arrays.toString(repetitionsMs) + ']';
+                "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
+                "timeSeries=" + (timeSeries != null ? timeSeries.size() + " points" : "none") + ']';
     }
 }

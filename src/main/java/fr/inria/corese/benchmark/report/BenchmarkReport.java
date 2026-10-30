@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.QueryResult;
+import fr.inria.corese.benchmark.telemetry.SystemEnvironmentCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +52,15 @@ public final class BenchmarkReport {
 
         // Metadata
         Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("version", "2.0.0");
         metadata.put("generatedAt", Instant.now().toString());
+
+        try {
+            metadata.put("environment", SystemEnvironmentCollector.collect());
+        } catch (Exception e) {
+            log.warn("Could not collect system environment metadata: {}", e.getMessage());
+        }
+
         Map<String, Object> protocol = new LinkedHashMap<>();
         protocol.put("warmup", true);
         protocol.put("repetitions", 3);
@@ -65,8 +74,9 @@ public final class BenchmarkReport {
         }
         report.put("metadata", metadata);
 
-        // Load benchmark runs
+        // Load benchmark runs (both 'runs' and 'loadingRuns' for v1 and v2 compatibility)
         report.put("runs", results);
+        report.put("loadingRuns", results);
 
         // Query benchmark runs (optional)
         if (queryResults != null && !queryResults.isEmpty()) {
@@ -84,10 +94,7 @@ public final class BenchmarkReport {
 
         // CSV — sibling csv/ directory alongside json/ if possible, otherwise alongside the json file
         try {
-            Path parent = jsonPath.getParent();
-            Path csvDir = (parent != null && parent.getParent() != null)
-                ? parent.getParent().resolve("csv")
-                : (parent != null ? parent.resolve("csv") : Path.of("csv"));
+            Path csvDir = resolveCsvDirectory(jsonPath);
             Files.createDirectories(csvDir);
             Path csvPath = csvDir.resolve(jsonPath.getFileName().toString().replace(".json", ".csv"));
             writeCsv(results, queryResults, csvPath.toString());
@@ -95,6 +102,18 @@ public final class BenchmarkReport {
         } catch (Exception e) {
             log.warn("Could not generate sibling CSV for {}: {}", outputPath, e.getMessage());
         }
+    }
+
+    private static Path resolveCsvDirectory(Path jsonPath) {
+        Path parent = jsonPath.getParent();
+        if (parent == null) {
+            return Path.of("csv");
+        }
+        Path grandParent = parent.getParent();
+        if (grandParent != null) {
+            return grandParent.resolve("csv");
+        }
+        return parent.resolve("csv");
     }
 
     /**
