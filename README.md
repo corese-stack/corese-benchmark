@@ -32,14 +32,19 @@ To view it locally:
 make site   # serves at http://localhost:8080
 ```
 
-**Dashboard features:**
+**Dashboard features (v2):**
 
-- **Scalability charts** — when a single dataset is selected, Performance charts switch to line charts (X = graph size in triples) showing how each engine scales
-- **W3C Conformance** — live pass/fail results fetched from [corese-stack.github.io/corese-w3c](https://corese-stack.github.io/corese-w3c/data/w3c-report.json) (All mode only)
-- **Shareable URLs** — state (dataset, engine filter, reference engine) is encoded in the URL (`?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5`)
-- **Export CSV** — exports the currently filtered results directly from the browser (Full results section)
-- **Engine filter** — click engine cards to filter charts; click × on pills to remove from comparison
-- **SPARQL section** — per-engine latency cards, median per query, color-coded comparison table
+- **Per-dataset pages** — Bowlogna, BSBM, LUBM, DBpedia each have two sub-sections: *Ingestion & Memory* and *SPARQL Queries*
+- **Ingestion charts** — heap memory over time (bi-axis), average throughput (t/s), average CPU usage (%) — all side by side
+- **SPARQL query chart** — grouped bar chart per query, with hatched bars for timeouts (> 60 s); log scale toggle on BSBM
+- **Result tables** — sortable; filter by All / Best per File (ingestion) or All / Best per Query / PASS / Failures (queries)
+- **Engine bar** — toggle engines on/off, drag-and-drop to reorder; order reflects in all charts
+- **DBpedia Scale** — bilogarithmic scatter plot (triples × loading time) + memory efficiency chart
+- **W3C Conformance** — live SPARQL 1.1 test results from [corese-stack.github.io/corese-w3c](https://corese-stack.github.io/corese-w3c/data/w3c-report.json)
+- **Environment & Protocol** — machine specs, JVM flags, measurement protocol details
+- **Export** — JSON (raw data), Query CSV, Markdown report, PDF
+- **Per-chart actions** — PNG download (↓) and fullscreen expand (⛶) on every chart
+- **Theme toggle** — dark / light mode, persisted in `localStorage`
 
 ---
 
@@ -89,12 +94,7 @@ python python-utils/workflow.py \
 
 #### 3. Read the result
 
-Open `site/index.html`. The `corese.local` card shows:
-
-- `+X% improvement` (green)
-- `−X% regression` (red)
-
-relative to `corese.4.6.5` as the fixed reference (100/100).
+Open `site/index.html`. Navigate to the dataset page (Bowlogna, BSBM, LUBM, or DBpedia) to compare ingestion time, throughput, memory and CPU usage between `corese.local` and the reference engines. The SPARQL Queries sub-section shows per-query median latency and PASS/TIMEOUT/ERROR status.
 
 ---
 
@@ -140,12 +140,12 @@ For datasets that have associated queries (Bowlogna, BSBM):
 python python-utils/workflow.py --engines corese.local,corese.4.6.5 --dataset bowlogna
 ```
 
-The **SPARQL Queries** section appears in the dashboard with:
+The **SPARQL Queries** sub-section appears in the dashboard with:
 
-- Per-engine latency cards: avg, p50, p95, p99
-- Median time per query and per engine
-- Color-coded comparison table (green = best, orange = ×5–19, red = ×20+)
-- `—` indicates timeout or error
+- Grouped bar chart — median time per query per engine, hatched bars for timeouts
+- Result table — sortable by query, engine, status, median ms, TTFR, row count
+- Filters — All results / Best per Query / PASS only / Failures
+- Click a status badge to inspect raw repetition times and result hash
 
 ---
 
