@@ -51,7 +51,7 @@ class StabilityTests(unittest.TestCase):
 
     def test_version_key_normalization(self):
         self.assertEqual(cnr.version_key("5.0"), cnr.version_key("5.0.0"))
-        self.assertTrue(cnr.version_key("5.0.1") > cnr.version_key("5.0"))
+        self.assertGreater(cnr.version_key("5.0.1"), cnr.version_key("5.0"))
 
 
 class FetchTests(unittest.TestCase):
