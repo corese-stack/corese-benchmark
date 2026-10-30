@@ -36,7 +36,7 @@ class IngestionTelemetrySamplerTest {
     }
 
     @Test
-    void samplerInterpolatesWhenIntermediateTriplesAreZero() throws Exception {
+    void samplerRecordsBufferedEnginesAccuratelyWithoutFabricatingData() throws Exception {
         // Simulates an engine that buffers everything until final commit (triples supplier returns 0 during load)
         try (IngestionTelemetrySampler sampler = new IngestionTelemetrySampler(20, () -> 0L)) {
             sampler.start();
@@ -47,11 +47,10 @@ class IngestionTelemetrySamplerTest {
             TelemetryPoint first = points.getFirst();
             assertEquals(0L, first.triplesLoaded());
 
-            // Intermediate points should have interpolated values between 0 and 10,000
+            // Intermediate points faithfully record 0 without faking an artificial linear curve
             for (int i = 1; i < points.size() - 1; i++) {
                 TelemetryPoint p = points.get(i);
-                assertTrue(p.triplesLoaded() > 0, "Expected interpolated positive triples, got " + p.triplesLoaded());
-                assertTrue(p.triplesLoaded() <= 10_000, "Interpolated triples must not exceed final total");
+                assertEquals(0L, p.triplesLoaded(), "Intermediate samples must not fabricate unmeasured counts");
             }
 
             TelemetryPoint last = points.getLast();

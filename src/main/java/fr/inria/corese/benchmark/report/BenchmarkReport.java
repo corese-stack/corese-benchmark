@@ -52,7 +52,7 @@ public final class BenchmarkReport {
 
         // Metadata
         Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("version", "2.0.0");
+        metadata.put("version", "2.0");
         metadata.put("generatedAt", Instant.now().toString());
 
         try {
@@ -62,9 +62,12 @@ public final class BenchmarkReport {
         }
 
         Map<String, Object> protocol = new LinkedHashMap<>();
-        protocol.put("warmup", true);
+        protocol.put("warmup", 1);
         protocol.put("repetitions", 3);
         protocol.put("queryRepetitions", 3);
+        protocol.put("queryTimeoutMs", 60000);
+        protocol.put("loadTimeoutMs", 120000);
+        protocol.put("metric", "median");
         metadata.put("protocol", protocol);
         metadata.put("java", System.getProperty("java.version"));
         metadata.put("os", System.getProperty("os.name"));
@@ -74,8 +77,7 @@ public final class BenchmarkReport {
         }
         report.put("metadata", metadata);
 
-        // Load benchmark runs (both 'runs' and 'loadingRuns' for v1 and v2 compatibility)
-        report.put("runs", results);
+        // Load benchmark runs (contractual v2 format)
         report.put("loadingRuns", results);
 
         // Query benchmark runs (optional)

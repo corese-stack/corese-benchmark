@@ -392,26 +392,23 @@ public class BenchmarkHarness {
 
             IngestionTelemetrySampler sampler = null;
             if (i == repetitions - 1) {
-                sampler = new IngestionTelemetrySampler(100, () -> {
-                    try {
-                        return driver.getGraphSize();
-                    } catch (Exception e) {
-                        return 0L;
-                    }
-                });
+                // Non-intrusive heap telemetry sampling during the final repetition
+                sampler = new IngestionTelemetrySampler(100, () -> 0L);
                 sampler.start();
             }
 
-            long start = System.nanoTime();
-            loadWithTimeout(path);
-            timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
+            try {
+                long start = System.nanoTime();
+                loadWithTimeout(path);
+                timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
 
-            cpuSamples[i] = metrics.getCpuPercent();
-            memAfter[i]   = metrics.getUsedMemoryMb();
-            triples       = driver.getGraphSize();
-
-            if (sampler != null) {
-                timeSeries = sampler.stop(triples);
+                cpuSamples[i] = metrics.getCpuPercent();
+                memAfter[i]   = metrics.getUsedMemoryMb();
+                triples       = driver.getGraphSize();
+            } finally {
+                if (sampler != null) {
+                    timeSeries = sampler.stop(triples);
+                }
             }
         }
 

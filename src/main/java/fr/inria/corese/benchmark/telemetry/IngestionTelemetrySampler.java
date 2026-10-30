@@ -98,30 +98,9 @@ public final class IngestionTelemetrySampler implements AutoCloseable {
             long elapsedMs = elapsedMsSinceStart();
             shutdownScheduler();
             points.add(new TelemetryPoint(elapsedMs, finalTriples, currentHeapUsedMb()));
-            interpolateBatchCounts(finalTriples, elapsedMs);
         }
         synchronized (points) {
             return List.copyOf(points);
-        }
-    }
-
-    private void interpolateBatchCounts(long finalTriples, long elapsedMs) {
-        if (finalTriples <= 0 || elapsedMs <= 0 || points.size() <= 2) {
-            return;
-        }
-        boolean allIntermediateZero = true;
-        for (int i = 1; i < points.size() - 1; i++) {
-            if (points.get(i).triplesLoaded() > 0) {
-                allIntermediateZero = false;
-                break;
-            }
-        }
-        if (allIntermediateZero) {
-            for (int i = 1; i < points.size() - 1; i++) {
-                TelemetryPoint p = points.get(i);
-                long estimated = Math.round(((double) p.elapsedMs() / elapsedMs) * finalTriples);
-                points.set(i, new TelemetryPoint(p.elapsedMs(), estimated, p.heapUsedMb()));
-            }
         }
     }
 

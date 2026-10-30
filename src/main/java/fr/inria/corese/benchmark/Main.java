@@ -108,22 +108,8 @@ public class Main {
             if (!"PASS".equals(qr.status()) || qr.resultHash().isEmpty()) {
                 continue;
             }
-            String key = qr.dataset() + "::" + qr.queryId();
-            List<QueryResult> peers = grouped.get(key);
-            if (peers == null || peers.size() <= 1) {
-                continue;
-            }
-            boolean mismatch = false;
-            for (QueryResult peer : peers) {
-                if (peer == qr || !"PASS".equals(peer.status()) || peer.resultHash().isEmpty()) {
-                    continue;
-                }
-                if (!peer.resultHash().equals(qr.resultHash()) || peer.rowCount() != qr.rowCount()) {
-                    mismatch = true;
-                    break;
-                }
-            }
-            if (mismatch) {
+            List<QueryResult> peers = grouped.get(qr.dataset() + "::" + qr.queryId());
+            if (hasPeerMismatch(qr, peers)) {
                 log.warn("Cross-engine mismatch detected for query {} on dataset {}: engine {} produced hash {} (rows: {})",
                     qr.queryId(), qr.dataset(), qr.engine(), qr.resultHash().substring(0, Math.min(8, qr.resultHash().length())), qr.rowCount());
                 queryResults.set(i, new QueryResult(
@@ -133,6 +119,19 @@ public class Main {
                 ));
             }
         }
+    }
+
+    private static boolean hasPeerMismatch(QueryResult qr, List<QueryResult> peers) {
+        if (peers == null || peers.size() <= 1) {
+            return false;
+        }
+        for (QueryResult peer : peers) {
+            if (peer != qr && "PASS".equals(peer.status()) && !peer.resultHash().isEmpty()
+                    && (!peer.resultHash().equals(qr.resultHash()) || peer.rowCount() != qr.rowCount())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static BenchmarkOptions parseOptions(String[] args) {
@@ -230,6 +229,7 @@ public class Main {
         }
     }
 
+    @SuppressWarnings("java:S5443") // Ephemeral internal IPC JSON file cleaned up in finally block
     private static void runChild(
         String engineName,
         BenchmarkOptions opts,
@@ -283,7 +283,10 @@ public class Main {
         }
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(tmp.toFile());
-        if (root.has("runs")) {
+        if (root.has("loadingRuns")) {
+            FileResult[] frs = mapper.treeToValue(root.get("loadingRuns"), FileResult[].class);
+            allFileResults.addAll(Arrays.asList(frs));
+        } else if (root.has("runs")) {
             FileResult[] frs = mapper.treeToValue(root.get("runs"), FileResult[].class);
             allFileResults.addAll(Arrays.asList(frs));
         }
