@@ -7,6 +7,7 @@ import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.harness.BenchmarkHarness;
 import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.QueryResult;
+import fr.inria.corese.benchmark.report.BenchmarkProtocol;
 import fr.inria.corese.benchmark.report.BenchmarkReport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,7 +87,8 @@ public class Main {
         crossValidateQueries(allQueryResults);
 
         try {
-            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile());
+            BenchmarkProtocol proto = BenchmarkProtocol.fromOptions(opts.quick(), opts.queryTimeoutSecs());
+            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile(), proto);
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
             System.exit(1);

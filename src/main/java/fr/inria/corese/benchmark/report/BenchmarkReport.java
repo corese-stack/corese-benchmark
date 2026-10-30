@@ -48,6 +48,10 @@ public final class BenchmarkReport {
      * @throws Exception if serialisation or file I/O fails
      */
     public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath) throws Exception {
+        write(results, queryResults, queries, outputPath, BenchmarkProtocol.defaultProtocol());
+    }
+
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath, BenchmarkProtocol protocolConfig) throws Exception {
         Map<String, Object> report = new LinkedHashMap<>();
 
         // Metadata
@@ -61,13 +65,14 @@ public final class BenchmarkReport {
             log.warn("Could not collect system environment metadata: {}", e.getMessage());
         }
 
+        BenchmarkProtocol proto = (protocolConfig != null) ? protocolConfig : BenchmarkProtocol.defaultProtocol();
         Map<String, Object> protocol = new LinkedHashMap<>();
-        protocol.put("warmup", 1);
-        protocol.put("repetitions", 3);
-        protocol.put("queryRepetitions", 3);
-        protocol.put("queryTimeoutMs", 60000);
-        protocol.put("loadTimeoutMs", 120000);
-        protocol.put("metric", "median");
+        protocol.put("warmup", proto.warmup());
+        protocol.put("repetitions", proto.repetitions());
+        protocol.put("queryRepetitions", proto.queryRepetitions());
+        protocol.put("queryTimeoutMs", proto.queryTimeoutMs());
+        protocol.put("loadTimeoutMs", proto.loadTimeoutMs());
+        protocol.put("metric", proto.metric());
         metadata.put("protocol", protocol);
         metadata.put("java", System.getProperty("java.version"));
         metadata.put("os", System.getProperty("os.name"));
@@ -77,7 +82,8 @@ public final class BenchmarkReport {
         }
         report.put("metadata", metadata);
 
-        // Load benchmark runs (contractual v2 format)
+        // Load benchmark runs (both 'runs' and 'loadingRuns' for v2 dashboard and python-utils compatibility)
+        report.put("runs", results);
         report.put("loadingRuns", results);
 
         // Query benchmark runs (optional)
