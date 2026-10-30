@@ -95,6 +95,11 @@ jobs:
           activate-environment: benchmarkenv
           auto-activate-base: false
 
+      - name: Run Python unit tests
+        shell: bash -l {0}
+        run: |
+          python -m unittest discover -s python-utils -p "test_*.py" -v
+
       - name: Run smoke test (dbpedia small only)
         shell: bash -l {0}
         run: |
