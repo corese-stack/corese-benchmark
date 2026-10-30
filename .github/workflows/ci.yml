@@ -95,6 +95,11 @@ jobs:
           activate-environment: benchmarkenv
           auto-activate-base: false
 
+      - name: Run Python unit tests
+        shell: bash -l {0}
+        run: |
+          python -m unittest discover -s python-utils -p "test_*.py" -v
+
       - name: Run smoke test (dbpedia small only)
         shell: bash -l {0}
         run: |
@@ -257,6 +262,13 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/libs"
           cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
           echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
+
+      - name: Check for new library releases on Maven Central
+        if: github.event_name == 'schedule'
+        run: |
+          source "$CONDA_SH"
+          conda activate benchmarkenv
+          python python-utils/check_new_releases.py --verbose || true
 
       - name: Run benchmark
         env:
