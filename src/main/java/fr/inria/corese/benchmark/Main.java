@@ -7,6 +7,7 @@ import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.harness.BenchmarkHarness;
 import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.QueryResult;
+import fr.inria.corese.benchmark.report.BenchmarkProtocol;
 import fr.inria.corese.benchmark.report.BenchmarkReport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,20 +74,21 @@ public class Main {
         List<FileResult> allFileResults = new ArrayList<>();
         List<QueryResult> allQueryResults = new ArrayList<>();
 
+        BenchmarkProtocol proto = BenchmarkProtocol.fromOptions(opts.quick(), opts.queryTimeoutSecs());
         boolean shouldIsolate = opts.isolateProcess() && opts.engines().size() > 1;
         for (String engineName : opts.engines()) {
             String cleanName = engineName.trim();
             if (shouldIsolate) {
                 runChild(cleanName, opts, allFileResults, allQueryResults);
             } else {
-                runEngine(cleanName, opts, queries, allFileResults, allQueryResults);
+                runEngine(cleanName, opts, queries, allFileResults, allQueryResults, proto);
             }
         }
 
         crossValidateQueries(allQueryResults);
 
         try {
-            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile());
+            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile(), proto);
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
             System.exit(1);
@@ -108,22 +110,8 @@ public class Main {
             if (!"PASS".equals(qr.status()) || qr.resultHash().isEmpty()) {
                 continue;
             }
-            String key = qr.dataset() + "::" + qr.queryId();
-            List<QueryResult> peers = grouped.get(key);
-            if (peers == null || peers.size() <= 1) {
-                continue;
-            }
-            boolean mismatch = false;
-            for (QueryResult peer : peers) {
-                if (peer == qr || !"PASS".equals(peer.status()) || peer.resultHash().isEmpty()) {
-                    continue;
-                }
-                if (!peer.resultHash().equals(qr.resultHash()) || peer.rowCount() != qr.rowCount()) {
-                    mismatch = true;
-                    break;
-                }
-            }
-            if (mismatch) {
+            List<QueryResult> peers = grouped.get(qr.dataset() + "::" + qr.queryId());
+            if (hasPeerMismatch(qr, peers)) {
                 log.warn("Cross-engine mismatch detected for query {} on dataset {}: engine {} produced hash {} (rows: {})",
                     qr.queryId(), qr.dataset(), qr.engine(), qr.resultHash().substring(0, Math.min(8, qr.resultHash().length())), qr.rowCount());
                 queryResults.set(i, new QueryResult(
@@ -133,6 +121,19 @@ public class Main {
                 ));
             }
         }
+    }
+
+    private static boolean hasPeerMismatch(QueryResult qr, List<QueryResult> peers) {
+        if (peers == null || peers.size() <= 1) {
+            return false;
+        }
+        for (QueryResult peer : peers) {
+            if (peer != qr && "PASS".equals(peer.status()) && !peer.resultHash().isEmpty()
+                    && (!peer.resultHash().equals(qr.resultHash()) || peer.rowCount() != qr.rowCount())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static BenchmarkOptions parseOptions(String[] args) {
@@ -206,15 +207,13 @@ public class Main {
         BenchmarkOptions opts,
         List<String> queries,
         List<FileResult> allFileResults,
-        List<QueryResult> allQueryResults
+        List<QueryResult> allQueryResults,
+        BenchmarkProtocol protocol
     ) {
         log.info("Starting engine: {}", engineName);
         try {
             TripleStoreDriver driver = DriverFactory.create(engineName, opts.inference());
-            int reps = opts.quick() ? 1 : 3;
-            BenchmarkHarness harness = opts.queryTimeoutSecs() > 0
-                ? new BenchmarkHarness(driver, opts.datasetName(), reps, opts.queryTimeoutSecs())
-                : new BenchmarkHarness(driver, opts.datasetName(), reps);
+            BenchmarkHarness harness = new BenchmarkHarness(driver, opts.datasetName(), protocol);
 
             List<FileResult> fileResults = harness.run(opts.datasetDir());
             allFileResults.addAll(fileResults);
@@ -230,6 +229,7 @@ public class Main {
         }
     }
 
+    @SuppressWarnings("java:S5443") // Ephemeral internal IPC JSON file cleaned up in finally block
     private static void runChild(
         String engineName,
         BenchmarkOptions opts,
@@ -283,7 +283,10 @@ public class Main {
         }
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(tmp.toFile());
-        if (root.has("runs")) {
+        if (root.has("loadingRuns")) {
+            FileResult[] frs = mapper.treeToValue(root.get("loadingRuns"), FileResult[].class);
+            allFileResults.addAll(Arrays.asList(frs));
+        } else if (root.has("runs")) {
             FileResult[] frs = mapper.treeToValue(root.get("runs"), FileResult[].class);
             allFileResults.addAll(Arrays.asList(frs));
         }

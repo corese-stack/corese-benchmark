@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.QueryResult;
+import fr.inria.corese.benchmark.telemetry.SystemEnvironmentCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,15 +48,31 @@ public final class BenchmarkReport {
      * @throws Exception if serialisation or file I/O fails
      */
     public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath) throws Exception {
+        write(results, queryResults, queries, outputPath, BenchmarkProtocol.defaultProtocol());
+    }
+
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath, BenchmarkProtocol protocolConfig) throws Exception {
         Map<String, Object> report = new LinkedHashMap<>();
 
         // Metadata
         Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("version", "2.0");
         metadata.put("generatedAt", Instant.now().toString());
+
+        try {
+            metadata.put("environment", SystemEnvironmentCollector.collect());
+        } catch (Exception e) {
+            log.warn("Could not collect system environment metadata: {}", e.getMessage());
+        }
+
+        BenchmarkProtocol proto = (protocolConfig != null) ? protocolConfig : BenchmarkProtocol.defaultProtocol();
         Map<String, Object> protocol = new LinkedHashMap<>();
-        protocol.put("warmup", true);
-        protocol.put("repetitions", 3);
-        protocol.put("queryRepetitions", 3);
+        protocol.put("warmup", proto.warmup());
+        protocol.put("repetitions", proto.repetitions());
+        protocol.put("queryRepetitions", proto.queryRepetitions());
+        protocol.put("queryTimeoutMs", proto.queryTimeoutMs());
+        protocol.put("loadTimeoutMs", proto.loadTimeoutMs());
+        protocol.put("metric", proto.metric());
         metadata.put("protocol", protocol);
         metadata.put("java", System.getProperty("java.version"));
         metadata.put("os", System.getProperty("os.name"));
@@ -65,8 +82,9 @@ public final class BenchmarkReport {
         }
         report.put("metadata", metadata);
 
-        // Load benchmark runs
+        // Load benchmark runs (both 'runs' and 'loadingRuns' for v2 dashboard and python-utils compatibility)
         report.put("runs", results);
+        report.put("loadingRuns", results);
 
         // Query benchmark runs (optional)
         if (queryResults != null && !queryResults.isEmpty()) {
@@ -84,10 +102,7 @@ public final class BenchmarkReport {
 
         // CSV — sibling csv/ directory alongside json/ if possible, otherwise alongside the json file
         try {
-            Path parent = jsonPath.getParent();
-            Path csvDir = (parent != null && parent.getParent() != null)
-                ? parent.getParent().resolve("csv")
-                : (parent != null ? parent.resolve("csv") : Path.of("csv"));
+            Path csvDir = resolveCsvDirectory(jsonPath);
             Files.createDirectories(csvDir);
             Path csvPath = csvDir.resolve(jsonPath.getFileName().toString().replace(".json", ".csv"));
             writeCsv(results, queryResults, csvPath.toString());
@@ -95,6 +110,18 @@ public final class BenchmarkReport {
         } catch (Exception e) {
             log.warn("Could not generate sibling CSV for {}: {}", outputPath, e.getMessage());
         }
+    }
+
+    private static Path resolveCsvDirectory(Path jsonPath) {
+        Path parent = jsonPath.getParent();
+        if (parent == null) {
+            return Path.of("csv");
+        }
+        Path grandParent = parent.getParent();
+        if (grandParent != null) {
+            return grandParent.resolve("csv");
+        }
+        return parent.resolve("csv");
     }
 
     /**
@@ -109,8 +136,12 @@ public final class BenchmarkReport {
     private static void writeCsv(List<FileResult> results, List<QueryResult> queryResults, String csvPath) throws Exception {
         try (PrintWriter pw = new PrintWriter(csvPath)) {
             // Load benchmark section
+            int loadReps = results.isEmpty() ? 3 : results.get(0).repetitionsMs().length;
+            String loadRepHeaders = java.util.stream.IntStream.rangeClosed(1, loadReps)
+                .mapToObj(i -> "rep" + i + "Ms")
+                .collect(Collectors.joining(","));
             pw.println("# LOAD BENCHMARK");
-            pw.println("engine,dataset,file,triples,loadingTimeMs,throughputTriplesPerSec,memoryBeforeMb,memoryAfterMb,memoryDeltaMb,cpuPercent,rep1Ms,rep2Ms,rep3Ms");
+            pw.println("engine,dataset,file,triples,loadingTimeMs,throughputTriplesPerSec,memoryBeforeMb,memoryAfterMb,memoryDeltaMb,cpuPercent," + loadRepHeaders);
             for (FileResult r : results) {
                 String reps = Arrays.stream(r.repetitionsMs())
                     .mapToObj(String::valueOf)
@@ -124,9 +155,13 @@ public final class BenchmarkReport {
 
             // Query benchmark section (optional)
             if (queryResults != null && !queryResults.isEmpty()) {
+                int qReps = queryResults.get(0).repetitionsMs().length;
+                String qRepHeaders = java.util.stream.IntStream.rangeClosed(1, qReps)
+                    .mapToObj(i -> "rep" + i + "Ms")
+                    .collect(Collectors.joining(","));
                 pw.println();
                 pw.println("# QUERY BENCHMARK");
-                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rowCount,resultHash,status,rep1Ms,rep2Ms,rep3Ms");
+                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rowCount,resultHash,status," + qRepHeaders);
                 for (QueryResult r : queryResults) {
                     String reps = Arrays.stream(r.repetitionsMs())
                         .mapToObj(String::valueOf)

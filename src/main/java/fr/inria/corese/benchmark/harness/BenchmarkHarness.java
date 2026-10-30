@@ -6,6 +6,9 @@ import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.benchmark.metrics.QueryResult;
 import fr.inria.corese.benchmark.metrics.SparqlAnalyser;
+import fr.inria.corese.benchmark.report.BenchmarkProtocol;
+import fr.inria.corese.benchmark.telemetry.IngestionTelemetrySampler;
+import fr.inria.corese.benchmark.telemetry.TelemetryPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,26 +34,29 @@ import java.util.stream.Collectors;
 public class BenchmarkHarness {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkHarness.class);
-    private final int repetitions;
-    private static final int QUERY_REPS = 3;
     private static final long DEFAULT_QUERY_TIMEOUT_S  = 30; // seconds per query execution
-    private static final long LOAD_TIMEOUT_MINUTES     = 10; // minutes per file load
-    private final long queryTimeoutS;
+    private static final String STATUS_PASS = "PASS";
+    private static final String STATUS_TIMEOUT = "TIMEOUT";
+    private static final String STATUS_ERROR = "ERROR";
 
     private final TripleStoreDriver driver;
     private final MetricsCollector metrics;
     private final String datasetName;
+    private final BenchmarkProtocol protocol;
+
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, BenchmarkProtocol protocol) {
+        this.driver = driver;
+        this.datasetName = datasetName;
+        this.protocol = protocol != null ? protocol : BenchmarkProtocol.defaultProtocol();
+        this.metrics = new MetricsCollector();
+    }
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
         this(driver, datasetName, repetitions, DEFAULT_QUERY_TIMEOUT_S);
     }
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions, long queryTimeoutS) {
-        this.driver = driver;
-        this.datasetName = datasetName;
-        this.repetitions = repetitions;
-        this.queryTimeoutS = queryTimeoutS;
-        this.metrics = new MetricsCollector();
+        this(driver, datasetName, BenchmarkProtocol.fromOptions(repetitions == 1, (int) queryTimeoutS));
     }
 
     /**
@@ -86,9 +92,9 @@ public class BenchmarkHarness {
                                     file.getName(), result.loadingTimeMs(), repStr,
                                     result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
                 } catch (java.util.concurrent.TimeoutException e) {
-                    log.error("  [{}/{}] {} — LOAD TIMEOUT ({}min, engine={}, dataset={}), skipping file",
+                    log.error("  [{}/{}] {} — LOAD TIMEOUT ({}ms, engine={}, dataset={}), skipping file",
                         fi + 1, files.length, file.getName(),
-                        LOAD_TIMEOUT_MINUTES, driver.getName(), datasetName);
+                        protocol.loadTimeoutMs(), driver.getName(), datasetName);
                 } catch (OutOfMemoryError e) {
                     System.gc();
                     log.error("  [{}/{}] {} — OUT OF MEMORY (engine={}, dataset={}, file={}), skipping file",
@@ -118,9 +124,9 @@ public class BenchmarkHarness {
                 driver.load(file.getAbsolutePath());
             }
             log.info("  {} triples loaded — running {} queries × {} reps",
-                driver.getGraphSize(), queries.size(), QUERY_REPS);
+                driver.getGraphSize(), queries.size(), protocol.queryRepetitions());
 
-            if (repetitions > 1) {
+            if (protocol.warmup() > 0) {
                 warmupQueries(queries);
             } else {
                 log.info("  Quick mode — skipping query warmup");
@@ -156,8 +162,9 @@ public class BenchmarkHarness {
             return t;
         })) {
             Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(warmupSparql));
+            long qTimeoutS = Math.max(1, protocol.queryTimeoutMs() / 1000L);
             try {
-                long[] res = wf.get(queryTimeoutS, TimeUnit.SECONDS);
+                long[] res = wf.get(qTimeoutS, TimeUnit.SECONDS);
                 long count = res[1];
                 if (count == 0) {
                     log.warn("  {} warmup: 0 results — query may be incorrect or data not loaded", warmupId);
@@ -167,7 +174,7 @@ public class BenchmarkHarness {
             } catch (TimeoutException e) {
                 wf.cancel(true);
                 warmupExec.shutdownNow();
-                log.warn("  {} warmup timed out after {}s — skipping", warmupId, queryTimeoutS);
+                log.warn("  {} warmup timed out after {}s — skipping", warmupId, qTimeoutS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("  {} warmup interrupted", warmupId);
@@ -179,15 +186,17 @@ public class BenchmarkHarness {
     }
 
     private QueryResult benchmarkSingleQuery(String sparql, String queryId, String category) {
-        long[] times      = new long[QUERY_REPS];
-        long[] ttfrTimes  = new long[QUERY_REPS];
-        long[] heapDeltas = new long[QUERY_REPS];
-        long[] rowCounts  = new long[QUERY_REPS];
-        String[] hashes   = new String[QUERY_REPS];
-        String[] statuses = new String[QUERY_REPS];
+        int qReps = protocol.queryRepetitions();
+        long[] times      = new long[qReps];
+        long[] ttfrTimes  = new long[qReps];
+        long[] heapDeltas = new long[qReps];
+        long[] rowCounts  = new long[qReps];
+        String[] hashes   = new String[qReps];
+        String[] statuses = new String[qReps];
 
-        for (int i = 0; i < QUERY_REPS; i++) {
-            executeSingleRepetition(sparql, queryId, i, times, ttfrTimes, heapDeltas, rowCounts, hashes, statuses);
+        RepetitionBuffers buffers = new RepetitionBuffers(times, ttfrTimes, heapDeltas, rowCounts, hashes, statuses);
+        for (int i = 0; i < qReps; i++) {
+            executeSingleRepetition(sparql, queryId, i, buffers);
         }
 
         long medianMs     = MetricsCollector.median(times);
@@ -195,11 +204,18 @@ public class BenchmarkHarness {
         double heapDeltaMb = medianLong(heapDeltas) / (1024.0 * 1024.0);
         long count = rowCounts[0];
         String hash = hashes[0] != null ? hashes[0] : "";
-        String status = medianMs >= 0 ? "PASS" : (statuses[0] != null ? statuses[0] : "ERROR");
+        String status;
+        if (medianMs >= 0) {
+            status = STATUS_PASS;
+        } else if (statuses[0] != null) {
+            status = statuses[0];
+        } else {
+            status = STATUS_ERROR;
+        }
 
         log.info("  {} [{}] | {} ms | ttfr {} ms | rows {} | status {}", queryId, category,
-            medianMs >= 0 ? medianMs : "TIMEOUT",
-            medianTtfrMs >= 0 ? medianTtfrMs : "TIMEOUT",
+            medianMs >= 0 ? medianMs : STATUS_TIMEOUT,
+            medianTtfrMs >= 0 ? medianTtfrMs : STATUS_TIMEOUT,
             count >= 0 ? count : "-",
             status);
 
@@ -213,11 +229,47 @@ public class BenchmarkHarness {
         );
     }
 
-    private void executeSingleRepetition(
-        String sparql, String queryId, int rep,
-        long[] times, long[] ttfrTimes, long[] heapDeltas,
-        long[] rowCounts, String[] hashes, String[] statuses
+    private record RepetitionBuffers(
+        long[] times,
+        long[] ttfrTimes,
+        long[] heapDeltas,
+        long[] rowCounts,
+        String[] hashes,
+        String[] statuses
     ) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof RepetitionBuffers b)) return false;
+            return Arrays.equals(times, b.times)
+                && Arrays.equals(ttfrTimes, b.ttfrTimes)
+                && Arrays.equals(heapDeltas, b.heapDeltas)
+                && Arrays.equals(rowCounts, b.rowCounts)
+                && Arrays.equals(hashes, b.hashes)
+                && Arrays.equals(statuses, b.statuses);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = Arrays.hashCode(times);
+            result = 31 * result + Arrays.hashCode(ttfrTimes);
+            result = 31 * result + Arrays.hashCode(heapDeltas);
+            result = 31 * result + Arrays.hashCode(rowCounts);
+            result = 31 * result + Arrays.hashCode(hashes);
+            result = 31 * result + Arrays.hashCode(statuses);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "RepetitionBuffers";
+        }
+    }
+
+    private void executeSingleRepetition(
+        String sparql, String queryId, int rep, RepetitionBuffers buffers
+    ) {
+        long qTimeoutS = Math.max(1, protocol.queryTimeoutMs() / 1000L);
         try (ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
             t.setDaemon(true);
@@ -225,37 +277,37 @@ public class BenchmarkHarness {
         })) {
             Future<QueryMetrics> future = executor.submit(() -> driver.queryWithMetrics(sparql));
             try {
-                QueryMetrics m = future.get(queryTimeoutS, TimeUnit.SECONDS);
-                times[rep]      = m.totalMs();
-                ttfrTimes[rep]  = m.ttfrMs();
-                heapDeltas[rep] = m.heapDeltaBytes();
-                rowCounts[rep]  = m.resultCount();
-                hashes[rep]     = m.resultHash();
-                statuses[rep]   = "PASS";
+                QueryMetrics m = future.get(qTimeoutS, TimeUnit.SECONDS);
+                buffers.times()[rep]      = m.totalMs();
+                buffers.ttfrTimes()[rep]  = m.ttfrMs();
+                buffers.heapDeltas()[rep] = m.heapDeltaBytes();
+                buffers.rowCounts()[rep]  = m.resultCount();
+                buffers.hashes()[rep]     = m.resultHash();
+                buffers.statuses()[rep]   = STATUS_PASS;
             } catch (TimeoutException e) {
                 future.cancel(true);
                 executor.shutdownNow();
-                log.warn("  {} rep {} timed out after {}s", queryId, rep + 1, queryTimeoutS);
-                times[rep]     = -1L;
-                ttfrTimes[rep] = -1L;
-                rowCounts[rep] = -1L;
-                hashes[rep]    = "";
-                statuses[rep]  = "TIMEOUT";
+                log.warn("  {} rep {} timed out after {}s", queryId, rep + 1, qTimeoutS);
+                buffers.times()[rep]     = -1L;
+                buffers.ttfrTimes()[rep] = -1L;
+                buffers.rowCounts()[rep] = -1L;
+                buffers.hashes()[rep]    = "";
+                buffers.statuses()[rep]  = STATUS_TIMEOUT;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("  {} rep {} interrupted", queryId, rep + 1);
-                times[rep]     = -1L;
-                ttfrTimes[rep] = -1L;
-                rowCounts[rep] = -1L;
-                hashes[rep]    = "";
-                statuses[rep]  = "ERROR";
+                buffers.times()[rep]     = -1L;
+                buffers.ttfrTimes()[rep] = -1L;
+                buffers.rowCounts()[rep] = -1L;
+                buffers.hashes()[rep]    = "";
+                buffers.statuses()[rep]  = STATUS_ERROR;
             } catch (ExecutionException e) {
                 log.warn("  {} rep {} failed: {}", queryId, rep + 1, e.getCause().getMessage());
-                times[rep]     = -1L;
-                ttfrTimes[rep] = -1L;
-                rowCounts[rep] = -1L;
-                hashes[rep]    = "";
-                statuses[rep]  = "ERROR";
+                buffers.times()[rep]     = -1L;
+                buffers.ttfrTimes()[rep] = -1L;
+                buffers.rowCounts()[rep] = -1L;
+                buffers.hashes()[rep]    = "";
+                buffers.statuses()[rep]  = STATUS_ERROR;
             }
         }
     }
@@ -291,7 +343,7 @@ public class BenchmarkHarness {
             : sorted[mid];
     }
 
-    private void loadWithTimeout(String path) throws Exception {
+    private void loadWithTimeout(String path) throws InterruptedException, ExecutionException, TimeoutException {
         try (ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "load-" + new File(path).getName());
             t.setDaemon(true);
@@ -302,12 +354,12 @@ public class BenchmarkHarness {
                 return null;
             });
             try {
-                future.get(LOAD_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+                future.get(protocol.loadTimeoutMs(), TimeUnit.MILLISECONDS);
             } catch (TimeoutException e) {
                 future.cancel(true);
                 exec.shutdownNow();
                 throw new TimeoutException(
-                    "Load timed out after " + LOAD_TIMEOUT_MINUTES + " min: " + path);
+                    "Load timed out after " + protocol.loadTimeoutMs() + " ms: " + path);
             } catch (InterruptedException e) {
                 future.cancel(true);
                 exec.shutdownNow();
@@ -321,8 +373,8 @@ public class BenchmarkHarness {
     private FileResult benchmarkFile(File file) throws Exception {
         String path = file.getAbsolutePath();
 
-        // --- Warmup (discarded) — skipped in quick mode (repetitions == 1) ---
-        if (repetitions > 1) {
+        // --- Warmup (discarded) ---
+        if (protocol.warmup() > 0) {
             driver.clear();
             System.gc();
             loadWithTimeout(path);
@@ -330,31 +382,46 @@ public class BenchmarkHarness {
             System.gc();
         }
 
-        // --- 3 repetitions ---
-        long[] timesMs   = new long[repetitions];
-        double[] memBefore  = new double[repetitions];
-        double[] memAfter   = new double[repetitions];
-        double[] cpuSamples = new double[repetitions];
+        // --- Measured repetitions ---
+        int reps = protocol.repetitions();
+        long[] timesMs   = new long[reps];
+        double[] memBefore  = new double[reps];
+        double[] memAfter   = new double[reps];
+        double[] cpuSamples = new double[reps];
         long triples = 0;
+        List<TelemetryPoint> timeSeries = List.of();
 
-        for (int i = 0; i < repetitions; i++) {
+        for (int i = 0; i < reps; i++) {
             driver.clear();
             memBefore[i] = metrics.getUsedMemoryMb();
 
-            long start = System.nanoTime();
-            loadWithTimeout(path);
-            timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
+            IngestionTelemetrySampler sampler = null;
+            if (i == reps - 1) {
+                // Non-intrusive heap telemetry sampling during the final repetition
+                sampler = new IngestionTelemetrySampler(100, () -> 0L);
+                sampler.start();
+            }
 
-            cpuSamples[i] = metrics.getCpuPercent();
-            memAfter[i]   = metrics.getUsedMemoryMb();
-            triples       = driver.getGraphSize();
+            try {
+                long start = System.nanoTime();
+                loadWithTimeout(path);
+                timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
+
+                cpuSamples[i] = metrics.getCpuPercent();
+                memAfter[i]   = metrics.getUsedMemoryMb();
+                triples       = driver.getGraphSize();
+            } finally {
+                if (sampler != null) {
+                    timeSeries = sampler.stop(triples);
+                }
+            }
         }
 
         // --- Compute medians ---
         long medianTimeMs = MetricsCollector.median(timesMs);
 
-        double[] deltas = new double[repetitions];
-        for (int i = 0; i < repetitions; i++) deltas[i] = memAfter[i] - memBefore[i];
+        double[] deltas = new double[reps];
+        for (int i = 0; i < reps; i++) deltas[i] = memAfter[i] - memBefore[i];
 
         return new FileResult(
             driver.getName(),
@@ -367,7 +434,8 @@ public class BenchmarkHarness {
             MetricsCollector.medianDouble(memAfter),
             MetricsCollector.medianDouble(deltas),
             MetricsCollector.medianDouble(cpuSamples),
-            timesMs
+            timesMs,
+            timeSeries
         );
     }
 }
