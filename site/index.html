@@ -3,354 +3,82 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Corese · Benchmark Dashboard</title>
+  <title>Corese Benchmark Dashboard</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="data/report-data.js" onerror="console.warn('report-data.js not found, will try fetch fallback')"></script>
 </head>
 <body>
 <div class="app-wrapper">
 
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <!-- Header -->
   <header class="page-header">
-    <!-- ── Top row: brand + engines + actions ── -->
-    <div class="header-top-row">
+    <div class="header-top">
       <div class="header-brand">
-        <span class="brand-title">Corese Benchmark</span>
-        <span class="brand-run-date" id="header-run-date" style="display:none"></span>
+        <h1 class="brand-title">Corese Benchmark Dashboard</h1>
       </div>
-
-      <div class="comparator-bar">
-        <span class="comparator-label">Engines:</span>
-        <button class="pills-scroll-btn" id="pills-scroll-left" onclick="scrollPills(-1)" aria-label="Scroll left">&#8249;</button>
-        <div class="engine-pills-wrap" id="engine-pills"></div>
-        <button class="pills-scroll-btn" id="pills-scroll-right" onclick="scrollPills(1)" aria-label="Scroll right">&#8250;</button>
-        <button class="btn-add-engine-trigger" id="btn-open-add-engine">+ Add</button>
+      <div class="header-actions">
+        <button id="export-json-btn" class="export-btn" title="Download JSON report" style="display:none">&#8595; Export JSON</button>
+        <button id="export-md-btn" class="export-btn" title="Download Markdown report" style="display:none">&#8595; Export MD</button>
+        <button id="export-pdf-btn" class="export-btn" title="Print / Export PDF" style="display:none">&#8600; Export PDF</button>
+        <button id="theme-toggle" class="theme-toggle-btn" title="Toggle light/dark theme">&#9788;</button>
       </div>
+    </div>
 
-      <div class="header-right">
+    <!-- Sticky environment pill -->
+    <div class="sticky-pill" id="sticky-pill" title="Click to view machine details"></div>
 
-      <div class="download-group">
-        <a class="btn-download" id="download-json" href="data/benchmark-report.json" download title="Télécharger le rapport JSON">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="12" y2="18"></line>
-            <line x1="15" y1="15" x2="12" y2="18"></line>
-          </svg>
-          <span>JSON</span>
-        </a>
-        <a class="btn-download" id="download-csv" href="data/benchmark-report.csv" download title="Télécharger le rapport CSV">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="12" y2="18"></line>
-            <line x1="15" y1="15" x2="12" y2="18"></line>
-          </svg>
-          <span>CSV</span>
-        </a>
-      </div>
+    <!-- Engine filter toggles -->
+    <div class="engine-bar" id="engine-bar"></div>
 
-      <button id="theme-toggle" class="theme-btn" title="Thème : Auto (Système)" aria-label="Changer le thème (Auto, Clair, Sombre)">
-        <svg id="icon-auto" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-          <line x1="8" y1="21" x2="16" y2="21"></line>
-          <line x1="12" y1="17" x2="12" y2="21"></line>
-        </svg>
-        <svg id="icon-sun" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" style="display:none">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <svg id="icon-moon" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" style="display:none">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      </button>
-      </div><!-- /.header-right -->
-    </div><!-- /.header-top-row -->
-
-    <!-- ── Bottom row: dataset tabs ── -->
-    <div class="header-bottom-row">
-      <div class="dataset-filter-bar">
-        <div class="dataset-pills-wrap" id="dataset-pills"></div>
-      </div>
-    </div><!-- /.header-bottom-row -->
+    <!-- Navigation tabs -->
+    <nav class="tab-bar" id="tab-bar"></nav>
   </header>
 
-  <!-- ── App body ───────────────────────────────────────────────────────── -->
-  <div class="app-body">
-
-    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-    <aside class="app-sidebar">
-      <div class="sidebar-search-box">
-        <input type="search" id="sidebar-search-input" placeholder="Rechercher…" autocomplete="off">
-      </div>
-
-      <nav class="sidebar-group">
-        <span class="sidebar-heading">Overview</span>
-        <ul class="sidebar-nav-list">
-          <li><a class="sidebar-nav-item" data-target="section-kpi" href="#section-kpi">Overview</a></li>
-        </ul>
-      </nav>
-
-      <nav class="sidebar-group">
-        <span class="sidebar-heading">Data</span>
-        <ul class="sidebar-nav-list">
-          <li><a class="sidebar-nav-item" data-target="section-datasets" href="#section-datasets">
-            Datasets
-            <span class="sidebar-item-badge" id="sidebar-badge-datasets"></span>
-          </a></li>
-          <li><a class="sidebar-nav-item" data-target="section-engines" href="#section-engines">
-            Engines
-            <span class="sidebar-item-badge" id="sidebar-badge-engines"></span>
-          </a></li>
-          <li id="sidebar-w3c-nav" style="display:none"><a class="sidebar-nav-item" data-target="section-w3c" href="#section-w3c">
-            W3C Conformance
-            <span class="sidebar-item-badge" id="sidebar-badge-w3c"></span>
-          </a></li>
-        </ul>
-      </nav>
-
-      <nav class="sidebar-group">
-        <span class="sidebar-heading">Results</span>
-        <ul class="sidebar-nav-list">
-          <li><a class="sidebar-nav-item" data-target="section-charts" href="#section-charts">Performance</a></li>
-          <li><a class="sidebar-nav-item" data-target="section-results" href="#section-results">
-            Full results
-            <span class="sidebar-item-badge" id="sidebar-badge-results"></span>
-          </a></li>
-          <li id="sidebar-sparql-nav" style="display:none"><a class="sidebar-nav-item" data-target="section-sparql" href="#section-sparql">
-            SPARQL
-            <span class="sidebar-item-badge" id="sidebar-badge-sparql"></span>
-          </a></li>
-
-        </ul>
-      </nav>
-
-      <div class="sidebar-footer-box" id="sidebar-meta">
-        <!-- filled by JS -->
-      </div>
-    </aside>
-
-    <!-- ── Main content ─────────────────────────────────────────────────── -->
-    <main class="app-content">
-
-      <div id="empty-state" style="display:none;padding:60px 24px;text-align:center;color:var(--text-muted)">
-        <div style="font-size:40px;margin-bottom:16px">📭</div>
-        <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">Aucune donnée disponible</div>
-        <div style="font-size:13px">Le fichier <code>data/benchmark-report.json</code> est introuvable ou vide.<br>Lance un benchmark ou vérifie la connexion.</div>
-      </div>
-
-      <!-- ── Overview ─────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-kpi">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Overview</h2>
-          <span class="section-meta" id="overview-meta"></span>
-        </div>
-        <!-- KPI breakdown cards -->
-        <div class="metrics-grid" id="metrics-grid">
-          <!-- filled by JS -->
-        </div>
-        <!-- Overview charts: bar + radar -->
-        <div class="overview-charts-grid">
-          <div class="chart-surface">
-            <div class="chart-header">
-              <span class="chart-title">Avg loading time by engine</span>
-              <span class="chart-unit">ms — lower is better</span>
-            </div>
-            <canvas id="chart-overview-bar" height="160"></canvas>
-          </div>
-          <div class="chart-surface">
-            <div class="chart-header">
-              <span class="chart-title">Performance profile</span>
-              <span class="chart-unit">normalized score — higher is better</span>
-            </div>
-            <canvas id="chart-overview-radar" height="160"></canvas>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Datasets ──────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-datasets">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Datasets</h2>
-          <span class="section-meta" id="datasets-meta"></span>
-        </div>
-        <div class="suites-list" id="dataset-grid">
-          <!-- filled by JS -->
-        </div>
-      </section>
-
-      <!-- ── Engines ───────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-engines">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Engines tested</h2>
-          <button id="clear-engines-btn" class="btn-clear-filter" onclick="clearEngineFilter()" style="display:none">✕ Clear filter</button>
-        </div>
-        <p class="section-sub">Click one or more engines to filter the charts</p>
-        <div class="suites-list" id="engine-grid">
-          <!-- filled by JS -->
-        </div>
-      </section>
-
-      <!-- ── Charts ───────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-charts">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Performance</h2>
-          <span class="section-meta" id="charts-mode-meta"></span>
-        </div>
-        <div class="charts-grid">
-
-          <div class="chart-surface" onclick="openChartZoom('chart-loading')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">Loading time</span>
-              <span class="chart-unit">ms — lower is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-loading','loading')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-loading')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-loading"></canvas>
-          </div>
-
-          <div class="chart-surface" onclick="openChartZoom('chart-memory')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">Memory</span>
-              <span class="chart-unit">ΔMB — lower is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-memory','memory')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-memory')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-memory"></canvas>
-          </div>
-
-          <div class="chart-surface" onclick="openChartZoom('chart-cpu')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">CPU</span>
-              <span class="chart-unit">% — lower is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-cpu','cpu')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-cpu')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-cpu"></canvas>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ── Full results ──────────────────────────────────────────────── -->
-      <section class="page-section" id="section-results">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Full results</h2>
-          <span class="section-meta" id="full-results-meta"></span>
-          <div style="display:flex;gap:6px">
-            <button class="btn-download" onclick="exportFilteredCsv()" title="Exporter les résultats filtrés en CSV">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="12" y2="18"></line>
-                <line x1="15" y1="15" x2="12" y2="18"></line>
-              </svg>
-              <span>Export CSV</span>
-            </button>
-            <button class="btn-download" onclick="exportFilteredJson()" title="Exporter les résultats filtrés en JSON">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="12" y2="18"></line>
-                <line x1="15" y1="15" x2="12" y2="18"></line>
-              </svg>
-              <span>Export JSON</span>
-            </button>
-          </div>
-        </div>
-        <div class="table-surface">
-          <div class="table-scroll">
-            <table class="report-table" translate="no">
-              <thead>
-                <tr>
-                  <th data-sort="engine" class="sortable">Engine</th>
-                  <th data-sort="file" class="sortable">File</th>
-                  <th data-sort="triples" class="sortable text-right">Triples</th>
-                  <th data-sort="loadingTimeMs" class="sortable text-right">Loading (ms)</th>
-                  <th data-sort="throughputTriplesPerSec" class="sortable text-right">Throughput (t/s)</th>
-                  <th data-sort="memoryDeltaMb" class="sortable text-right">Memory ΔMB</th>
-                  <th data-sort="cpuPercent" class="sortable text-right">CPU %</th>
-                  <th>Repetitions (ms)</th>
-                </tr>
-              </thead>
-              <tbody id="results-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── SPARQL section (filled by JS) ───────────────────────────── -->
-      <section class="page-section" id="section-sparql" style="display:none">
-        <!-- filled by JS -->
-      </section>
-
-      <!-- ── W3C Conformance section (filled by JS) ──────────────────── -->
-      <section class="page-section" id="section-w3c" style="display:none">
-        <!-- filled by JS -->
-      </section>
-
-    </main>
-  </div><!-- /.app-body -->
-
-  <dialog id="chart-zoom-modal" class="chart-zoom-dialog" onclick="if(event.target===this)closeChartZoom()">
-    <div class="chart-zoom-inner">
-      <div class="chart-zoom-header">
-        <span class="chart-zoom-title" id="chart-zoom-title"></span>
-        <div class="chart-zoom-actions">
-          <button class="btn-chart-png" id="chart-zoom-png" title="Download PNG">↓ PNG</button>
-          <button class="modal-close" onclick="closeChartZoom()">✕</button>
-        </div>
-      </div>
-      <canvas id="chart-zoom-canvas"></canvas>
-    </div>
-  </dialog>
-
-
-  <!-- ── Add engine modal overlay ───────────────────────────────────────── -->
-  <div class="modal-overlay" id="modal-add-engine">
-    <div class="modal-card">
-      <div class="modal-card-title">Add an engine</div>
-      <div class="modal-card-desc">Select the triplestore and version to add to the comparison.</div>
-      <div class="modal-form-group">
-        <label class="modal-form-label" for="modal-select-triplestore">Engine</label>
-        <select class="modal-form-select" id="modal-select-triplestore">
-          <!-- filled by JS -->
-        </select>
-      </div>
-      <div class="modal-form-group">
-        <label class="modal-form-label" for="modal-select-version">Version / Branch</label>
-        <select class="modal-form-select" id="modal-select-version">
-          <!-- filled by JS -->
-        </select>
-      </div>
-      <div class="modal-card-actions">
-        <button class="btn-modal-cancel" id="btn-modal-cancel">Cancel</button>
-        <button class="btn-modal-submit" id="btn-modal-submit">Add</button>
-      </div>
-    </div>
+  <!-- Error state -->
+  <div id="error-state" class="error-state" style="display:none">
+    <div class="error-icon">!</div>
+    <div class="error-title">No Data Available</div>
+    <div class="error-message">Could not load benchmark data.</div>
+    <p class="error-hint">Check that <code>data/benchmark-report.json</code> or <code>data/mock-report-v2.json</code> exists.</p>
   </div>
 
-</div><!-- /.app-wrapper -->
+  <!-- Main content area (pages render here) -->
+  <main id="main-content" class="main-content"></main>
+
+</div>
 
 <footer class="page-footer">
   <p>
-    <a href="https://github.com/corese-stack/corese-benchmark" target="_blank">corese-stack/corese-benchmark</a>
-    &nbsp;·&nbsp; Protocol&nbsp;: warmup + 3 repetitions + median
-    &nbsp;·&nbsp; <a href="https://project.inria.fr/corese/" target="_blank">Corese Engine</a> — Inria Wimmics
+    <a href="https://github.com/corese-stack/corese-benchmark" target="_blank" rel="noopener">corese-stack/corese-benchmark</a>
+    &middot; Protocol: warmup + 3 repetitions + median
+    &middot; <a href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese Engine</a> &mdash; Inria Wimmics
   </p>
 </footer>
 
-<script src="data/report-data.js" onerror="void 0"></script>
-<script src="app.js"></script>
+<script>
+  (function() {
+    var saved = localStorage.getItem('theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    document.addEventListener('DOMContentLoaded', function() {
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      function update() {
+        var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        btn.textContent = isDark ? '\u2600' : '\u263D';
+        btn.title = isDark ? 'Passer en thème clair' : 'Passer en thème sombre';
+      }
+      update();
+      btn.addEventListener('click', function() {
+        var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        var next = isLight ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        update();
+      });
+    });
+  })();
+</script>
+<script src="js/bundle.js"></script>
 </body>
 </html>
