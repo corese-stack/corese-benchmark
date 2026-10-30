@@ -78,12 +78,16 @@ class BenchmarkReportTest {
         JsonNode metadata = root.get("metadata");
         assertEquals("2.0", metadata.get("version").asText());
         assertTrue(metadata.has("generatedAt"));
+        assertTrue(metadata.has("queries"));
+        assertEquals(1, metadata.get("queries").size());
+        assertEquals("SELECT * WHERE { ?s ?p ?o }", metadata.get("queries").get(0).asText());
 
         // Verify protocol
         assertTrue(metadata.has("protocol"));
         JsonNode protoNode = metadata.get("protocol");
         assertEquals(1, protoNode.get("warmup").asInt());
         assertEquals(3, protoNode.get("repetitions").asInt());
+        assertEquals(3, protoNode.get("queryRepetitions").asInt());
         assertEquals(45_000L, protoNode.get("queryTimeoutMs").asLong());
         assertEquals(600_000L, protoNode.get("loadTimeoutMs").asLong());
         assertEquals("median", protoNode.get("metric").asText());
@@ -96,11 +100,11 @@ class BenchmarkReportTest {
         assertTrue(envNode.has("ramTotalGb"));
         assertTrue(envNode.has("jvmVersion"));
 
-        // Verify loading runs (both v2 'loadingRuns' and legacy 'runs' for python-utils compatibility)
+        // Verify loading runs (both v2 'loadingRuns' and legacy 'runs' are identical)
         assertTrue(root.has("loadingRuns"), "Must export 'loadingRuns' for v2 dashboard");
         assertTrue(root.has("runs"), "Must export 'runs' for backward compatibility");
+        assertEquals(root.get("loadingRuns"), root.get("runs"), "loadingRuns and runs must be identical");
         assertEquals(1, root.get("loadingRuns").size());
-        assertEquals(1, root.get("runs").size());
 
         // Verify timeSeries on loadingRun
         JsonNode run = root.get("loadingRuns").get(0);
@@ -116,5 +120,37 @@ class BenchmarkReportTest {
         assertEquals(1, root.get("queryRuns").size());
         assertEquals("query_1", root.get("queryRuns").get(0).get("queryId").asText());
         assertEquals("PASS", root.get("queryRuns").get(0).get("status").asText());
+    }
+
+    @Test
+    void nullProtocolFallsBackToDefaultProtocol(@TempDir Path tempDir) throws Exception {
+        Path jsonOut = tempDir.resolve("default-report.json");
+        BenchmarkReport.write(Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), jsonOut.toString(), null);
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(jsonOut.toFile());
+        JsonNode protoNode = root.get("metadata").get("protocol");
+        assertEquals(1, protoNode.get("warmup").asInt());
+        assertEquals(3, protoNode.get("repetitions").asInt());
+        assertEquals(3, protoNode.get("queryRepetitions").asInt());
+        assertEquals(30_000L, protoNode.get("queryTimeoutMs").asLong());
+        assertEquals(600_000L, protoNode.get("loadTimeoutMs").asLong());
+    }
+
+    @Test
+    void protocolFromOptionsAdaptsQuickMode() {
+        BenchmarkProtocol quickProto = BenchmarkProtocol.fromOptions(true, 15);
+        assertEquals(0, quickProto.warmup());
+        assertEquals(1, quickProto.repetitions());
+        assertEquals(1, quickProto.queryRepetitions());
+        assertEquals(15_000L, quickProto.queryTimeoutMs());
+        assertEquals(600_000L, quickProto.loadTimeoutMs());
+        assertEquals("median", quickProto.metric());
+
+        BenchmarkProtocol standardProto = BenchmarkProtocol.fromOptions(false, -1);
+        assertEquals(1, standardProto.warmup());
+        assertEquals(3, standardProto.repetitions());
+        assertEquals(3, standardProto.queryRepetitions());
+        assertEquals(30_000L, standardProto.queryTimeoutMs());
     }
 }

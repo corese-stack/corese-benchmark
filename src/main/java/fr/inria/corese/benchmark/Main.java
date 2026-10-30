@@ -74,20 +74,20 @@ public class Main {
         List<FileResult> allFileResults = new ArrayList<>();
         List<QueryResult> allQueryResults = new ArrayList<>();
 
+        BenchmarkProtocol proto = BenchmarkProtocol.fromOptions(opts.quick(), opts.queryTimeoutSecs());
         boolean shouldIsolate = opts.isolateProcess() && opts.engines().size() > 1;
         for (String engineName : opts.engines()) {
             String cleanName = engineName.trim();
             if (shouldIsolate) {
                 runChild(cleanName, opts, allFileResults, allQueryResults);
             } else {
-                runEngine(cleanName, opts, queries, allFileResults, allQueryResults);
+                runEngine(cleanName, opts, queries, allFileResults, allQueryResults, proto);
             }
         }
 
         crossValidateQueries(allQueryResults);
 
         try {
-            BenchmarkProtocol proto = BenchmarkProtocol.fromOptions(opts.quick(), opts.queryTimeoutSecs());
             BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile(), proto);
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
@@ -207,15 +207,13 @@ public class Main {
         BenchmarkOptions opts,
         List<String> queries,
         List<FileResult> allFileResults,
-        List<QueryResult> allQueryResults
+        List<QueryResult> allQueryResults,
+        BenchmarkProtocol protocol
     ) {
         log.info("Starting engine: {}", engineName);
         try {
             TripleStoreDriver driver = DriverFactory.create(engineName, opts.inference());
-            int reps = opts.quick() ? 1 : 3;
-            BenchmarkHarness harness = opts.queryTimeoutSecs() > 0
-                ? new BenchmarkHarness(driver, opts.datasetName(), reps, opts.queryTimeoutSecs())
-                : new BenchmarkHarness(driver, opts.datasetName(), reps);
+            BenchmarkHarness harness = new BenchmarkHarness(driver, opts.datasetName(), protocol);
 
             List<FileResult> fileResults = harness.run(opts.datasetDir());
             allFileResults.addAll(fileResults);

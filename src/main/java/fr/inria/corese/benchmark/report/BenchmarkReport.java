@@ -136,8 +136,12 @@ public final class BenchmarkReport {
     private static void writeCsv(List<FileResult> results, List<QueryResult> queryResults, String csvPath) throws Exception {
         try (PrintWriter pw = new PrintWriter(csvPath)) {
             // Load benchmark section
+            int loadReps = results.isEmpty() ? 3 : results.get(0).repetitionsMs().length;
+            String loadRepHeaders = java.util.stream.IntStream.rangeClosed(1, loadReps)
+                .mapToObj(i -> "rep" + i + "Ms")
+                .collect(Collectors.joining(","));
             pw.println("# LOAD BENCHMARK");
-            pw.println("engine,dataset,file,triples,loadingTimeMs,throughputTriplesPerSec,memoryBeforeMb,memoryAfterMb,memoryDeltaMb,cpuPercent,rep1Ms,rep2Ms,rep3Ms");
+            pw.println("engine,dataset,file,triples,loadingTimeMs,throughputTriplesPerSec,memoryBeforeMb,memoryAfterMb,memoryDeltaMb,cpuPercent," + loadRepHeaders);
             for (FileResult r : results) {
                 String reps = Arrays.stream(r.repetitionsMs())
                     .mapToObj(String::valueOf)
@@ -151,9 +155,13 @@ public final class BenchmarkReport {
 
             // Query benchmark section (optional)
             if (queryResults != null && !queryResults.isEmpty()) {
+                int qReps = queryResults.get(0).repetitionsMs().length;
+                String qRepHeaders = java.util.stream.IntStream.rangeClosed(1, qReps)
+                    .mapToObj(i -> "rep" + i + "Ms")
+                    .collect(Collectors.joining(","));
                 pw.println();
                 pw.println("# QUERY BENCHMARK");
-                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rowCount,resultHash,status,rep1Ms,rep2Ms,rep3Ms");
+                pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rowCount,resultHash,status," + qRepHeaders);
                 for (QueryResult r : queryResults) {
                     String reps = Arrays.stream(r.repetitionsMs())
                         .mapToObj(String::valueOf)
