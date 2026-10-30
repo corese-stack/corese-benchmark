@@ -7,6 +7,7 @@ import { getEngineColor, getEngineLabel } from '../data-loader.js';
 import { buildLoadingTableWithFilter } from '../components/result-table.js';
 import { fmtMemory } from '../formatters.js';
 import { addExpandButton } from '../chart-expand.js';
+import { renderCpuChart } from '../charts/cpu-chart.js';
 
 const DATASET = 'dbpedia';
 
@@ -90,6 +91,17 @@ export function renderDbpedia(container) {
   mw.appendChild(mc); memBox.appendChild(mw);
   chartsRow.appendChild(memBox);
 
+  const cpuBox = document.createElement('div');
+  cpuBox.className = 'chart-box';
+  const ch2 = document.createElement('div'); ch2.className = 'chart-box-header';
+  const ct2 = document.createElement('h4'); ct2.textContent = 'Average CPU Usage (%)';
+  const cs2 = document.createElement('span'); cs2.className = 'chart-subtitle'; cs2.textContent = 'lower is better';
+  ch2.appendChild(ct2); ch2.appendChild(cs2); cpuBox.appendChild(ch2);
+  const ccw = document.createElement('div'); ccw.className = 'chart-canvas-wrap';
+  const cc2 = document.createElement('canvas'); cc2.id = 'chart-dbpedia-cpu';
+  ccw.appendChild(cc2); cpuBox.appendChild(ccw);
+  chartsRow.appendChild(cpuBox);
+
   container.appendChild(chartsRow);
 
   const tableTitle = document.createElement('h4');
@@ -105,6 +117,7 @@ export function renderDbpedia(container) {
     updateDbpedia();
     addExpandButton(scaleBox);
     addExpandButton(memBox);
+    addExpandButton(cpuBox);
   });
 }
 
@@ -117,6 +130,7 @@ function updateDbpedia() {
 
   renderScaleChart(runs);
   renderMemoryChart(runs);
+  renderCpuChart('chart-dbpedia-cpu', runs);
 }
 
 function renderScaleChart(runs) {

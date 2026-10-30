@@ -353,8 +353,17 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   grid-column: span 2;
 }
 
+/* 3-column ingestion layout: loading (2fr) + throughput (1fr) + cpu (1fr) */
+.charts-row-ingestion {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+.charts-row-ingestion .chart-box-wide {
+  grid-column: span 1;
+}
+
 @media (max-width: 840px) {
   .chart-box-wide { grid-column: span 1; }
+  .charts-row-ingestion { grid-template-columns: 1fr; }
 }
 
 .chart-box-full {

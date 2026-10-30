@@ -17,6 +17,7 @@ const FILES = [
   'components/result-table.js',
   'charts/loading-chart.js',
   'charts/throughput-chart.js',
+  'charts/cpu-chart.js',
   'charts/query-breakdown.js',
   'chart-expand.js',
   'pages/overview.js',
@@ -28,6 +29,7 @@ const FILES = [
   'pages/transparency.js',
   'export-md.js',
   'export-pdf.js',
+  'export-csv.js',
   'app.js',
 ];
 

@@ -21,6 +21,7 @@ export function buildLoadingTable(container, runs) {
     { label: 'Median Time', key: r => r.loadingTimeMs || 0,                     fmt: r => fmtMs(r.loadingTimeMs),                                                        cls: 'text-right font-mono' },
     { label: 'Throughput',  key: r => r.throughputTriplesPerSec || 0,           fmt: r => fmtThroughput(r.throughputTriplesPerSec),                                       cls: 'text-right font-mono' },
     { label: 'Heap \u0394', key: r => r.memoryDeltaMb != null ? r.memoryDeltaMb : -Infinity, fmt: r => fmtMemory(r.memoryDeltaMb),                                      cls: 'text-right font-mono' },
+    { label: 'CPU %',      key: r => r.cpuPercent != null ? r.cpuPercent : -Infinity,       fmt: r => r.cpuPercent != null ? r.cpuPercent.toFixed(1) + '%' : '\u2014',   cls: 'text-right font-mono' },
     { label: 'Repetitions', key: null,                                           fmt: r => r.repetitionsMs ? r.repetitionsMs.map(v => fmt(v)).join(', ') : '\u2014',     cls: 'font-mono' },
     { label: 'CV (%)',      key: r => computeCV(r.repetitionsMs) ?? -Infinity,   fmt: r => computeCV(r.repetitionsMs) != null ? computeCV(r.repetitionsMs).toFixed(1) + '%' : '\u2014', cls: 'text-right font-mono' },
   ];

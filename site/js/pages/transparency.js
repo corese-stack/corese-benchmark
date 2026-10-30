@@ -58,14 +58,7 @@ export function renderTransparency(container) {
     { label: 'Flags', value: env.jvmFlags ? env.jvmFlags.join(' ') : '\u2014' },
   ]));
 
-  // 5. Git Traceability
-  grid.appendChild(createInfoCard('Git Traceability', '\ud83d\udd17', [
-    { label: 'Benchmark Commit', value: git.benchmarkCommit || '\u2014' },
-    { label: 'Corese Core Commit', value: git.coreseCommit || '\u2014' },
-    { label: 'Branch', value: git.branch || '\u2014' },
-  ]));
-
-  // 6. Protocol
+  // 5. Protocol
   grid.appendChild(createInfoCard('Measurement Protocol', '\ud83d\udccf', [
     { label: 'Warmup Runs', value: protocol.warmup != null ? String(protocol.warmup) : '\u2014' },
     { label: 'Repetitions', value: protocol.repetitions != null ? String(protocol.repetitions) : '\u2014' },

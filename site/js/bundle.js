@@ -609,6 +609,7 @@ function buildLoadingTable(container, runs) {
     { label: 'Median Time', key: r => r.loadingTimeMs || 0,                     fmt: r => fmtMs(r.loadingTimeMs),                                                        cls: 'text-right font-mono' },
     { label: 'Throughput',  key: r => r.throughputTriplesPerSec || 0,           fmt: r => fmtThroughput(r.throughputTriplesPerSec),                                       cls: 'text-right font-mono' },
     { label: 'Heap \u0394', key: r => r.memoryDeltaMb != null ? r.memoryDeltaMb : -Infinity, fmt: r => fmtMemory(r.memoryDeltaMb),                                      cls: 'text-right font-mono' },
+    { label: 'CPU %',      key: r => r.cpuPercent != null ? r.cpuPercent : -Infinity,       fmt: r => r.cpuPercent != null ? r.cpuPercent.toFixed(1) + '%' : '\u2014',   cls: 'text-right font-mono' },
     { label: 'Repetitions', key: null,                                           fmt: r => r.repetitionsMs ? r.repetitionsMs.map(v => fmt(v)).join(', ') : '\u2014',     cls: 'font-mono' },
     { label: 'CV (%)',      key: r => computeCV(r.repetitionsMs) ?? -Infinity,   fmt: r => computeCV(r.repetitionsMs) != null ? computeCV(r.repetitionsMs).toFixed(1) + '%' : '\u2014', cls: 'text-right font-mono' },
   ];
@@ -1128,6 +1129,89 @@ function renderThroughputChart(canvasId, loadingRuns) {
         x: {
           title: { display: true, text: 'Throughput (triples/s)', color: '#8b949e' },
           ticks: { color: '#8b949e', callback: v => v.toLocaleString() },
+          grid: { color: 'rgba(48,54,61,0.3)' },
+        },
+        y: {
+          ticks: { color: '#8b949e' },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+
+  state.charts[canvasId] = chart;
+  return chart;
+}
+
+
+
+// ── charts/cpu-chart.js ──
+// cpu-chart.js — Horizontal bar chart for average CPU usage during loading
+
+
+/**
+ * Render CPU % horizontal bar chart.
+ * @param {string} canvasId
+ * @param {Array} loadingRuns - filtered loading runs
+ */
+function renderCpuChart(canvasId, loadingRuns) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+
+  if (state.charts[canvasId]) {
+    state.charts[canvasId].destroy();
+    delete state.charts[canvasId];
+  }
+
+  const ctx = canvas.getContext('2d');
+
+  const labels = [];
+  const data = [];
+  const bgColors = [];
+  const borderColors = [];
+
+  state.activeEngines.forEach(engine => {
+    const runs = loadingRuns.filter(r => r.engine === engine && r.cpuPercent != null);
+    if (runs.length === 0) return;
+    const avg = runs.reduce((s, r) => s + r.cpuPercent, 0) / runs.length;
+    labels.push(getEngineLabel(engine));
+    data.push(+avg.toFixed(1));
+    bgColors.push(getEngineColor(engine) + 'cc');
+    borderColors.push(getEngineColor(engine));
+  });
+
+  if (data.length === 0) return null;
+
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg CPU (%)',
+        data,
+        backgroundColor: bgColors,
+        borderColor: borderColors,
+        borderWidth: 1,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.parsed.x.toFixed(1)} %`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          min: 0,
+          max: 100,
+          title: { display: true, text: 'CPU Usage (%)', color: '#8b949e' },
+          ticks: { color: '#8b949e', callback: v => v + '%' },
           grid: { color: 'rgba(48,54,61,0.3)' },
         },
         y: {
@@ -1666,11 +1750,22 @@ function renderBowlogna(container) {
   const tc = document.createElement('canvas'); tc.id = 'chart-bowlogna-throughput';
   tcw.appendChild(tc); tpBox.appendChild(tcw);
 
+  const cpuBox = document.createElement('div');
+  cpuBox.className = 'chart-box';
+  const ch2 = document.createElement('div'); ch2.className = 'chart-box-header';
+  const ct2 = document.createElement('h4'); ct2.textContent = 'Average CPU Usage (%)';
+  const cs2 = document.createElement('span'); cs2.className = 'chart-subtitle'; cs2.textContent = 'lower is better';
+  ch2.appendChild(ct2); ch2.appendChild(cs2); cpuBox.appendChild(ch2);
+  const ccw = document.createElement('div'); ccw.className = 'chart-canvas-wrap';
+  const cc2 = document.createElement('canvas'); cc2.id = 'chart-bowlogna-cpu';
+  ccw.appendChild(cc2); cpuBox.appendChild(ccw);
+
   const chartsRow = document.createElement('div');
-  chartsRow.className = 'charts-row';
+  chartsRow.className = 'charts-row charts-row-ingestion';
   loadingBox.className = 'chart-box chart-box-wide';
   chartsRow.appendChild(loadingBox);
   chartsRow.appendChild(tpBox);
+  chartsRow.appendChild(cpuBox);
   sectionA.appendChild(chartsRow);
 
   const loadTableTitle = document.createElement('h4');
@@ -1779,9 +1874,11 @@ function renderBowlogna(container) {
     const runs = getLoadingRuns(DATASET);
     renderLoadingChart('chart-bowlogna-loading', DATASET);
     renderThroughputChart('chart-bowlogna-throughput', runs);
+    renderCpuChart('chart-bowlogna-cpu', runs);
     buildLoadingTableWithFilter(loadTableContainer, runs);
     addExpandButton(loadingBox);
     addExpandButton(tpBox);
+    addExpandButton(cpuBox);
   });
 }
 
@@ -1901,11 +1998,22 @@ function renderBsbm(container) {
   const tc = document.createElement('canvas'); tc.id = 'chart-bsbm-throughput';
   tcw.appendChild(tc); tpBox.appendChild(tcw);
 
+  const cpuBox = document.createElement('div');
+  cpuBox.className = 'chart-box';
+  const ch2 = document.createElement('div'); ch2.className = 'chart-box-header';
+  const ct2 = document.createElement('h4'); ct2.textContent = 'Average CPU Usage (%)';
+  const cs2 = document.createElement('span'); cs2.className = 'chart-subtitle'; cs2.textContent = 'lower is better';
+  ch2.appendChild(ct2); ch2.appendChild(cs2); cpuBox.appendChild(ch2);
+  const ccw = document.createElement('div'); ccw.className = 'chart-canvas-wrap';
+  const cc2 = document.createElement('canvas'); cc2.id = 'chart-bsbm-cpu';
+  ccw.appendChild(cc2); cpuBox.appendChild(ccw);
+
   const chartsRow = document.createElement('div');
-  chartsRow.className = 'charts-row';
+  chartsRow.className = 'charts-row charts-row-ingestion';
   loadingBox.className = 'chart-box chart-box-wide';
   chartsRow.appendChild(loadingBox);
   chartsRow.appendChild(tpBox);
+  chartsRow.appendChild(cpuBox);
   sectionA.appendChild(chartsRow);
 
   const loadTableTitle = document.createElement('h4');
@@ -2017,9 +2125,11 @@ function renderBsbm(container) {
     const runs = getLoadingRuns(DATASET);
     renderLoadingChart('chart-bsbm-loading', DATASET);
     renderThroughputChart('chart-bsbm-throughput', runs);
+    renderCpuChart('chart-bsbm-cpu', runs);
     buildLoadingTableWithFilter(loadTableContainer, runs);
     addExpandButton(loadingBox);
     addExpandButton(tpBox);
+    addExpandButton(cpuBox);
   });
 }
 
@@ -2134,11 +2244,22 @@ function renderLubm(container) {
   const tc = document.createElement('canvas'); tc.id = 'chart-lubm-throughput';
   tcw.appendChild(tc); tpBox.appendChild(tcw);
 
+  const cpuBox = document.createElement('div');
+  cpuBox.className = 'chart-box';
+  const ch2 = document.createElement('div'); ch2.className = 'chart-box-header';
+  const ct2 = document.createElement('h4'); ct2.textContent = 'Average CPU Usage (%)';
+  const cs2 = document.createElement('span'); cs2.className = 'chart-subtitle'; cs2.textContent = 'lower is better';
+  ch2.appendChild(ct2); ch2.appendChild(cs2); cpuBox.appendChild(ch2);
+  const ccw = document.createElement('div'); ccw.className = 'chart-canvas-wrap';
+  const cc2 = document.createElement('canvas'); cc2.id = 'chart-lubm-cpu';
+  ccw.appendChild(cc2); cpuBox.appendChild(ccw);
+
   const chartsRow = document.createElement('div');
-  chartsRow.className = 'charts-row';
+  chartsRow.className = 'charts-row charts-row-ingestion';
   loadingBox.className = 'chart-box chart-box-wide';
   chartsRow.appendChild(loadingBox);
   chartsRow.appendChild(tpBox);
+  chartsRow.appendChild(cpuBox);
   sectionA.appendChild(chartsRow);
 
   const loadTableTitle = document.createElement('h4');
@@ -2240,9 +2361,11 @@ function renderLubm(container) {
     const runs = getLoadingRuns(DATASET);
     renderLoadingChart('chart-lubm-loading', DATASET);
     renderThroughputChart('chart-lubm-throughput', runs);
+    renderCpuChart('chart-lubm-cpu', runs);
     buildLoadingTableWithFilter(loadTableContainer, runs);
     addExpandButton(loadingBox);
     addExpandButton(tpBox);
+    addExpandButton(cpuBox);
   });
 }
 
@@ -2362,6 +2485,17 @@ function renderDbpedia(container) {
   mw.appendChild(mc); memBox.appendChild(mw);
   chartsRow.appendChild(memBox);
 
+  const cpuBox = document.createElement('div');
+  cpuBox.className = 'chart-box';
+  const ch2 = document.createElement('div'); ch2.className = 'chart-box-header';
+  const ct2 = document.createElement('h4'); ct2.textContent = 'Average CPU Usage (%)';
+  const cs2 = document.createElement('span'); cs2.className = 'chart-subtitle'; cs2.textContent = 'lower is better';
+  ch2.appendChild(ct2); ch2.appendChild(cs2); cpuBox.appendChild(ch2);
+  const ccw = document.createElement('div'); ccw.className = 'chart-canvas-wrap';
+  const cc2 = document.createElement('canvas'); cc2.id = 'chart-dbpedia-cpu';
+  ccw.appendChild(cc2); cpuBox.appendChild(ccw);
+  chartsRow.appendChild(cpuBox);
+
   container.appendChild(chartsRow);
 
   const tableTitle = document.createElement('h4');
@@ -2377,6 +2511,7 @@ function renderDbpedia(container) {
     updateDbpedia();
     addExpandButton(scaleBox);
     addExpandButton(memBox);
+    addExpandButton(cpuBox);
   });
 }
 
@@ -2389,6 +2524,7 @@ function updateDbpedia() {
 
   renderScaleChart(runs);
   renderMemoryChart(runs);
+  renderCpuChart('chart-dbpedia-cpu', runs);
 }
 
 function renderScaleChart(runs) {
@@ -2822,14 +2958,7 @@ function renderTransparency(container) {
     { label: 'Flags', value: env.jvmFlags ? env.jvmFlags.join(' ') : '\u2014' },
   ]));
 
-  // 5. Git Traceability
-  grid.appendChild(createInfoCard('Git Traceability', '\ud83d\udd17', [
-    { label: 'Benchmark Commit', value: git.benchmarkCommit || '\u2014' },
-    { label: 'Corese Core Commit', value: git.coreseCommit || '\u2014' },
-    { label: 'Branch', value: git.branch || '\u2014' },
-  ]));
-
-  // 6. Protocol
+  // 5. Protocol
   grid.appendChild(createInfoCard('Measurement Protocol', '\ud83d\udccf', [
     { label: 'Warmup Runs', value: protocol.warmup != null ? String(protocol.warmup) : '\u2014' },
     { label: 'Repetitions', value: protocol.repetitions != null ? String(protocol.repetitions) : '\u2014' },
@@ -3156,6 +3285,80 @@ function buildHtml() {
 
 
 
+// ── export-csv.js ──
+// export-csv.js — CSV export for loading runs and query runs
+
+
+function escape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return s.includes(',') || s.includes('"') || s.includes('\n')
+    ? '"' + s.replace(/"/g, '""') + '"'
+    : s;
+}
+
+function triggerDownload(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadLoadingCsv() {
+  if (!state.data) return;
+  const date = new Date().toISOString().slice(0, 10);
+
+  const headers = ['engine', 'engine_label', 'dataset', 'file', 'triples',
+    'loading_time_ms', 'throughput_triples_per_sec', 'memory_delta_mb',
+    'cpu_percent', 'repetitions_ms', 'cv_percent'];
+
+  const rows = state.data.loadingRuns.map(r => [
+    r.engine,
+    getEngineLabel(r.engine),
+    r.dataset,
+    r.file || '',
+    r.triples,
+    r.loadingTimeMs,
+    r.throughputTriplesPerSec != null ? r.throughputTriplesPerSec.toFixed(0) : '',
+    r.memoryDeltaMb != null ? r.memoryDeltaMb.toFixed(2) : '',
+    r.cpuPercent != null ? r.cpuPercent.toFixed(1) : '',
+    Array.isArray(r.repetitionsMs) ? r.repetitionsMs.join(';') : '',
+    computeCV(r.repetitionsMs) != null ? computeCV(r.repetitionsMs).toFixed(2) : '',
+  ]);
+
+  const csv = [headers, ...rows].map(row => row.map(escape).join(',')).join('\r\n');
+  triggerDownload(csv, `corese-benchmark-loading-${date}.csv`);
+}
+
+function downloadQueryCsv() {
+  if (!state.data) return;
+  const date = new Date().toISOString().slice(0, 10);
+
+  const headers = ['engine', 'engine_label', 'dataset', 'query_id',
+    'status', 'median_ms', 'ttfr_ms', 'row_count',
+    'repetitions_ms', 'hash'];
+
+  const rows = state.data.queryRuns.map(r => [
+    r.engine,
+    getEngineLabel(r.engine),
+    r.dataset,
+    r.queryId,
+    r.status,
+    r.medianMs,
+    r.medianTtfrMs != null && r.medianTtfrMs !== -1 ? r.medianTtfrMs : '',
+    r.rowCount != null ? r.rowCount : '',
+    Array.isArray(r.repetitionsMs) ? r.repetitionsMs.join(';') : '',
+    r.hash || '',
+  ]);
+
+  const csv = [headers, ...rows].map(row => row.map(escape).join(',')).join('\r\n');
+  triggerDownload(csv, `corese-benchmark-queries-${date}.csv`);
+}
+
+
 // ── app.js ──
 // app.js — Bootstrap & navigation for Corese Benchmark Dashboard v2
 
@@ -3194,6 +3397,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (exportPdfBtn) {
       exportPdfBtn.style.display = '';
       exportPdfBtn.addEventListener('click', downloadPdfReport);
+    }
+    const exportLoadingCsvBtn = document.getElementById('export-loading-csv-btn');
+    if (exportLoadingCsvBtn) {
+      exportLoadingCsvBtn.style.display = '';
+      exportLoadingCsvBtn.addEventListener('click', downloadLoadingCsv);
+    }
+    const exportQueryCsvBtn = document.getElementById('export-query-csv-btn');
+    if (exportQueryCsvBtn) {
+      exportQueryCsvBtn.style.display = '';
+      exportQueryCsvBtn.addEventListener('click', downloadQueryCsv);
     }
 
     // Build engine filter bar

@@ -5,6 +5,7 @@ import state from './state.js';
 import { loadData, getEngineColor } from './data-loader.js';
 import { downloadMarkdownReport } from './export-md.js';
 import { downloadPdfReport } from './export-pdf.js';
+import { downloadLoadingCsv, downloadQueryCsv } from './export-csv.js';
 import { renderOverview } from './pages/overview.js';
 import { renderBowlogna } from './pages/bowlogna.js';
 import { renderBsbm } from './pages/bsbm.js';
@@ -47,6 +48,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (exportPdfBtn) {
       exportPdfBtn.style.display = '';
       exportPdfBtn.addEventListener('click', downloadPdfReport);
+    }
+    const exportLoadingCsvBtn = document.getElementById('export-loading-csv-btn');
+    if (exportLoadingCsvBtn) {
+      exportLoadingCsvBtn.style.display = '';
+      exportLoadingCsvBtn.addEventListener('click', downloadLoadingCsv);
+    }
+    const exportQueryCsvBtn = document.getElementById('export-query-csv-btn');
+    if (exportQueryCsvBtn) {
+      exportQueryCsvBtn.style.display = '';
+      exportQueryCsvBtn.addEventListener('click', downloadQueryCsv);
     }
 
     // Build engine filter bar

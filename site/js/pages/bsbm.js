@@ -8,6 +8,7 @@ import { openResultDialog } from '../components/result-dialog.js';
 import { renderQueryBreakdown } from '../charts/query-breakdown.js';
 import { renderLoadingChart } from '../charts/loading-chart.js';
 import { renderThroughputChart } from '../charts/throughput-chart.js';
+import { renderCpuChart } from '../charts/cpu-chart.js';
 import { addExpandButton } from '../chart-expand.js';
 
 const DATASET = 'bsbm';
@@ -90,11 +91,22 @@ export function renderBsbm(container) {
   const tc = document.createElement('canvas'); tc.id = 'chart-bsbm-throughput';
   tcw.appendChild(tc); tpBox.appendChild(tcw);
 
+  const cpuBox = document.createElement('div');
+  cpuBox.className = 'chart-box';
+  const ch2 = document.createElement('div'); ch2.className = 'chart-box-header';
+  const ct2 = document.createElement('h4'); ct2.textContent = 'Average CPU Usage (%)';
+  const cs2 = document.createElement('span'); cs2.className = 'chart-subtitle'; cs2.textContent = 'lower is better';
+  ch2.appendChild(ct2); ch2.appendChild(cs2); cpuBox.appendChild(ch2);
+  const ccw = document.createElement('div'); ccw.className = 'chart-canvas-wrap';
+  const cc2 = document.createElement('canvas'); cc2.id = 'chart-bsbm-cpu';
+  ccw.appendChild(cc2); cpuBox.appendChild(ccw);
+
   const chartsRow = document.createElement('div');
-  chartsRow.className = 'charts-row';
+  chartsRow.className = 'charts-row charts-row-ingestion';
   loadingBox.className = 'chart-box chart-box-wide';
   chartsRow.appendChild(loadingBox);
   chartsRow.appendChild(tpBox);
+  chartsRow.appendChild(cpuBox);
   sectionA.appendChild(chartsRow);
 
   const loadTableTitle = document.createElement('h4');
@@ -206,9 +218,11 @@ export function renderBsbm(container) {
     const runs = getLoadingRuns(DATASET);
     renderLoadingChart('chart-bsbm-loading', DATASET);
     renderThroughputChart('chart-bsbm-throughput', runs);
+    renderCpuChart('chart-bsbm-cpu', runs);
     buildLoadingTableWithFilter(loadTableContainer, runs);
     addExpandButton(loadingBox);
     addExpandButton(tpBox);
+    addExpandButton(cpuBox);
   });
 }
 
