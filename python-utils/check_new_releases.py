@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Check Maven Central for new stable releases of Jena and RDF4J."""
 import argparse
+import http.client
 import json
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 SEARCH_URL = "https://search.maven.org/solrsearch/select"
-DEFAULT_BASELINE = "site/data/baseline.json"
+DEFAULT_BASELINE = str(
+    Path(__file__).resolve().parent.parent / "site" / "data" / "baseline.json"
+)
 ARTIFACTS = {
     "jena": ("org.apache.jena", "jena-arq"),
     "rdf4j": ("org.eclipse.rdf4j", "rdf4j-storage"),
@@ -31,24 +37,42 @@ def is_stable(version):
 
 
 def version_key(version):
-    return tuple(int(n) for n in re.findall(r"\d+", version))
+    nums = [int(n) for n in re.findall(r"\d+", version)]
+    while len(nums) > 1 and nums[-1] == 0:
+        nums.pop()
+    return tuple(nums)
 
 
-def fetch_versions(group, artifact, timeout=15):
+def fetch_versions(group, artifact, timeout=15, max_retries=3):
     query = urllib.parse.urlencode(
         {
             "q": f'g:"{group}" AND a:"{artifact}"',
             "core": "gav",
             "rows": "200",
+            "sort": "timestamp desc",
             "wt": "json",
         }
     )
     request = urllib.request.Request(
         f"{SEARCH_URL}?{query}", headers={"User-Agent": "check-new-releases/1.0"}
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    return [doc["v"] for doc in payload.get("response", {}).get("docs", []) if "v" in doc]
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            return [
+                doc["v"]
+                for doc in payload.get("response", {}).get("docs", [])
+                if "v" in doc
+            ]
+        except (urllib.error.URLError, http.client.HTTPException) as e:
+            last_err = e
+            if attempt < max_retries - 1:
+                time.sleep(0.5 * (attempt + 1))
+    if last_err:
+        raise last_err
+    return []
 
 
 def latest_stable(versions):
@@ -139,7 +163,7 @@ def main(argv=None):
         log(args.verbose, f"Loading baseline {args.baseline}")
         baseline = load_baseline(args.baseline)
         report = compare(baseline, verbose=args.verbose)
-    except (OSError, ValueError) as exc:  # includes URLError, JSONDecodeError
+    except (OSError, ValueError, http.client.HTTPException) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

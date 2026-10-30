@@ -263,6 +263,13 @@ jobs:
           cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
           echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
 
+      - name: Check for new library releases on Maven Central
+        if: github.event_name == 'schedule'
+        run: |
+          source "$CONDA_SH"
+          conda activate benchmarkenv
+          python python-utils/check_new_releases.py --verbose || true
+
       - name: Run benchmark
         env:
           ENGINES: ${{ steps.params.outputs.engines }}

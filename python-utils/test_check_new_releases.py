@@ -1,8 +1,10 @@
+import http.client
 import io
 import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
@@ -47,12 +49,24 @@ class StabilityTests(unittest.TestCase):
         self.assertEqual(cnr.latest_stable(["5.9.0", "5.10.0", "6.0.0-rc1"]), "5.10.0")
         self.assertIsNone(cnr.latest_stable(["1.0-SNAPSHOT"]))
 
+    def test_version_key_normalization(self):
+        self.assertEqual(cnr.version_key("5.0"), cnr.version_key("5.0.0"))
+        self.assertTrue(cnr.version_key("5.0.1") > cnr.version_key("5.0"))
+
 
 class FetchTests(unittest.TestCase):
     def test_fetch_versions(self):
         with mock.patch("urllib.request.urlopen", return_value=fake_response(["1.0", "2.0"])) as m:
             self.assertEqual(cnr.fetch_versions("g", "a"), ["1.0", "2.0"])
-        self.assertIn("g%3A%22g%22", m.call_args[0][0].full_url)
+        self.assertIn("sort=timestamp+desc", m.call_args[0][0].full_url)
+
+    def test_fetch_versions_retry_on_failure(self):
+        err = urllib.error.URLError("temporary failure")
+        good = fake_response(["2.0.0"])
+        with mock.patch("urllib.request.urlopen", side_effect=[err, good]), \
+             mock.patch("time.sleep"):
+            versions = cnr.fetch_versions("g", "a", max_retries=2)
+            self.assertEqual(versions, ["2.0.0"])
 
 
 class BaselineTests(unittest.TestCase):
@@ -84,7 +98,7 @@ class MainTests(unittest.TestCase):
 
     def baseline(self, engines):
         path = os.path.join(self.tmp.name, "baseline.json")
-        with open(path, "w") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             json.dump({"metadata": {"engines": engines}}, fh)
         return path
 
@@ -135,8 +149,8 @@ class MainTests(unittest.TestCase):
 
     def test_network_error(self):
         path = self.baseline({"jena": "5.0.0"})
-        import urllib.error
         with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("down")), \
+                mock.patch("time.sleep"), \
                 redirect_stderr(io.StringIO()):
             self.assertEqual(cnr.main(["--baseline", path]), 2)
 
