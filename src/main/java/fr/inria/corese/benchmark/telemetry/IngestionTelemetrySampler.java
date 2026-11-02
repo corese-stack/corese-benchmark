@@ -143,6 +143,7 @@ public final class IngestionTelemetrySampler implements AutoCloseable {
     /** Thread factory producing a single named daemon thread so the JVM can exit cleanly. */
     private static final class DaemonThreadFactory implements ThreadFactory {
         @Override
+        @SuppressWarnings("NullableProblems")
         public Thread newThread(Runnable r) {
             Thread thread = new Thread(r, "ingestion-telemetry-sampler");
             thread.setDaemon(true);

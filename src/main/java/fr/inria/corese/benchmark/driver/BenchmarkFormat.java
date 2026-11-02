@@ -23,10 +23,6 @@ public enum BenchmarkFormat {
         this.supportsNamedGraphs = supportsNamedGraphs;
     }
 
-    public String getExtension() {
-        return extension;
-    }
-
     public boolean supportsNamedGraphs() {
         return supportsNamedGraphs;
     }

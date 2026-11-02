@@ -106,7 +106,7 @@ public final class SystemEnvironmentCollector {
     private static int readCpuCores(List<String> cpuinfoLines) {
         java.util.Set<String> coreKeys = new java.util.LinkedHashSet<>();
         String currentPhysicalId = "0";
-        String currentCoreId = null;
+        String currentCoreId;
         for (String line : cpuinfoLines) {
             if (line.startsWith("physical id")) {
                 String value = valueAfterColon(line);

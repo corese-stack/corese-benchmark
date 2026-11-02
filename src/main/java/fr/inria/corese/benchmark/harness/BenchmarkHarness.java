@@ -260,10 +260,6 @@ public class BenchmarkHarness {
             return result;
         }
 
-        @Override
-        public String toString() {
-            return "RepetitionBuffers";
-        }
     }
 
     private void executeSingleRepetition(
@@ -395,14 +391,12 @@ public class BenchmarkHarness {
             driver.clear();
             memBefore[i] = metrics.getUsedMemoryMb();
 
-            IngestionTelemetrySampler sampler = null;
-            if (i == reps - 1) {
+            try (IngestionTelemetrySampler sampler = i == reps - 1
+                    ? new IngestionTelemetrySampler(100, () -> 0L)
+                    : null) {
                 // Non-intrusive heap telemetry sampling during the final repetition
-                sampler = new IngestionTelemetrySampler(100, () -> 0L);
-                sampler.start();
-            }
+                if (sampler != null) sampler.start();
 
-            try {
                 long start = System.nanoTime();
                 loadWithTimeout(path);
                 timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
@@ -410,7 +404,7 @@ public class BenchmarkHarness {
                 cpuSamples[i] = metrics.getCpuPercent();
                 memAfter[i]   = metrics.getUsedMemoryMb();
                 triples       = driver.getGraphSize();
-            } finally {
+
                 if (sampler != null) {
                     timeSeries = sampler.stop(triples);
                 }

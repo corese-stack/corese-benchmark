@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -65,7 +66,7 @@ public final class BenchmarkReport {
             log.warn("Could not collect system environment metadata: {}", e.getMessage());
         }
 
-        BenchmarkProtocol proto = (protocolConfig != null) ? protocolConfig : BenchmarkProtocol.defaultProtocol();
+        BenchmarkProtocol proto = Objects.requireNonNullElse(protocolConfig, BenchmarkProtocol.defaultProtocol());
         Map<String, Object> protocol = new LinkedHashMap<>();
         protocol.put("warmup", proto.warmup());
         protocol.put("repetitions", proto.repetitions());
@@ -118,10 +119,7 @@ public final class BenchmarkReport {
             return Path.of("csv");
         }
         Path grandParent = parent.getParent();
-        if (grandParent != null) {
-            return grandParent.resolve("csv");
-        }
-        return parent.resolve("csv");
+        return Objects.requireNonNullElse(grandParent, parent).resolve("csv");
     }
 
     /**
@@ -136,7 +134,7 @@ public final class BenchmarkReport {
     private static void writeCsv(List<FileResult> results, List<QueryResult> queryResults, String csvPath) throws Exception {
         try (PrintWriter pw = new PrintWriter(csvPath)) {
             // Load benchmark section
-            int loadReps = results.isEmpty() ? 3 : results.get(0).repetitionsMs().length;
+            int loadReps = results.isEmpty() ? 3 : results.getFirst().repetitionsMs().length;
             String loadRepHeaders = java.util.stream.IntStream.rangeClosed(1, loadReps)
                 .mapToObj(i -> "rep" + i + "Ms")
                 .collect(Collectors.joining(","));
@@ -155,7 +153,7 @@ public final class BenchmarkReport {
 
             // Query benchmark section (optional)
             if (queryResults != null && !queryResults.isEmpty()) {
-                int qReps = queryResults.get(0).repetitionsMs().length;
+                int qReps = queryResults.getFirst().repetitionsMs().length;
                 String qRepHeaders = java.util.stream.IntStream.rangeClosed(1, qReps)
                     .mapToObj(i -> "rep" + i + "Ms")
                     .collect(Collectors.joining(","));

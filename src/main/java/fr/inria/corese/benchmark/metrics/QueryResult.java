@@ -42,20 +42,6 @@ public record QueryResult(
     String resultHash,
     String status
 ) {
-    public QueryResult(
-        String engine,
-        String dataset,
-        String queryId,
-        String queryCategory,
-        long   medianMs,
-        long[] repetitionsMs,
-        long   medianTtfrMs,
-        long[] repetitionsTtfrMs,
-        double heapDeltaMb
-    ) {
-        this(engine, dataset, queryId, queryCategory, medianMs, repetitionsMs, medianTtfrMs, repetitionsTtfrMs, heapDeltaMb, -1L, "", medianMs >= 0 ? "PASS" : "TIMEOUT");
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -82,20 +68,4 @@ public record QueryResult(
         return result;
     }
 
-    @Override
-    public String toString() {
-        return "QueryResult[" +
-                "engine=" + engine + ", " +
-                "dataset=" + dataset + ", " +
-                "queryId=" + queryId + ", " +
-                "queryCategory=" + queryCategory + ", " +
-                "medianMs=" + medianMs + ", " +
-                "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
-                "medianTtfrMs=" + medianTtfrMs + ", " +
-                "repetitionsTtfrMs=" + Arrays.toString(repetitionsTtfrMs) + ", " +
-                "heapDeltaMb=" + heapDeltaMb + ", " +
-                "rowCount=" + rowCount + ", " +
-                "resultHash=" + resultHash + ", " +
-                "status=" + status + ']';
-    }
 }
