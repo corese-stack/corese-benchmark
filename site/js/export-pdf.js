@@ -1,0 +1,102 @@
+// export-pdf.js — Generate and print a PDF benchmark report
+'use strict';
+
+import state from './state.js';
+import { getEngineLabel } from './data-loader.js';
+
+export function downloadPdfReport() {
+  if (!state.data) return;
+
+  const html = buildHtml();
+
+  let iframe = document.getElementById('_pdf-print-frame');
+  if (iframe) iframe.remove();
+  iframe = document.createElement('iframe');
+  iframe.id = '_pdf-print-frame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 400);
+}
+
+function buildHtml() {
+  const data    = state.data;
+  const meta    = data.metadata || {};
+  const env     = meta.environment || {};
+  const proto   = meta.protocol || {};
+  const engines = state.activeEngines;
+  const now     = new Date().toISOString().slice(0, 10);
+
+  const ENGINE_COLORS = ['#4e79a7','#f28e2b','#59a14f','#e15759','#76b7b2','#edc948','#b07aa1','#ff9da7'];
+  const colorMap = {};
+  engines.forEach((e, i) => { colorMap[e] = ENGINE_COLORS[i % ENGINE_COLORS.length]; });
+
+  const th  = `style="padding:6px 10px;text-align:right;border:1px solid #ddd;background:#f5f5f5;font-weight:600"`;
+  const th0 = `style="padding:6px 10px;text-align:left;border:1px solid #ddd;background:#f5f5f5;font-weight:600"`;
+  const td  = `style="padding:5px 10px;text-align:right;border:1px solid #ddd"`;
+  const td0 = `style="padding:5px 10px;text-align:left;border:1px solid #ddd;font-family:monospace"`;
+  const tdW = `style="padding:5px 10px;text-align:right;border:1px solid #ddd;font-weight:700;background:#fffbe6"`;
+
+  function queryTable(title, runs) {
+    const queryIds = [...new Set(runs.map(r => r.queryId))].sort((a, b) =>
+      parseInt(a.replace(/\D/g,'')) - parseInt(b.replace(/\D/g,''))
+    );
+    const header = `<tr><th ${th0}>Query</th>${engines.map(e =>
+      `<th ${th}><span style="color:${colorMap[e]}">${getEngineLabel(e)}</span></th>`
+    ).join('')}<th ${th}>Best</th></tr>`;
+
+    const rows = queryIds.map(qid => {
+      const vals = engines.map(eng => {
+        const run = runs.find(r => r.engine === eng && r.queryId === qid);
+        if (!run) return null;
+        if (run.status === 'TIMEOUT') return 'TIMEOUT';
+        if (run.status !== 'PASS') return run.status;
+        return run.medianMs;
+      });
+      const nums = vals.map(v => (typeof v === 'number') ? v : null);
+      const minV = Math.min(...nums.filter(v => v !== null));
+      const winIdx = isFinite(minV) ? nums.indexOf(minV) : -1;
+
+      const cells = vals.map((v, i) => {
+        const style = (i === winIdx) ? tdW : td;
+        const disp = v === null ? '—' : typeof v === 'number' ? v.toLocaleString() + ' ms' : v;
+        return `<td ${style}>${disp}</td>`;
+      }).join('');
+      const best = winIdx >= 0
+        ? `<span style="color:${colorMap[engines[winIdx]]}">${getEngineLabel(engines[winIdx])}</span>`
+        : '—';
+      return `<tr><td ${td0}>${qid.replace('query_', 'Q')}</td>${cells}<td ${td}>${best}</td></tr>`;
+    }).join('');
+
+    return `<h2 style="margin:28px 0 8px;font-size:15px;color:#333">${title}</h2>
+      <table style="border-collapse:collapse;width:100%;font-size:12px">${header}${rows}</table>`;
+  }
+
+  const datasets = [...new Set(data.queryRuns.map(r => r.dataset))];
+  const sections = datasets.map(ds => {
+    const runs = data.queryRuns.filter(r => r.dataset === ds && engines.includes(r.engine));
+    return `<h2 style="margin:32px 0 4px;font-size:16px;border-bottom:2px solid #4e79a7;padding-bottom:4px">${ds}</h2>
+      ${queryTable('Median Execution Time', runs)}`;
+  }).join('');
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+    <title>Corese Benchmark — ${now}</title>
+    <style>
+      @media print { @page { margin:18mm 15mm; } body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+      body { font-family:system-ui,sans-serif; font-size:13px; color:#222; margin:0; padding:20px 30px; }
+      h1 { font-size:20px; margin-bottom:6px; }
+    </style>
+  </head><body>
+    <h1>Corese Benchmark Report</h1>
+    <p style="margin:4px 0;color:#555"><strong>Generated:</strong> ${meta.generatedAt || now}</p>
+    <p style="margin:4px 0;color:#555"><strong>CPU:</strong> ${env.cpuModel || '—'} (${env.cpuCores || '?'}c/${env.cpuThreads || '?'}t) &nbsp;·&nbsp; <strong>RAM:</strong> ${env.ramTotalGb || '?'} GB</p>
+    <p style="margin:4px 0;color:#555"><strong>OS:</strong> ${env.osDistribution || '—'} &nbsp;·&nbsp; <strong>JVM:</strong> ${env.jvmVersion || '—'}</p>
+    <p style="margin:4px 0;color:#555"><strong>Protocol:</strong> warmup + ${proto.repetitions || 3} repetitions, median — timeout ${(proto.queryTimeoutMs || 60000) / 1000}s</p>
+    ${sections}
+    <p style="margin-top:32px;font-size:11px;color:#aaa">Generated by Corese Benchmark Dashboard — ${now}</p>
+  </body></html>`;
+}
+
+export default downloadPdfReport;

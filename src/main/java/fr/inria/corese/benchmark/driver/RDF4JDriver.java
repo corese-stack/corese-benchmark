@@ -171,7 +171,7 @@ public class RDF4JDriver implements TripleStoreDriver {
         long start = System.currentTimeMillis();
         long ttfr;
         long count = 0;
-        String hash = "";
+        String hash;
         try (RepositoryConnection conn = repository.getConnection()) {
             TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
             try (TupleQueryResult result = q.evaluate()) {

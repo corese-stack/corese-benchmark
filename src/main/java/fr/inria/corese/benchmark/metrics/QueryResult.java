@@ -42,36 +42,26 @@ public record QueryResult(
     String resultHash,
     String status
 ) {
-    public QueryResult(
-        String engine,
-        String dataset,
-        String queryId,
-        String queryCategory,
-        long   medianMs,
-        long[] repetitionsMs,
-        long   medianTtfrMs,
-        long[] repetitionsTtfrMs,
-        double heapDeltaMb
-    ) {
-        this(engine, dataset, queryId, queryCategory, medianMs, repetitionsMs, medianTtfrMs, repetitionsTtfrMs, heapDeltaMb, -1L, "", medianMs >= 0 ? "PASS" : "TIMEOUT");
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof QueryResult other)) return false;
-        return medianMs == other.medianMs &&
-                medianTtfrMs == other.medianTtfrMs &&
-                rowCount == other.rowCount &&
-                Double.compare(other.heapDeltaMb, heapDeltaMb) == 0 &&
-                Objects.equals(engine, other.engine) &&
-                Objects.equals(dataset, other.dataset) &&
-                Objects.equals(queryId, other.queryId) &&
-                Objects.equals(queryCategory, other.queryCategory) &&
-                Objects.equals(resultHash, other.resultHash) &&
-                Objects.equals(status, other.status) &&
-                Arrays.equals(repetitionsMs, other.repetitionsMs) &&
-                Arrays.equals(repetitionsTtfrMs, other.repetitionsTtfrMs);
+        if (!(o instanceof QueryResult(
+                var eng, var ds, var qId, var qCat,
+                var mMs, var rMs,
+                var mTtfr, var rTtfr,
+                var heap, var rows, var hash, var st))) return false;
+        return medianMs == mMs &&
+                medianTtfrMs == mTtfr &&
+                rowCount == rows &&
+                Double.compare(heap, heapDeltaMb) == 0 &&
+                Objects.equals(engine, eng) &&
+                Objects.equals(dataset, ds) &&
+                Objects.equals(queryId, qId) &&
+                Objects.equals(queryCategory, qCat) &&
+                Objects.equals(resultHash, hash) &&
+                Objects.equals(status, st) &&
+                Arrays.equals(repetitionsMs, rMs) &&
+                Arrays.equals(repetitionsTtfrMs, rTtfr);
     }
 
     @Override
@@ -82,20 +72,4 @@ public record QueryResult(
         return result;
     }
 
-    @Override
-    public String toString() {
-        return "QueryResult[" +
-                "engine=" + engine + ", " +
-                "dataset=" + dataset + ", " +
-                "queryId=" + queryId + ", " +
-                "queryCategory=" + queryCategory + ", " +
-                "medianMs=" + medianMs + ", " +
-                "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
-                "medianTtfrMs=" + medianTtfrMs + ", " +
-                "repetitionsTtfrMs=" + Arrays.toString(repetitionsTtfrMs) + ", " +
-                "heapDeltaMb=" + heapDeltaMb + ", " +
-                "rowCount=" + rowCount + ", " +
-                "resultHash=" + resultHash + ", " +
-                "status=" + status + ']';
-    }
 }

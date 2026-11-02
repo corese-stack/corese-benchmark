@@ -47,39 +47,26 @@ public record FileResult(
     // Real-time telemetry samples during loading
     List<TelemetryPoint> timeSeries
 ) {
-    public FileResult(
-        String engine,
-        String dataset,
-        String file,
-        long triples,
-        long loadingTimeMs,
-        double throughputTriplesPerSec,
-        double memoryBeforeMb,
-        double memoryAfterMb,
-        double memoryDeltaMb,
-        double cpuPercent,
-        long[] repetitionsMs
-    ) {
-        this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
-                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, List.of());
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof FileResult other)) return false;
-        return triples == other.triples &&
-                loadingTimeMs == other.loadingTimeMs &&
-                Double.compare(other.throughputTriplesPerSec, throughputTriplesPerSec) == 0 &&
-                Double.compare(other.memoryBeforeMb, memoryBeforeMb) == 0 &&
-                Double.compare(other.memoryAfterMb, memoryAfterMb) == 0 &&
-                Double.compare(other.memoryDeltaMb, memoryDeltaMb) == 0 &&
-                Double.compare(other.cpuPercent, cpuPercent) == 0 &&
-                Objects.equals(engine, other.engine) &&
-                Objects.equals(dataset, other.dataset) &&
-                Objects.equals(file, other.file) &&
-                Arrays.equals(repetitionsMs, other.repetitionsMs) &&
-                Objects.equals(timeSeries, other.timeSeries);
+        if (!(o instanceof FileResult(
+                var eng, var ds, var f, var tri,
+                var ltMs, var thpt,
+                var memBef, var memAft, var memDelta,
+                var cpu, var reps, var ts))) return false;
+        return triples == tri &&
+                loadingTimeMs == ltMs &&
+                Double.compare(thpt, throughputTriplesPerSec) == 0 &&
+                Double.compare(memBef, memoryBeforeMb) == 0 &&
+                Double.compare(memAft, memoryAfterMb) == 0 &&
+                Double.compare(memDelta, memoryDeltaMb) == 0 &&
+                Double.compare(cpu, cpuPercent) == 0 &&
+                Objects.equals(engine, eng) &&
+                Objects.equals(dataset, ds) &&
+                Objects.equals(file, f) &&
+                Arrays.equals(repetitionsMs, reps) &&
+                Objects.equals(timeSeries, ts);
     }
 
     @Override
@@ -90,20 +77,4 @@ public record FileResult(
         return result;
     }
 
-    @Override
-    public String toString() {
-        return "FileResult[" +
-                "engine=" + engine + ", " +
-                "dataset=" + dataset + ", " +
-                "file=" + file + ", " +
-                "triples=" + triples + ", " +
-                "loadingTimeMs=" + loadingTimeMs + ", " +
-                "throughputTriplesPerSec=" + throughputTriplesPerSec + ", " +
-                "memoryBeforeMb=" + memoryBeforeMb + ", " +
-                "memoryAfterMb=" + memoryAfterMb + ", " +
-                "memoryDeltaMb=" + memoryDeltaMb + ", " +
-                "cpuPercent=" + cpuPercent + ", " +
-                "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
-                "timeSeries=" + (timeSeries != null ? timeSeries.size() + " points" : "none") + ']';
-    }
 }
