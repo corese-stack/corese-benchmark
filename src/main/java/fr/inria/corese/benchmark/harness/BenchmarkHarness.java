@@ -240,13 +240,13 @@ public class BenchmarkHarness {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof RepetitionBuffers b)) return false;
-            return Arrays.equals(times, b.times)
-                && Arrays.equals(ttfrTimes, b.ttfrTimes)
-                && Arrays.equals(heapDeltas, b.heapDeltas)
-                && Arrays.equals(rowCounts, b.rowCounts)
-                && Arrays.equals(hashes, b.hashes)
-                && Arrays.equals(statuses, b.statuses);
+            if (!(o instanceof RepetitionBuffers(var t, var tf, var hd, var rc, var h, var s))) return false;
+            return Arrays.equals(times, t)
+                && Arrays.equals(ttfrTimes, tf)
+                && Arrays.equals(heapDeltas, hd)
+                && Arrays.equals(rowCounts, rc)
+                && Arrays.equals(hashes, h)
+                && Arrays.equals(statuses, s);
         }
 
         @Override
