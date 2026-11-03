@@ -4,7 +4,7 @@
  * ZERO MOCK: Every engine, version, and number comes strictly from real test runs.
  */
 
-import { parseEngineId, isBranchVersion, sanitizeColor } from './engine-id.js?v=29';
+import { parseEngineId, isBranchVersion, sanitizeColor } from './engine-id.js?v=30';
 
 export { parseEngineId, isBranchVersion };
 

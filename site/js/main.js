@@ -2,9 +2,9 @@
  * Corese Benchmark Dashboard - Main Orchestrator
  */
 
-import { loadBenchmarkReport } from './api.js?v=29';
-import { engineManager } from './engines.js?v=29';
-import { parseUrlEngines, updateUrlEngines } from './router.js?v=29';
+import { loadBenchmarkReport } from './api.js?v=30';
+import { engineManager } from './engines.js?v=30';
+import { parseUrlEngines, updateUrlEngines } from './router.js?v=30';
 
 class DashboardApp {
   #abortController = null;
@@ -33,7 +33,7 @@ class DashboardApp {
     const { signal } = this.#abortController;
 
     try {
-      this.data = await loadBenchmarkReport('data/benchmark-report.json?v=29', { signal });
+      this.data = await loadBenchmarkReport('data/benchmark-report.json?v=30', { signal });
       if (signal.aborted) return;
 
       // 1. Parse initial engines from URL search parameters (shareable links)

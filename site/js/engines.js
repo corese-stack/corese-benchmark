@@ -4,7 +4,7 @@
  * ZERO MOCK: Every engine, version, and storage backend exists in the report JSON.
  */
 
-import { formatEngineId, isBranchVersion, escapeHtml, sanitizeColor } from './engine-id.js?v=29';
+import { formatEngineId, isBranchVersion, escapeHtml, sanitizeColor } from './engine-id.js?v=30';
 
 export const SETTLE_TRANSITION_MS = 180;
 export const SETTLE_SAFETY_MS = 40;
@@ -664,6 +664,10 @@ export class EngineManager extends EventTarget {
       }
     }
 
+    const prefersReducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     d.chip.classList.remove('is-dragging');
     d.chip.classList.add('is-settling');
     void d.chip.offsetWidth;
@@ -703,7 +707,7 @@ export class EngineManager extends EventTarget {
         this.announce(`${engName} moved to position ${d.to + 1} of ${this.activeEngines.length}`);
 
         this.safeRaf(() => {
-          const freshChips = this.el.chipsContainer?.querySelectorAll('.engine-chip');
+          const freshChips = this.getChipElements();
           freshChips?.[d.to]?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
         });
       } else {
@@ -714,6 +718,7 @@ export class EngineManager extends EventTarget {
           el.style.zIndex = '';
           el.classList.remove('is-settling');
         });
+        this.clearHighlight();
       }
 
       this.safeRaf(() => {
@@ -722,6 +727,11 @@ export class EngineManager extends EventTarget {
         }
       });
     };
+
+    if (prefersReducedMotion || this.settleDurationMs <= 0) {
+      commit();
+      return;
+    }
 
     this.#pendingCommit = () => {
       if (!committed) {
@@ -746,10 +756,10 @@ export class EngineManager extends EventTarget {
       if (e.target.closest('.engine-chip__remove')) return;
       if (this.#activeDrag || this.#pendingDrag || this.#isSettling) return;
 
-      const chip = e.target.closest('.engine-chip');
+      const chip = e.target.closest('.engine-chip:not(.engine-chip--ghost)');
       if (!chip) return;
 
-      const chipElements = Array.from(container.querySelectorAll('.engine-chip'));
+      const chipElements = this.getChipElements();
       const fromIdx = chipElements.indexOf(chip);
       if (fromIdx === -1) return;
 
@@ -868,7 +878,7 @@ export class EngineManager extends EventTarget {
 
       if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
 
-      const chipElements = Array.from(container.querySelectorAll('.engine-chip'));
+      const chipElements = this.getChipElements();
       const currentIdx = chipElements.indexOf(chip);
       if (currentIdx === -1) return;
 
@@ -880,7 +890,7 @@ export class EngineManager extends EventTarget {
 
       // Restore focus to moved chip at new index
       this.safeRaf(() => {
-        const newChips = container.querySelectorAll('.engine-chip');
+        const newChips = this.getChipElements();
         if (newChips[targetIdx]) {
           newChips[targetIdx].focus();
           newChips[targetIdx].scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
@@ -1066,7 +1076,7 @@ export class EngineManager extends EventTarget {
         this.renderMillerColumns({ colClass: '.miller__col--versions', id: ver.id });
       }
     } else if (columnEl.classList.contains('miller__col--storages')) {
-      const st = this.draftEngine?.storages.find((s) => s.id === itemId);
+      const st = (this.draftEngine?.storages || []).find((s) => s.id === itemId);
       if (st) {
         this.draftStorage = st;
         this.renderMillerColumns({ colClass: '.miller__col--storages', id: st.id });
@@ -1154,14 +1164,18 @@ export class EngineManager extends EventTarget {
           this.removeEngine(target);
         }
         this.closePicker(true);
+      } else {
+        this.announce('At least one engine must remain selected');
       }
     } else {
       // Toggle on: add to active comparison with FLIP entrance animation
       const container = this.el.chipsContainer;
       const firstLefts = new Map();
       if (container) {
-        container.querySelectorAll('.engine-chip').forEach((c) => {
-          firstLefts.set(c.dataset.key, c.getBoundingClientRect().left);
+        this.getChipElements().forEach((c) => {
+          if (c.dataset.key) {
+            firstLefts.set(c.dataset.key, c.getBoundingClientRect().left);
+          }
         });
       }
 
@@ -1170,12 +1184,16 @@ export class EngineManager extends EventTarget {
       this.dispatchChangeEvent();
       this.closePicker(true);
 
+      const engMeta = this.catalog.find((item) => item.id === target.engineId);
+      const engName = engMeta?.shortName || engMeta?.name || target.engineId;
+      this.announce(`${engName} added to comparison`);
+
       const prefersReducedMotion = typeof window !== 'undefined' &&
         window.matchMedia &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       this.safeRaf(() => {
-        const chips = Array.from(this.el.chipsContainer?.querySelectorAll('.engine-chip') || []);
+        const chips = this.getChipElements();
         const newChip = chips.find((c) => c.dataset.key === targetKey);
 
         if (!prefersReducedMotion) {
@@ -1553,7 +1571,7 @@ export class EngineManager extends EventTarget {
 
       // 3. Column Storage
       colStorages.innerHTML = '';
-      this.draftEngine.storages.forEach((s) => {
+      (this.draftEngine?.storages || []).forEach((s) => {
         const isSelected = this.draftStorage && s.id === this.draftStorage.id;
         const previewStyle = getEngineStyle({
           engineId: this.draftEngine.id,

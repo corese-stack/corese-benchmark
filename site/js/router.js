@@ -3,7 +3,7 @@
  * Deep linking for selected engines comparison in URL query parameter (?engines=...)
  */
 
-import { parseEngineId, formatEngineId } from './engine-id.js?v=29';
+import { parseEngineId, formatEngineId } from './engine-id.js?v=30';
 
 export function parseUrlEngines(searchStr, catalog = []) {
   const params = new URLSearchParams(searchStr || '');
