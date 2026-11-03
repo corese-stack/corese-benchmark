@@ -1,356 +1,211 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Corese · Benchmark Dashboard</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmark · Corese</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inria+Sans:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=29">
+  <script>
+    (function () {
+      const mode = localStorage.getItem('corese-theme-mode') || 'system';
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const resolved = (mode === 'system') ? (systemDark ? 'dark' : 'light') : mode;
+      document.documentElement.dataset.theme = resolved;
+    })();
+  </script>
 </head>
 <body>
-<div class="app-wrapper">
-
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <header class="page-header">
-    <!-- ── Top row: brand + engines + actions ── -->
-    <div class="header-top-row">
-      <div class="header-brand">
-        <span class="brand-title">Corese Benchmark</span>
-        <span class="brand-run-date" id="header-run-date" style="display:none"></span>
-      </div>
-
-      <div class="comparator-bar">
-        <span class="comparator-label">Engines:</span>
-        <button class="pills-scroll-btn" id="pills-scroll-left" onclick="scrollPills(-1)" aria-label="Scroll left">&#8249;</button>
-        <div class="engine-pills-wrap" id="engine-pills"></div>
-        <button class="pills-scroll-btn" id="pills-scroll-right" onclick="scrollPills(1)" aria-label="Scroll right">&#8250;</button>
-        <button class="btn-add-engine-trigger" id="btn-open-add-engine">+ Add</button>
-      </div>
-
-      <div class="header-right">
-
-      <div class="download-group">
-        <a class="btn-download" id="download-json" href="data/benchmark-report.json" download title="Télécharger le rapport JSON">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="12" y2="18"></line>
-            <line x1="15" y1="15" x2="12" y2="18"></line>
-          </svg>
-          <span>JSON</span>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <nav class="brand" aria-label="Main navigation">
+        <!-- Corese official logo -->
+        <a class="brand__logo" href="https://project.inria.fr/corese/" target="_blank" rel="noopener" title="Official Corese portal (Inria)">
+          <img src="assets/logo/corese.svg" alt="Corese" class="brand__logo-img">
         </a>
-        <a class="btn-download" id="download-csv" href="data/benchmark-report.csv" download title="Télécharger le rapport CSV">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="12" y2="18"></line>
-            <line x1="15" y1="15" x2="12" y2="18"></line>
-          </svg>
-          <span>CSV</span>
+
+        <!-- Suite root: Corese -->
+        <a class="brand__root" href="https://project.inria.fr/corese/" target="_blank" rel="noopener" title="Corese Project">
+          Corese
         </a>
-      </div>
 
-      <button id="theme-toggle" class="theme-btn" title="Thème : Auto (Système)" aria-label="Changer le thème (Auto, Clair, Sombre)">
-        <svg id="icon-auto" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-          <line x1="8" y1="21" x2="16" y2="21"></line>
-          <line x1="12" y1="17" x2="12" y2="21"></line>
-        </svg>
-        <svg id="icon-sun" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" style="display:none">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <svg id="icon-moon" class="theme-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" style="display:none">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      </button>
-      </div><!-- /.header-right -->
-    </div><!-- /.header-top-row -->
+        <!-- Breadcrumb separator -->
+        <span class="brand__sep" aria-hidden="true">/</span>
 
-    <!-- ── Bottom row: dataset tabs ── -->
-    <div class="header-bottom-row">
-      <div class="dataset-filter-bar">
-        <div class="dataset-pills-wrap" id="dataset-pills"></div>
+        <!-- Active suite tool switcher: Benchmark ▾ -->
+        <div class="menu">
+          <button class="menu__trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="suite-menu" title="Switch to another tool in the Corese Suite">
+            <span class="menu__label">Benchmark</span>
+            <svg class="menu__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <ul class="menu__list" id="suite-menu" role="menu" aria-label="Corese Suite" hidden>
+            <li role="none"><a role="menuitem" class="menu__item" href="https://github.com/corese-stack/corese-core" target="_blank" rel="noopener">Corese Core</a></li>
+            <li role="none"><a role="menuitem" class="menu__item" href="https://corese.inria.fr/" target="_blank" rel="noopener">Corese Server</a></li>
+            <li role="none"><a role="menuitem" class="menu__item" href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese Command</a></li>
+            <li role="none"><a role="menuitem" class="menu__item" href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese GUI</a></li>
+            <li role="separator" class="menu__divider" aria-hidden="true"></li>
+            <li role="none"><a role="menuitem" class="menu__item is-active" href="#" aria-current="page">Benchmark</a></li>
+            <li role="none"><a role="menuitem" class="menu__item" href="https://corese-stack.github.io/corese-w3c/" target="_blank" rel="noopener">W3C Conformance</a></li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Right actions: GitHub & Theme -->
+      <div class="topbar__actions">
+        <!-- Project GitHub link -->
+        <a class="topbar__action-btn" href="https://github.com/corese-stack/corese-benchmark" target="_blank" rel="noopener" aria-label="Source code on GitHub (corese-benchmark)" title="Source code on GitHub (corese-benchmark)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+
+        <!-- Theme switcher button (System / Light / Dark) -->
+        <button class="topbar__action-btn theme-toggle" type="button" data-theme-mode="system" aria-label="Theme: System (automatic)" title="Theme: System (automatic)">
+          <!-- System icon (monitor) -->
+          <svg class="theme-toggle__icon theme-toggle__icon--system" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="2.5" width="12" height="8.5" rx="1.5"/>
+            <path d="M5.5 14h5M8 11v3"/>
+          </svg>
+          <!-- Light icon (sun) -->
+          <svg class="theme-toggle__icon theme-toggle__icon--light" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="8" cy="8" r="3.25"/>
+            <path d="M8 1.5v1.5M8 13v1.5M1.5 8h1.5M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06"/>
+          </svg>
+          <!-- Dark icon (moon) -->
+          <svg class="theme-toggle__icon theme-toggle__icon--dark" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13.5 9.2A5.5 5.5 0 1 1 6.8 2.5a4.5 4.5 0 0 0 6.7 6.7z"/>
+          </svg>
+        </button>
       </div>
-    </div><!-- /.header-bottom-row -->
+    </div>
   </header>
 
-  <!-- ── App body ───────────────────────────────────────────────────────── -->
-  <div class="app-body">
-
-    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-    <aside class="app-sidebar">
-      <div class="sidebar-search-box">
-        <input type="search" id="sidebar-search-input" placeholder="Rechercher…" autocomplete="off">
-      </div>
-
-      <nav class="sidebar-group">
-        <span class="sidebar-heading">Overview</span>
-        <ul class="sidebar-nav-list">
-          <li><a class="sidebar-nav-item" data-target="section-kpi" href="#section-kpi">Overview</a></li>
-        </ul>
-      </nav>
-
-      <nav class="sidebar-group">
-        <span class="sidebar-heading">Data</span>
-        <ul class="sidebar-nav-list">
-          <li><a class="sidebar-nav-item" data-target="section-datasets" href="#section-datasets">
-            Datasets
-            <span class="sidebar-item-badge" id="sidebar-badge-datasets"></span>
-          </a></li>
-          <li><a class="sidebar-nav-item" data-target="section-engines" href="#section-engines">
-            Engines
-            <span class="sidebar-item-badge" id="sidebar-badge-engines"></span>
-          </a></li>
-          <li id="sidebar-w3c-nav" style="display:none"><a class="sidebar-nav-item" data-target="section-w3c" href="#section-w3c">
-            W3C Conformance
-            <span class="sidebar-item-badge" id="sidebar-badge-w3c"></span>
-          </a></li>
-        </ul>
-      </nav>
-
-      <nav class="sidebar-group">
-        <span class="sidebar-heading">Results</span>
-        <ul class="sidebar-nav-list">
-          <li><a class="sidebar-nav-item" data-target="section-charts" href="#section-charts">Performance</a></li>
-          <li><a class="sidebar-nav-item" data-target="section-results" href="#section-results">
-            Full results
-            <span class="sidebar-item-badge" id="sidebar-badge-results"></span>
-          </a></li>
-          <li id="sidebar-sparql-nav" style="display:none"><a class="sidebar-nav-item" data-target="section-sparql" href="#section-sparql">
-            SPARQL
-            <span class="sidebar-item-badge" id="sidebar-badge-sparql"></span>
-          </a></li>
-
-        </ul>
-      </nav>
-
-      <div class="sidebar-footer-box" id="sidebar-meta">
-        <!-- filled by JS -->
-      </div>
-    </aside>
-
-    <!-- ── Main content ─────────────────────────────────────────────────── -->
-    <main class="app-content">
-
-      <div id="empty-state" style="display:none;padding:60px 24px;text-align:center;color:var(--text-muted)">
-        <div style="font-size:40px;margin-bottom:16px">📭</div>
-        <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">Aucune donnée disponible</div>
-        <div style="font-size:13px">Le fichier <code>data/benchmark-report.json</code> est introuvable ou vide.<br>Lance un benchmark ou vérifie la connexion.</div>
-      </div>
-
-      <!-- ── Overview ─────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-kpi">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Overview</h2>
-          <span class="section-meta" id="overview-meta"></span>
+  <!-- Sticky Engines Toolbar -->
+  <aside class="engines-bar" aria-label="Benchmark Engines">
+    <div class="engines-bar__inner">
+      <span class="engines-bar__label">Engines:</span>
+      <div class="engines-bar__scroller" id="engines-scroller">
+        <div class="engines-bar__chips" id="active-engines-chips" role="list" aria-label="Selected engines for benchmark comparison">
+          <!-- Rendered dynamically from real report data -->
         </div>
-        <!-- KPI breakdown cards -->
-        <div class="metrics-grid" id="metrics-grid">
-          <!-- filled by JS -->
-        </div>
-        <!-- Overview charts: bar + radar -->
-        <div class="overview-charts-grid">
-          <div class="chart-surface">
-            <div class="chart-header">
-              <span class="chart-title">Avg loading time by engine</span>
-              <span class="chart-unit">ms — lower is better</span>
+      </div>
+      <div class="sr-only" id="chips-announcer" aria-live="polite" aria-atomic="true"></div>
+
+      <!-- Add Engine Button with Miller Columns Popover -->
+      <div class="engine-picker">
+        <button class="engine-picker__btn" id="btn-add-engine" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="miller-popover" title="Add benchmark engine">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 2.5v7M2.5 6h7"/>
+          </svg>
+          <span>Add Engine</span>
+        </button>
+
+        <!-- 3-Column Miller Popover -->
+        <div class="miller-popover" id="miller-popover" role="dialog" aria-label="Select Engine, Version and Storage" aria-modal="false" hidden>
+          <div class="miller-popover__header">
+            <span class="miller-popover__step">1. Engine</span>
+            <span class="miller-popover__step">2. Version</span>
+            <span class="miller-popover__step">3. Storage</span>
+          </div>
+
+          <div class="miller-popover__body">
+            <div class="miller__col miller__col--engines" role="listbox" aria-label="Engines"></div>
+            <div class="miller__col miller__col--versions" role="listbox" aria-label="Versions"></div>
+            <div class="miller__col miller__col--storages" role="listbox" aria-label="Storage"></div>
+          </div>
+
+          <div class="miller-popover__footer">
+            <div class="miller__preview-wrap">
+              <span class="miller__preview-label">Engine:</span>
+              <span class="miller__preview">Corese · 4.6.5 · In-Memory</span>
             </div>
-            <canvas id="chart-overview-bar" height="160"></canvas>
-          </div>
-          <div class="chart-surface">
-            <div class="chart-header">
-              <span class="chart-title">Performance profile</span>
-              <span class="chart-unit">normalized score — higher is better</span>
-            </div>
-            <canvas id="chart-overview-radar" height="160"></canvas>
+            <button type="button" class="miller__confirm-btn" id="btn-confirm-engine">Add</button>
           </div>
         </div>
-      </section>
-
-      <!-- ── Datasets ──────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-datasets">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Datasets</h2>
-          <span class="section-meta" id="datasets-meta"></span>
-        </div>
-        <div class="suites-list" id="dataset-grid">
-          <!-- filled by JS -->
-        </div>
-      </section>
-
-      <!-- ── Engines ───────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-engines">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Engines tested</h2>
-          <button id="clear-engines-btn" class="btn-clear-filter" onclick="clearEngineFilter()" style="display:none">✕ Clear filter</button>
-        </div>
-        <p class="section-sub">Click one or more engines to filter the charts</p>
-        <div class="suites-list" id="engine-grid">
-          <!-- filled by JS -->
-        </div>
-      </section>
-
-      <!-- ── Charts ───────────────────────────────────────────────────── -->
-      <section class="page-section" id="section-charts">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Performance</h2>
-          <span class="section-meta" id="charts-mode-meta"></span>
-        </div>
-        <div class="charts-grid">
-
-          <div class="chart-surface" onclick="openChartZoom('chart-loading')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">Loading time</span>
-              <span class="chart-unit">ms — lower is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-loading','loading')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-loading')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-loading"></canvas>
-          </div>
-
-          <div class="chart-surface" onclick="openChartZoom('chart-memory')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">Memory</span>
-              <span class="chart-unit">ΔMB — lower is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-memory','memory')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-memory')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-memory"></canvas>
-          </div>
-
-          <div class="chart-surface" onclick="openChartZoom('chart-cpu')" style="cursor:pointer">
-            <div class="chart-header">
-              <span class="chart-title">CPU</span>
-              <span class="chart-unit">% — lower is better</span>
-              <button class="btn-chart-png" onclick="event.stopPropagation();downloadChart('chart-cpu','cpu')" title="Download PNG">↓ PNG</button>
-              <button class="btn-chart-png" onclick="event.stopPropagation();openChartZoom('chart-cpu')" title="Agrandir">⤢</button>
-            </div>
-            <canvas id="chart-cpu"></canvas>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ── Full results ──────────────────────────────────────────────── -->
-      <section class="page-section" id="section-results">
-        <div class="section-head-bar">
-          <h2 class="section-heading" style="margin:0">Full results</h2>
-          <span class="section-meta" id="full-results-meta"></span>
-          <div style="display:flex;gap:6px">
-            <button class="btn-download" onclick="exportFilteredCsv()" title="Exporter les résultats filtrés en CSV">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="12" y2="18"></line>
-                <line x1="15" y1="15" x2="12" y2="18"></line>
-              </svg>
-              <span>Export CSV</span>
-            </button>
-            <button class="btn-download" onclick="exportFilteredJson()" title="Exporter les résultats filtrés en JSON">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="12" y2="18"></line>
-                <line x1="15" y1="15" x2="12" y2="18"></line>
-              </svg>
-              <span>Export JSON</span>
-            </button>
-          </div>
-        </div>
-        <div class="table-surface">
-          <div class="table-scroll">
-            <table class="report-table" translate="no">
-              <thead>
-                <tr>
-                  <th data-sort="engine" class="sortable">Engine</th>
-                  <th data-sort="file" class="sortable">File</th>
-                  <th data-sort="triples" class="sortable text-right">Triples</th>
-                  <th data-sort="loadingTimeMs" class="sortable text-right">Loading (ms)</th>
-                  <th data-sort="throughputTriplesPerSec" class="sortable text-right">Throughput (t/s)</th>
-                  <th data-sort="memoryDeltaMb" class="sortable text-right">Memory ΔMB</th>
-                  <th data-sort="cpuPercent" class="sortable text-right">CPU %</th>
-                  <th>Repetitions (ms)</th>
-                </tr>
-              </thead>
-              <tbody id="results-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── SPARQL section (filled by JS) ───────────────────────────── -->
-      <section class="page-section" id="section-sparql" style="display:none">
-        <!-- filled by JS -->
-      </section>
-
-      <!-- ── W3C Conformance section (filled by JS) ──────────────────── -->
-      <section class="page-section" id="section-w3c" style="display:none">
-        <!-- filled by JS -->
-      </section>
-
-    </main>
-  </div><!-- /.app-body -->
-
-  <dialog id="chart-zoom-modal" class="chart-zoom-dialog" onclick="if(event.target===this)closeChartZoom()">
-    <div class="chart-zoom-inner">
-      <div class="chart-zoom-header">
-        <span class="chart-zoom-title" id="chart-zoom-title"></span>
-        <div class="chart-zoom-actions">
-          <button class="btn-chart-png" id="chart-zoom-png" title="Download PNG">↓ PNG</button>
-          <button class="modal-close" onclick="closeChartZoom()">✕</button>
-        </div>
-      </div>
-      <canvas id="chart-zoom-canvas"></canvas>
-    </div>
-  </dialog>
-
-
-  <!-- ── Add engine modal overlay ───────────────────────────────────────── -->
-  <div class="modal-overlay" id="modal-add-engine">
-    <div class="modal-card">
-      <div class="modal-card-title">Add an engine</div>
-      <div class="modal-card-desc">Select the triplestore and version to add to the comparison.</div>
-      <div class="modal-form-group">
-        <label class="modal-form-label" for="modal-select-triplestore">Engine</label>
-        <select class="modal-form-select" id="modal-select-triplestore">
-          <!-- filled by JS -->
-        </select>
-      </div>
-      <div class="modal-form-group">
-        <label class="modal-form-label" for="modal-select-version">Version / Branch</label>
-        <select class="modal-form-select" id="modal-select-version">
-          <!-- filled by JS -->
-        </select>
-      </div>
-      <div class="modal-card-actions">
-        <button class="btn-modal-cancel" id="btn-modal-cancel">Cancel</button>
-        <button class="btn-modal-submit" id="btn-modal-submit">Add</button>
       </div>
     </div>
-  </div>
+  </aside>
 
-</div><!-- /.app-wrapper -->
+  <main class="dashboard-main" id="dashboard-main">
+  </main>
 
-<footer class="page-footer">
-  <p>
-    <a href="https://github.com/corese-stack/corese-benchmark" target="_blank">corese-stack/corese-benchmark</a>
-    &nbsp;·&nbsp; Protocol&nbsp;: warmup + 3 repetitions + median
-    &nbsp;·&nbsp; <a href="https://project.inria.fr/corese/" target="_blank">Corese Engine</a> — Inria Wimmics
-  </p>
-</footer>
+  <script type="module" src="./js/main.js?v=29"></script>
 
-<script src="data/report-data.js" onerror="void 0"></script>
-<script src="app.js"></script>
+  <script>
+    (function () {
+      const trigger = document.querySelector('.menu__trigger');
+      const list = document.getElementById('suite-menu');
+
+      function setOpen(open) {
+        trigger.setAttribute('aria-expanded', String(open));
+        list.hidden = !open;
+      }
+
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setOpen(list.hidden);
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!list.hidden && !list.contains(e.target)) setOpen(false);
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !list.hidden) {
+          setOpen(false);
+          trigger.focus();
+        }
+      });
+
+      // 3-state theme management: System (default) ➔ Light ➔ Dark ➔ System
+      const themeToggle = document.querySelector('.theme-toggle');
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const MODES = ['system', 'light', 'dark'];
+      const LABELS = {
+        system: 'Theme: System (automatic)',
+        light: 'Theme: Light',
+        dark: 'Theme: Dark'
+      };
+
+      function getSavedMode() {
+        const mode = localStorage.getItem('corese-theme-mode');
+        return MODES.includes(mode) ? mode : 'system';
+      }
+
+      function applyTheme(mode) {
+        const resolved = (mode === 'system') ? (mediaQuery.matches ? 'dark' : 'light') : mode;
+        document.documentElement.dataset.theme = resolved;
+        themeToggle.dataset.themeMode = mode;
+        themeToggle.setAttribute('aria-label', LABELS[mode]);
+        themeToggle.setAttribute('title', LABELS[mode]);
+        window.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme: resolved } }));
+      }
+
+      let currentMode = getSavedMode();
+      applyTheme(currentMode);
+
+      themeToggle.addEventListener('click', function () {
+        const nextIdx = (MODES.indexOf(currentMode) + 1) % MODES.length;
+        currentMode = MODES[nextIdx];
+        if (currentMode === 'system') {
+          localStorage.removeItem('corese-theme-mode');
+        } else {
+          localStorage.setItem('corese-theme-mode', currentMode);
+        }
+        applyTheme(currentMode);
+      });
+
+      mediaQuery.addEventListener('change', function () {
+        if (currentMode === 'system') {
+          applyTheme('system');
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
