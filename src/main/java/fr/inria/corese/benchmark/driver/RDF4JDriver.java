@@ -7,6 +7,7 @@ import org.eclipse.rdf4j.query.BindingSet;
 import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
+import org.eclipse.rdf4j.sail.nativerdf.NativeStore;
 import org.eclipse.rdf4j.query.TupleQuery;
 import org.eclipse.rdf4j.query.TupleQueryResult;
 import org.eclipse.rdf4j.query.QueryLanguage;
@@ -21,40 +22,90 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Benchmark driver for Eclipse RDF4J 5.
  *
- * <p>Stores triples in an RDF4J in-memory {@link SailRepository} backed by a
- * {@link MemoryStore}. N-Triples files are parsed in batches of 10 000 lines;
- * when a batch fails due to a malformed triple the driver falls back to
- * line-by-line parsing so that valid triples are still loaded.</p>
+ * <p>Supports both in-memory repositories backed by {@link MemoryStore} and persistent
+ * disk-backed storage via {@link NativeStore}. Storage mode is automatically inferred
+ * from the engine name suffix ({@code .native}) or explicitly configured via constructors.</p>
+ *
+ * <p>Thread safety note: Instances of this driver are single-threaded and operated sequentially
+ * during benchmark warmup, load, and query executions.</p>
+ *
+ * <p>N-Triples files are parsed in batches of 10 000 lines; when a batch fails due to a malformed
+ * triple the driver falls back to line-by-line parsing so that valid triples are still loaded.</p>
  */
 public class RDF4JDriver implements TripleStoreDriver {
 
     private static final Logger log = LoggerFactory.getLogger(RDF4JDriver.class);
 
     private final String name;
+    private final boolean nativeStore;
     private SailRepository repository;
+    private Path tempDir;
 
     /**
      * Constructs a new driver with the given engine name.
+     * Native disk storage is enabled if the name ends with {@code ".native"}.
      *
-     * @param name human-readable engine name reported in benchmark results (e.g. {@code "rdf4j.5.1.3"})
+     * @param name human-readable engine name reported in benchmark results (e.g. {@code "rdf4j.5.3.2"} or {@code "rdf4j.5.3.2.native"})
      */
     public RDF4JDriver(String name) {
-        this.name = name;
+        this(name, Objects.requireNonNull(name, "Engine name must not be null")
+                .toLowerCase(Locale.ROOT).endsWith(".native"));
     }
 
     /**
-     * Initialises a fresh RDF4J in-memory {@link SailRepository}.
+     * Constructs a new driver with explicit storage mode.
+     *
+     * @param name        human-readable engine name
+     * @param nativeStore {@code true} to use NativeStore disk storage, {@code false} for in-memory
+     */
+    public RDF4JDriver(String name, boolean nativeStore) {
+        this.name = Objects.requireNonNull(name, "Engine name must not be null");
+        this.nativeStore = nativeStore;
+    }
+
+    /**
+     * Indicates whether this driver uses NativeStore persistent disk storage.
+     *
+     * @return {@code true} if NativeStore is enabled, {@code false} for in-memory
+     */
+    public boolean isNativeStore() {
+        return nativeStore;
+    }
+
+    /**
+     * Initialises a fresh RDF4J {@link SailRepository} (in-memory or disk-backed NativeStore).
+     * If previously initialised, releases existing resources first.
      */
     @Override
     public void init() {
-        this.repository = new SailRepository(new MemoryStore());
-        this.repository.init();
+        if (repository != null || tempDir != null) {
+            close();
+        }
+        openStorage();
+    }
+
+    private void openStorage() {
+        try {
+            if (nativeStore) {
+                this.tempDir = TempStorage.create("corese-bench-rdf4j-native-");
+                this.repository = new SailRepository(new NativeStore(tempDir.toFile()));
+            } else {
+                this.repository = new SailRepository(new MemoryStore());
+            }
+            this.repository.init();
+        } catch (Exception e) {
+            closeStorage();
+            throw new IllegalStateException("Failed to initialise RDF4J repository", e);
+        }
     }
 
     /**
@@ -235,31 +286,43 @@ public class RDF4JDriver implements TripleStoreDriver {
     }
 
     /**
-     * Resets the repository by shutting it down and reinitialising a fresh
-     * {@link MemoryStore}. A full reinit is used instead of a simple
-     * {@code removeAll} to avoid negative memory-delta measurements caused
-     * by GC residuals from the previous repetition.
+     * Resets the repository by shutting it down and reinitialising a fresh repository.
+     * For in-memory, re-creates a MemoryStore.
+     * For NativeStore, safely shuts down the repository, deletes the temporary directory, and creates a fresh NativeStore.
      */
     @Override
     public void clear() {
-        // Full reinit to release internal SAIL structures — avoids negative memory deltas
-        // caused by GC collecting previous-rep residuals mid-measurement.
         if (repository != null) {
-            repository.shutDown();
+            closeStorage();
+            openStorage();
         }
-        this.repository = new SailRepository(new MemoryStore());
-        this.repository.init();
     }
 
     /**
      * Shuts down the repository and releases all resources.
+     * If NativeStore is enabled, deletes the temporary directory.
      * Safe to call even if {@link #init()} was never called.
      */
     @Override
     public void close() {
-        if (repository != null) {
-            repository.shutDown();
+        closeStorage();
+    }
+
+    private void closeStorage() {
+        try {
+            if (repository != null) {
+                try {
+                    repository.shutDown();
+                } catch (Exception e) {
+                    log.warn("Error shutting down RDF4J repository", e);
+                }
+            }
+        } finally {
             this.repository = null;
+            if (tempDir != null) {
+                TempStorage.release(tempDir);
+                this.tempDir = null;
+            }
         }
     }
 

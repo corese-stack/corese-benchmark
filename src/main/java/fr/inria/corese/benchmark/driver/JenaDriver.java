@@ -7,39 +7,96 @@ import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.system.Txn;
+import org.apache.jena.tdb2.TDB2Factory;
+import org.apache.jena.tdb2.sys.TDBInternal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Benchmark driver for Apache Jena.
  *
- * <p>Stores triples and quads in a Jena in-memory transactional {@link Dataset}
- * ({@link DatasetFactory#createTxnMem()}) and executes SPARQL queries via
- * {@link QueryExecution}. All four SPARQL query forms (SELECT, CONSTRUCT, ASK,
- * DESCRIBE) are supported over default and named graphs.</p>
+ * <p>Supports both transactional in-memory datasets ({@link DatasetFactory#createTxnMem()})
+ * and persistent disk-backed storage via Jena TDB2 ({@link TDB2Factory#connectDataset(String)}).
+ * Storage mode is automatically inferred from the engine name suffix ({@code .tdb2}) or explicitly
+ * configured via constructors.</p>
+ *
+ * <p>Thread safety note: Instances of this driver are single-threaded and operated sequentially
+ * during benchmark warmup, load, and query executions.</p>
+ *
+ * <p>All four SPARQL query forms (SELECT, CONSTRUCT, ASK, DESCRIBE) are supported over
+ * default and named graphs.</p>
  */
 public class JenaDriver implements TripleStoreDriver {
 
+    private static final Logger log = LoggerFactory.getLogger(JenaDriver.class);
+
     private final String name;
+    private final boolean tdb2;
     private Dataset dataset;
+    private Path tempDir;
 
     /**
      * Constructs a new driver with the given engine name.
+     * TDB2 disk storage is enabled if the name ends with {@code ".tdb2"}.
      *
-     * @param name human-readable engine name reported in benchmark results (e.g. {@code "jena.6.2.0"})
+     * @param name human-readable engine name reported in benchmark results (e.g. {@code "jena.6.2.0"} or {@code "jena.6.2.0.tdb2"})
      */
     public JenaDriver(String name) {
-        this.name = name;
+        this(name, Objects.requireNonNull(name, "Engine name must not be null")
+                .toLowerCase(Locale.ROOT).endsWith(".tdb2"));
     }
 
     /**
-     * Initialises a fresh Jena in-memory transactional dataset.
+     * Constructs a new driver with explicit storage mode.
+     *
+     * @param name human-readable engine name
+     * @param tdb2 {@code true} to use TDB2 persistent storage, {@code false} for in-memory
+     */
+    public JenaDriver(String name, boolean tdb2) {
+        this.name = Objects.requireNonNull(name, "Engine name must not be null");
+        this.tdb2 = tdb2;
+    }
+
+    /**
+     * Indicates whether this driver uses TDB2 persistent disk storage.
+     *
+     * @return {@code true} if TDB2 is enabled, {@code false} for in-memory
+     */
+    public boolean isTdb2() {
+        return tdb2;
+    }
+
+    /**
+     * Initialises a fresh Jena dataset (in-memory transactional or disk-backed TDB2).
+     * If previously initialised, releases existing resources first.
      */
     @Override
     public void init() {
-        this.dataset = DatasetFactory.createTxnMem();
+        if (dataset != null || tempDir != null) {
+            close();
+        }
+        openStorage();
+    }
+
+    private void openStorage() {
+        if (tdb2) {
+            try {
+                this.tempDir = TempStorage.create("corese-bench-jena-tdb2-");
+                this.dataset = TDB2Factory.connectDataset(tempDir.toAbsolutePath().toString());
+            } catch (Exception e) {
+                closeStorage();
+                throw new IllegalStateException("Failed to initialise Jena TDB2 dataset", e);
+            }
+        } else {
+            this.dataset = DatasetFactory.createTxnMem();
+        }
     }
 
     /**
@@ -144,8 +201,8 @@ public class JenaDriver implements TripleStoreDriver {
 
     private static void addJenaRow(SparqlResultHasher hasher, QuerySolution qs, List<String> sortedVarNames) {
         List<String> values = new ArrayList<>(sortedVarNames.size());
-        for (String var : sortedVarNames) {
-            RDFNode node = qs.get(var);
+        for (String varName : sortedVarNames) {
+            RDFNode node = qs.get(varName);
             values.add(extractJenaTerm(node));
         }
         hasher.addRow(values);
@@ -210,25 +267,49 @@ public class JenaDriver implements TripleStoreDriver {
     }
 
     /**
-     * Resets the dataset by closing it and re-creating a fresh in-memory transactional dataset.
-     * A full reinit releases internal indexes instantaneously without iterating statements.
+     * Resets the dataset by closing it and re-creating a fresh dataset.
+     * For in-memory, creates a new transactional memory dataset.
+     * For TDB2, safely expels the dataset, deletes the temporary directory, and connects to a fresh location.
      */
     @Override
     public void clear() {
         if (dataset != null) {
-            dataset.close();
-            dataset = DatasetFactory.createTxnMem();
+            closeStorage();
+            openStorage();
         }
     }
 
     /**
      * Closes and discards the Jena dataset, releasing all associated resources.
+     * If TDB2 is enabled, expels internal locks and deletes the temporary directory.
      */
     @Override
     public void close() {
-        if (dataset != null) {
-            dataset.close();
+        closeStorage();
+    }
+
+    private void closeStorage() {
+        try {
+            if (dataset != null) {
+                if (tdb2) {
+                    try {
+                        TDBInternal.expel(dataset.asDatasetGraph());
+                    } catch (Exception e) {
+                        log.warn("Error expelling Jena TDB2 dataset", e);
+                    }
+                }
+                try {
+                    dataset.close();
+                } catch (Exception e) {
+                    log.warn("Error closing Jena dataset", e);
+                }
+            }
+        } finally {
             this.dataset = null;
+            if (tempDir != null) {
+                TempStorage.release(tempDir);
+                this.tempDir = null;
+            }
         }
     }
 
