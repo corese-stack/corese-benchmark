@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 /**
  * Manages the lifecycle and clean deletion of ephemeral storage directories
  * allocated for persistent disk-backed triple store benchmarks (e.g. Jena TDB2,
- * RDF4J NativeStore).
+ * RDF4J NativeStore, RDF4J LMDB).
  *
  * <p>Supports configuring an explicit base directory via the system property
  * {@code corese.bench.storage.dir}. This prevents disk benchmarks from running on

@@ -6,7 +6,8 @@ package fr.inria.corese.benchmark.driver;
  * <ul>
  *   <li>{@code "corese.4.6.5"}, {@code "corese.local"}, {@code "corese.next"} (in-memory)</li>
  *   <li>{@code "jena.6.2.0"} (in-memory) or {@code "jena.6.2.0.tdb2"} (persistent TDB2 disk storage)</li>
- *   <li>{@code "rdf4j.5.3.2"} (in-memory) or {@code "rdf4j.5.3.2.native"} (persistent NativeStore disk storage)</li>
+ *   <li>{@code "rdf4j.5.3.2"} (in-memory), {@code "rdf4j.5.3.2.native"} (persistent NativeStore disk storage),
+ *       or {@code "rdf4j.5.3.2.lmdb"} (persistent LMDB disk storage)</li>
  * </ul>
  */
 public final class DriverFactory {
@@ -48,7 +49,7 @@ public final class DriverFactory {
             return new RDF4JDriver(engineName);
         } else {
             throw new IllegalArgumentException("Unknown engine: " + engineName
-                + " (expected format: corese.X.X.X, corese.next, jena.X.X.X[.tdb2], rdf4j.X.X.X[.native])");
+                + " (expected format: corese.X.X.X, corese.next, jena.X.X.X[.tdb2], rdf4j.X.X.X[.native|.lmdb])");
         }
     }
 

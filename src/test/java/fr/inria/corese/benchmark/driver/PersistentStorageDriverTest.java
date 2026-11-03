@@ -37,10 +37,16 @@ class PersistentStorageDriverTest {
         TripleStoreDriver rdf4jNative = DriverFactory.create("rdf4j.5.3.2.native", false);
         assertInstanceOf(RDF4JDriver.class, rdf4jNative);
         assertTrue(((RDF4JDriver) rdf4jNative).isNativeStore());
+        assertFalse(((RDF4JDriver) rdf4jNative).isLmdbStore());
+
+        TripleStoreDriver rdf4jLmdb = DriverFactory.create("rdf4j.5.3.2.lmdb", false);
+        assertInstanceOf(RDF4JDriver.class, rdf4jLmdb);
+        assertTrue(((RDF4JDriver) rdf4jLmdb).isLmdbStore());
+        assertFalse(((RDF4JDriver) rdf4jLmdb).isNativeStore());
     }
 
     @ParameterizedTest(name = "Persistent driver {0} loads, queries, clears, and closes")
-    @ValueSource(strings = {"jena.test.tdb2", "rdf4j.test.native"})
+    @ValueSource(strings = {"jena.test.tdb2", "rdf4j.test.native", "rdf4j.test.lmdb"})
     void testPersistentDriverLifecycle(String engineName, @TempDir Path tempDir) throws Exception {
         Path file = tempDir.resolve("sample.ttl");
         Files.writeString(file, TURTLE_SAMPLE);

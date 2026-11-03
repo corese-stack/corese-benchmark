@@ -6,6 +6,7 @@ import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.query.BindingSet;
 import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
+import org.eclipse.rdf4j.sail.lmdb.LmdbStore;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.eclipse.rdf4j.sail.nativerdf.NativeStore;
 import org.eclipse.rdf4j.query.TupleQuery;
@@ -31,9 +32,9 @@ import java.util.Objects;
 /**
  * Benchmark driver for Eclipse RDF4J 5.
  *
- * <p>Supports both in-memory repositories backed by {@link MemoryStore} and persistent
- * disk-backed storage via {@link NativeStore}. Storage mode is automatically inferred
- * from the engine name suffix ({@code .native}) or explicitly configured via constructors.</p>
+ * <p>Supports in-memory repositories backed by {@link MemoryStore} as well as persistent
+ * disk-backed storage via {@link NativeStore} and {@link LmdbStore}. Storage mode is automatically
+ * inferred from the engine name suffix ({@code .native} or {@code .lmdb}) or explicitly configured.</p>
  *
  * <p>Thread safety note: Instances of this driver are single-threaded and operated sequentially
  * during benchmark warmup, load, and query executions.</p>
@@ -45,44 +46,99 @@ public class RDF4JDriver implements TripleStoreDriver {
 
     private static final Logger log = LoggerFactory.getLogger(RDF4JDriver.class);
 
+    /**
+     * Storage backend types supported by RDF4J.
+     */
+    public enum StorageType {
+        MEMORY,
+        NATIVE,
+        LMDB;
+
+        public static StorageType fromEngineName(String engineName) {
+            if (engineName == null) {
+                return MEMORY;
+            }
+            String lower = engineName.toLowerCase(Locale.ROOT);
+            if (lower.endsWith(".native")) {
+                return NATIVE;
+            }
+            if (lower.endsWith(".lmdb")) {
+                return LMDB;
+            }
+            return MEMORY;
+        }
+    }
+
     private final String name;
-    private final boolean nativeStore;
+    private final StorageType storageType;
     private SailRepository repository;
     private Path tempDir;
 
     /**
      * Constructs a new driver with the given engine name.
-     * Native disk storage is enabled if the name ends with {@code ".native"}.
+     * Storage mode is automatically inferred:
+     * <ul>
+     *   <li>Ends with {@code ".native"} &rarr; {@link StorageType#NATIVE}</li>
+     *   <li>Ends with {@code ".lmdb"} &rarr; {@link StorageType#LMDB}</li>
+     *   <li>Otherwise &rarr; {@link StorageType#MEMORY}</li>
+     * </ul>
      *
-     * @param name human-readable engine name reported in benchmark results (e.g. {@code "rdf4j.5.3.2"} or {@code "rdf4j.5.3.2.native"})
+     * @param name human-readable engine name reported in benchmark results (e.g. {@code "rdf4j.5.3.2"}, {@code "rdf4j.5.3.2.native"}, or {@code "rdf4j.5.3.2.lmdb"})
      */
     public RDF4JDriver(String name) {
-        this(name, Objects.requireNonNull(name, "Engine name must not be null")
-                .toLowerCase(Locale.ROOT).endsWith(".native"));
+        this(name, StorageType.fromEngineName(Objects.requireNonNull(name, "Engine name must not be null")));
     }
 
     /**
-     * Constructs a new driver with explicit storage mode.
+     * Constructs a new driver with legacy boolean storage mode.
      *
      * @param name        human-readable engine name
      * @param nativeStore {@code true} to use NativeStore disk storage, {@code false} for in-memory
      */
     public RDF4JDriver(String name, boolean nativeStore) {
+        this(name, nativeStore ? StorageType.NATIVE : StorageType.MEMORY);
+    }
+
+    /**
+     * Constructs a new driver with explicit storage type.
+     *
+     * @param name        human-readable engine name
+     * @param storageType explicit storage backend type
+     */
+    public RDF4JDriver(String name, StorageType storageType) {
         this.name = Objects.requireNonNull(name, "Engine name must not be null");
-        this.nativeStore = nativeStore;
+        this.storageType = Objects.requireNonNull(storageType, "StorageType must not be null");
     }
 
     /**
      * Indicates whether this driver uses NativeStore persistent disk storage.
      *
-     * @return {@code true} if NativeStore is enabled, {@code false} for in-memory
+     * @return {@code true} if NativeStore is enabled, {@code false} otherwise
      */
     public boolean isNativeStore() {
-        return nativeStore;
+        return storageType == StorageType.NATIVE;
     }
 
     /**
-     * Initialises a fresh RDF4J {@link SailRepository} (in-memory or disk-backed NativeStore).
+     * Indicates whether this driver uses LMDB persistent disk storage.
+     *
+     * @return {@code true} if LMDB is enabled, {@code false} otherwise
+     */
+    public boolean isLmdbStore() {
+        return storageType == StorageType.LMDB;
+    }
+
+    /**
+     * Returns the active storage backend type.
+     *
+     * @return storage backend type
+     */
+    public StorageType getStorageType() {
+        return storageType;
+    }
+
+    /**
+     * Initialises a fresh RDF4J {@link SailRepository} (in-memory or disk-backed).
      * If previously initialised, releases existing resources first.
      */
     @Override
@@ -95,16 +151,21 @@ public class RDF4JDriver implements TripleStoreDriver {
 
     private void openStorage() {
         try {
-            if (nativeStore) {
-                this.tempDir = TempStorage.create("corese-bench-rdf4j-native-");
-                this.repository = new SailRepository(new NativeStore(tempDir.toFile()));
-            } else {
-                this.repository = new SailRepository(new MemoryStore());
+            switch (storageType) {
+                case NATIVE -> {
+                    this.tempDir = TempStorage.create("corese-bench-rdf4j-native-");
+                    this.repository = new SailRepository(new NativeStore(tempDir.toFile()));
+                }
+                case LMDB -> {
+                    this.tempDir = TempStorage.create("corese-bench-rdf4j-lmdb-");
+                    this.repository = new SailRepository(new LmdbStore(tempDir.toFile()));
+                }
+                case MEMORY -> this.repository = new SailRepository(new MemoryStore());
             }
             this.repository.init();
         } catch (Exception e) {
             closeStorage();
-            throw new IllegalStateException("Failed to initialise RDF4J repository", e);
+            throw new IllegalStateException("Failed to initialise RDF4J repository (" + storageType + ")", e);
         }
     }
 

@@ -366,6 +366,15 @@ sys.stdout  = _Tee(sys.__stdout__, _log_fh)
 sys.stderr  = _Tee(sys.__stderr__, _log_fh)
 print(f"Logging to: {_log_path}")
 
+def clean_engine_version(raw_ver):
+    if not raw_ver:
+        return raw_ver
+    for s in (".tdb2", ".tdb1", ".native", ".lmdb", ".mem"):
+        if raw_ver.endswith(s):
+            return raw_ver[:-len(s)]
+    return raw_ver
+
+
 # ── Resume mode: one engine × one dataset at a time, skips existing results ──
 if args.engines and args.resume:
     engines_list = [e.strip() for e in args.engines.split(",")]
@@ -376,6 +385,7 @@ if args.engines and args.resume:
     def build_gradle_props_r(engine):
         parts = engine.split(".", 1)
         family, ver = (parts[0], parts[1]) if len(parts) == 2 else (engine, None)
+        ver = clean_engine_version(ver)
         extra = []
         if family == 'corese':
             extra += [f"-PcoreseVersion={'local' if ver in ('next','local') else ver}"]
@@ -433,7 +443,7 @@ if args.engines:
         for e in engine_sublist:
             parts = e.split(".", 1)
             if len(parts) == 2:
-                versions[parts[0]] = parts[1]
+                versions[parts[0]] = clean_engine_version(parts[1])
         extra = []
         if "corese" in versions:
             corese_ver = versions['corese']

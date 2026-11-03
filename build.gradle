@@ -63,6 +63,7 @@ dependencies {
     implementation "org.eclipse.rdf4j:rdf4j-repository:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-sail-memory:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-sail-nativerdf:${rdf4jVersion}"
+    implementation "org.eclipse.rdf4j:rdf4j-sail-lmdb:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-repository-sail:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio:${rdf4jVersion}"
     // RIO parsers — required for multi-format support (.nq, .ttl, .trig)
@@ -89,6 +90,7 @@ dependencies {
     testImplementation "org.eclipse.rdf4j:rdf4j-repository:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-sail-memory:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-sail-nativerdf:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-sail-lmdb:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-repository-sail:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-rio:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-rio-ntriples:${rdf4jVersionTest}"

@@ -98,15 +98,14 @@ public class CoreseDriver implements TripleStoreDriver {
         if (res instanceof Mappings maps) {
             count = maps.size();
             SparqlResultHasher hasher = new SparqlResultHasher();
-            List<String> varNames = new ArrayList<>();
-            for (Node varNode : maps.getSelect()) {
-                varNames.add(varNode.getLabel());
-            }
-            java.util.Collections.sort(varNames);
+            List<String> sortedVarNames = maps.getSelect().stream()
+                    .map(Node::getLabel)
+                    .sorted()
+                    .toList();
             for (Mapping m : maps) {
-                List<String> row = new ArrayList<>(varNames.size());
-                for (String var : varNames) {
-                    Node val = m.getNode(var);
+                List<String> row = new ArrayList<>(sortedVarNames.size());
+                for (String varName : sortedVarNames) {
+                    Node val = m.getNode(varName);
                     row.add(val != null ? val.getLabel() : null);
                 }
                 hasher.addRow(row);
