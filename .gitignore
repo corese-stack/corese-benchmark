@@ -1,33 +1,77 @@
+## #################################################################
+## OS & Temporary files
+## #################################################################
 .DS_Store
-tmp
+Thumbs.db
+*~
+*.swp
+*.lock
+*.tmp
+*.bak
+tmp/
 
+## #################################################################
+## IDE & AI tooling metadata
+## #################################################################
 .idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
 .claude/
+.continue/
+.sonarlint/
+.codex/
+.gemini/
 
-# Gradle
-.gradle
-build
-
-# Benchmark data (downloaded datasets, generated reports)
-input/
+## #################################################################
+## Java & Gradle build artifacts
+## #################################################################
+.gradle/
+.gradle-review/
+build/
+bin/
 out/
+target/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.war
+
+## #################################################################
+## Benchmark inputs, downloads & outputs
+## #################################################################
+input/
 public/
 commit/
-
-# Local Corese JAR (copied by workflow.py)
 libs/*
 !libs/.gitkeep
 
-# Generated site data (rebuilt on every run)
+## #################################################################
+## Generated site reports (rebuilt on each benchmark run)
+## #################################################################
 site/data/benchmark-report.json
 site/data/benchmark-report.csv
 site/data/report-data.js
 site/data/history-data.js
 site/data/history/
 
-# Python
+## #################################################################
+## Python & Virtual Environments
+## #################################################################
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
 python-utils/__pycache__/
 python-utils/datasets/__pycache__/
+
+## #################################################################
+## Logs
+## #################################################################
+logs/
+*.log
