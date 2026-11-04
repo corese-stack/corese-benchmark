@@ -8,7 +8,8 @@ export const KNOWN_STORAGES = ['in-memory', 'tdb2', 'tdb1', 'native', 'lmdb', 'p
 
 export const BRANCH_VERSIONS = ['next', 'dev', 'develop'];
 
-const SAFE_COLOR_REGEX = /^(#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgb|rgba|hsl|hsla)\(\s*[^()<>{}"';]+\s*\))$/;
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3,8}$/;
+const FUNC_COLOR_REGEX = /^(?:rgb|rgba|hsl|hsla|oklch)\([^()<>{}"';]+\)$/;
 
 /**
  * Validates and sanitizes a CSS color string to guarantee safe insertion into DOM/SVG/style.
@@ -17,7 +18,7 @@ const SAFE_COLOR_REGEX = /^(#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|
 export function sanitizeColor(colorStr, fallback = null) {
   if (typeof colorStr !== 'string') return fallback;
   const trimmed = colorStr.trim();
-  if (!SAFE_COLOR_REGEX.test(trimmed)) return fallback;
+  if (!HEX_COLOR_REGEX.test(trimmed) && !FUNC_COLOR_REGEX.test(trimmed)) return fallback;
 
   // Strict range and format validation in browser environments
   if (typeof CSS !== 'undefined' && typeof CSS.supports === 'function') {
@@ -104,9 +105,9 @@ export function formatEngineId({ engineId, versionId, storageId }) {
 export function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }

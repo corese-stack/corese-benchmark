@@ -39,10 +39,10 @@ export async function loadBenchmarkReport(url = 'data/benchmark-report.json', { 
     const { engineId, versionId, storageId } = run.parsedEngine;
     if (!catalogMap.has(engineId)) {
       // Safe property lookup guarding against Object prototype properties and null values
-      const customMeta = (Object.prototype.hasOwnProperty.call(enginesConfig, engineId) && enginesConfig[engineId] && typeof enginesConfig[engineId] === 'object')
+      const customMeta = (Object.hasOwn(enginesConfig, engineId) && enginesConfig[engineId] && typeof enginesConfig[engineId] === 'object')
         ? enginesConfig[engineId]
         : {};
-      const knownMeta = Object.prototype.hasOwnProperty.call(KNOWN_ENGINE_META, engineId)
+      const knownMeta = Object.hasOwn(KNOWN_ENGINE_META, engineId)
         ? KNOWN_ENGINE_META[engineId]
         : {};
 

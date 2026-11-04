@@ -15,18 +15,18 @@ export const AUTO_SCROLL_MAX_SPEED = 12;
 const OFFICIAL_ENGINE_FAMILIES_LIGHT = {
   corese: {
     base: '#0072b2',      // Primary Blue (hue ~210°, contrast 5.19:1 on white)
-    dev: '#0096c7',       // Vivid Cyan
-    ramp: ['#0072b2', '#3a86c8', '#6faade', '#9ec8ee']
+    dev: '#00b4d8',       // Vivid Cyan
+    ramp: ['#0072b2', '#004e82', '#3a86c8', '#1a365d']
   },
   jena: {
     base: '#d55e00',      // Vermillion (hue ~25°, contrast 3.87:1)
-    dev: '#e85d04',       // Bright Orange
-    ramp: ['#d55e00', '#e37a28', '#ee9856', '#f6b888']
+    dev: '#ff7b00',       // Bright Orange
+    ramp: ['#d55e00', '#9e3d00', '#f77f00', '#6b2600']
   },
   rdf4j: {
     base: '#009e73',      // Teal / Bluish Green (hue ~165°, contrast 3.42:1)
-    dev: '#059669',       // Emerald
-    ramp: ['#009e73', '#33b38f', '#66c7ab', '#99dcc8']
+    dev: '#06d6a0',       // Emerald
+    ramp: ['#009e73', '#00664b', '#2ec4b6', '#004733']
   }
 };
 
@@ -34,17 +34,17 @@ const OFFICIAL_ENGINE_FAMILIES_DARK = {
   corese: {
     base: '#388bfd',      // Accessible light blue (contrast 4.84:1 on dark)
     dev: '#79c0ff',       // Electric Cyan
-    ramp: ['#388bfd', '#58a6ff', '#79c0ff', '#a5d6ff']
+    ramp: ['#388bfd', '#79c0ff', '#1f6feb', '#a5d6ff']
   },
   jena: {
     base: '#f0883e',      // Accessible amber/vermillion (contrast 6.39:1 on dark)
-    dev: '#ff7b72',       // Bright coral
-    ramp: ['#f0883e', '#ffa657', '#ffc680', '#ffd8a8']
+    dev: '#ff9e58',       // Bright coral
+    ramp: ['#f0883e', '#ffb074', '#bd5a17', '#ffd8a8']
   },
   rdf4j: {
     base: '#3fb950',      // Accessible bright green (contrast 6.37:1 on dark)
     dev: '#56d364',       // Vivid emerald
-    ramp: ['#3fb950', '#56d364', '#7ee787', '#aff5b4']
+    ramp: ['#3fb950', '#7ee787', '#238636', '#aff5b4']
   }
 };
 
@@ -73,8 +73,7 @@ function generateDistinctFamily(engineId, customColor = null) {
 
   let hash = 0;
   for (let i = 0; i < engineId.length; i++) {
-    hash = (hash << 5) - hash + engineId.charCodeAt(i);
-    hash |= 0;
+    hash = Math.trunc((hash << 5) - hash + engineId.codePointAt(i));
   }
   const seed = Math.abs(hash);
 
@@ -85,17 +84,39 @@ function generateDistinctFamily(engineId, customColor = null) {
   const dev = `hsl(${(chosenHue + 15) % 360}, 90%, 55%)`;
   const ramp = [
     `hsl(${chosenHue}, 75%, 45%)`,
-    `hsl(${chosenHue}, 65%, 58%)`,
-    `hsl(${chosenHue}, 55%, 70%)`,
-    `hsl(${chosenHue}, 45%, 80%)`
+    `hsl(${chosenHue}, 85%, 32%)`,
+    `hsl(${chosenHue}, 65%, 60%)`,
+    `hsl(${chosenHue}, 90%, 25%)`
   ];
 
   return { base, dev, ramp };
 }
 
 /**
+ * Computes deterministic version rank among stable releases in the catalog.
+ * Rank 0 = latest release, 1 = previous release, 2+ = legacy releases.
+ */
+function getVersionRank(versionId, engineEntry) {
+  if (!engineEntry || !engineEntry.versions) return 0;
+  const versionsList = Array.isArray(engineEntry.versions)
+    ? engineEntry.versions
+    : Array.from(engineEntry.versions.values());
+
+  const stableReleases = versionsList
+    .filter((v) => !isBranchVersion(v.id || v))
+    .map((v) => (typeof v === 'string' ? v : v.id))
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+
+  const rank = stableReleases.indexOf(versionId);
+  return rank >= 0 ? rank : 0;
+}
+
+/**
  * Computes the unique visual style (color, glyph, storage pattern) for an engine configuration.
- * Stable release engines share the family's primary color, while dev branches feature vivid cyan.
+ * Orthogonal visual encoding:
+ * - Engine family: distinct hue
+ * - Version: distinct glyph (diamond dev, circle latest, square previous, triangle legacy) + ramp color tier
+ * - Storage: marker fill (solid in-memory, ring disk)
  */
 export function getEngineStyle(target, catalog = []) {
   const engineId = (target.engineId || '').toLowerCase();
@@ -106,17 +127,34 @@ export function getEngineStyle(target, catalog = []) {
   const customColor = engEntry?.color || null;
 
   const official = getOfficialFamilies();
-  const family = Object.prototype.hasOwnProperty.call(official, engineId)
+  const family = Object.hasOwn(official, engineId)
     ? official[engineId]
     : generateDistinctFamily(engineId, customColor);
 
   const isDev = isBranchVersion(versionId);
   const isDisk = storageId !== 'in-memory';
 
-  const color = isDev
-    ? sanitizeColor(family.dev, '#0096c7')
-    : sanitizeColor(family.base, '#0072b2');
-  const glyph = isDev ? 'diamond' : 'circle';
+  let color;
+  let glyph;
+
+  if (isDev) {
+    color = sanitizeColor(family.dev, '#00b4d8');
+    glyph = 'diamond';
+  } else {
+    const rank = getVersionRank(versionId, engEntry);
+    const ramp = family.ramp || [family.base];
+    const rampColor = ramp[Math.min(rank, ramp.length - 1)] || family.base;
+    color = sanitizeColor(rampColor, family.base || '#0072b2');
+
+    if (rank === 0) {
+      glyph = 'circle';
+    } else if (rank === 1) {
+      glyph = 'square';
+    } else {
+      glyph = 'triangle';
+    }
+  }
+
   const storagePattern = isDisk ? 'ring' : 'solid';
 
   return {
@@ -129,14 +167,29 @@ export function getEngineStyle(target, catalog = []) {
 }
 
 /**
- * Renders a crisp SVG indicator: clean circular dot for release engines, distinct diamond for dev branches.
+ * Renders a crisp SVG indicator:
+ * - Dev: diamond ◆
+ * - Latest release: circle ●
+ * - Previous release: square ■
+ * - Older legacy: triangle ▲
+ * Disk storages render with an accessible ring (outline) rather than solid fill.
  */
 export function renderEngineIndicatorSvg(style) {
   const safeColor = sanitizeColor(style.color, '#0072b2');
-  if (style.isDev) {
-    return `<svg class="engine-glyph" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,1 9,5 5,9 1,5" fill="${safeColor}" /></svg>`;
+  const isDisk = style.isDisk || style.storagePattern === 'ring';
+  const fillAttr = isDisk ? 'none' : safeColor;
+  const strokeAttr = isDisk ? `stroke="${safeColor}" stroke-width="1.75"` : '';
+
+  if (style.glyph === 'diamond' || style.isDev) {
+    return `<svg class="engine-glyph" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,1 9,5 5,9 1,5" fill="${fillAttr}" ${strokeAttr} /></svg>`;
   }
-  return `<svg class="engine-glyph" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4.25" fill="${safeColor}" /></svg>`;
+  if (style.glyph === 'square') {
+    return `<svg class="engine-glyph" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="${fillAttr}" ${strokeAttr} /></svg>`;
+  }
+  if (style.glyph === 'triangle') {
+    return `<svg class="engine-glyph" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><polygon points="5,1.5 9,8.5 1,8.5" fill="${fillAttr}" ${strokeAttr} /></svg>`;
+  }
+  return `<svg class="engine-glyph" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="${isDisk ? '3.5' : '4.25'}" fill="${fillAttr}" ${strokeAttr} /></svg>`;
 }
 
 export class EngineManager extends EventTarget {
@@ -166,6 +219,16 @@ export class EngineManager extends EventTarget {
     this.settleDurationMs = 180;
   }
 
+  #parseDurationMs(raw) {
+    if (/^\d+(?:\.\d+)?\s*s$/i.test(raw)) {
+      return Number.parseFloat(raw) * 1000;
+    }
+    if (/^\d+(?:\.\d+)?\s*ms$/i.test(raw) || /^\d+(?:\.\d+)?$/.test(raw)) {
+      return Number.parseFloat(raw);
+    }
+    return null;
+  }
+
   init(domElements, catalog, initialEngines = null) {
     this.destroy(); // Idempotent setup
     this.#abortController = new AbortController();
@@ -174,14 +237,7 @@ export class EngineManager extends EventTarget {
     // Dynamically synchronize settle transition timing with CSS custom property
     if (typeof window !== 'undefined' && typeof getComputedStyle === 'function') {
       const raw = getComputedStyle(document.documentElement).getPropertyValue('--chip-settle-duration').trim();
-      let parsed = null;
-      if (/^\d+(?:\.\d+)?\s*s$/i.test(raw)) {
-        parsed = parseFloat(raw) * 1000;
-      } else if (/^\d+(?:\.\d+)?\s*ms$/i.test(raw)) {
-        parsed = parseFloat(raw);
-      } else if (/^\d+(?:\.\d+)?$/.test(raw)) {
-        parsed = parseFloat(raw);
-      }
+      const parsed = this.#parseDurationMs(raw);
       if (Number.isFinite(parsed) && parsed >= 0) {
         this.settleDurationMs = parsed;
       }
@@ -512,6 +568,15 @@ export class EngineManager extends EventTarget {
       }, { signal });
     }
 
+    // Step back in drill-down (mobile)
+    if (this.el.backBtn) {
+      this.el.backBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentStep = Number.parseInt(this.el.popover?.dataset.step || '1', 10);
+        this.setStep(Math.max(1, currentStep - 1));
+      }, { signal });
+    }
+
     // Close picker when clicking outside without stealing focus
     document.addEventListener('pointerdown', (e) => {
       if (!this.isPickerOpen) return;
@@ -544,12 +609,30 @@ export class EngineManager extends EventTarget {
       }, { signal });
     }
 
-    // Global Escape
+    // Global Escape: on mobile, step back first before closing
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isPickerOpen) {
-        this.closePicker(true);
+        const isMobile = Boolean(window?.matchMedia?.('(max-width: 560px)')?.matches);
+        const currentStep = Number.parseInt(this.el.popover?.dataset.step || '1', 10);
+        if (isMobile && currentStep > 1) {
+          this.setStep(currentStep - 1);
+        } else {
+          this.closePicker(true);
+        }
       }
     }, { signal });
+
+    // Viewport resize synchronization between mobile drill-down and desktop Miller layout
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mobileMq = window.matchMedia('(max-width: 560px)');
+      const handleMqChange = () => {
+        if (this.isPickerOpen) {
+          const step = Number.parseInt(this.el.popover?.dataset.step || '1', 10);
+          this.setStep(step);
+        }
+      };
+      mobileMq.addEventListener('change', handleMqChange, { signal });
+    }
 
     // Theme changes: only refresh chip visuals without firing full re-query/URL events
     window.addEventListener('theme-changed', () => {
@@ -646,8 +729,7 @@ export class EngineManager extends EventTarget {
         el.style.transform = '';
         el.style.transition = '';
         el.style.zIndex = '';
-        el.classList.remove('is-dragging');
-        el.classList.remove('is-settling');
+        el.classList.remove('is-dragging', 'is-settling');
       });
       return;
     }
@@ -664,15 +746,14 @@ export class EngineManager extends EventTarget {
       }
     }
 
-    const prefersReducedMotion = typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prefersReducedMotion = Boolean(window?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
 
     d.chip.classList.remove('is-dragging');
     d.chip.classList.add('is-settling');
-    void d.chip.offsetWidth;
-    d.chip.style.transition = `transform ${this.settleDurationMs}ms cubic-bezier(.2, .8, .2, 1)`;
-    d.chip.style.transform = `translateX(${targetDx}px)`;
+    if (d.chip.offsetWidth) {
+      d.chip.style.transition = `transform ${this.settleDurationMs}ms cubic-bezier(.2, .8, .2, 1)`;
+      d.chip.style.transform = `translateX(${targetDx}px)`;
+    }
 
     let committed = false;
     let safetyTimer = null;
@@ -777,13 +858,16 @@ export class EngineManager extends EventTarget {
         };
       });
 
-      const firstSlot = slots[0];
-      const lastSlot = slots[slots.length - 1];
+      const firstSlot = slots.at(0);
+      const lastSlot = slots.at(-1);
       const mySlot = slots[fromIdx];
 
-      const realGap = slots.length > 1
-        ? (fromIdx < slots.length - 1 ? slots[fromIdx + 1].left - slots[fromIdx].right : slots[fromIdx].left - slots[fromIdx - 1].right)
-        : 8;
+      let realGap = 8;
+      if (slots.length > 1) {
+        realGap = fromIdx < slots.length - 1
+          ? slots[fromIdx + 1].left - slots[fromIdx].right
+          : slots[fromIdx].left - slots[fromIdx - 1].right;
+      }
 
       this.#pendingDrag = {
         pointerId: e.pointerId,
@@ -907,7 +991,7 @@ export class EngineManager extends EventTarget {
     container.addEventListener('mousedown', (e) => {
       if (e.button === 1) {
         const chip = e.target.closest('.engine-chip');
-        if (chip && chip.dataset.key) {
+        if (chip?.dataset.key) {
           e.preventDefault();
           this.#middleClickArmedKey = chip.dataset.key;
         }
@@ -957,7 +1041,7 @@ export class EngineManager extends EventTarget {
     container.addEventListener('pointerover', (e) => {
       if (this.#activeDrag) return;
       const chip = e.target.closest('.engine-chip');
-      if (chip && chip.dataset.key) {
+      if (chip?.dataset.key) {
         this.setHighlight(chip.dataset.key, false);
       }
     }, { signal });
@@ -973,7 +1057,7 @@ export class EngineManager extends EventTarget {
 
     container.addEventListener('focusin', (e) => {
       const chip = e.target.closest('.engine-chip');
-      if (chip && chip.dataset.key) {
+      if (chip?.dataset.key) {
         this.setHighlight(chip.dataset.key, true);
       }
     }, { signal });
@@ -986,24 +1070,29 @@ export class EngineManager extends EventTarget {
     }, { signal });
   }
 
+  #handlePopoverTabKey(e, popover) {
+    const focusables = Array.from(popover.querySelectorAll('button:not([disabled])')).filter((btn) => {
+      return btn.offsetParent !== null && !btn.closest('[inert]');
+    });
+    if (focusables.length === 0) return;
+    const first = focusables.at(0);
+    const last = focusables.at(-1);
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   handlePopoverKeydown(e) {
     const popover = this.el.popover;
     if (!popover || popover.hidden) return;
 
-    // Focus trap inside popover on Tab
     if (e.key === 'Tab') {
-      const focusables = Array.from(popover.querySelectorAll('button:not([disabled])'));
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
+      this.#handlePopoverTabKey(e, popover);
       return;
     }
 
@@ -1019,41 +1108,62 @@ export class EngineManager extends EventTarget {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       const nextIdx = (idx + 1) % items.length;
-      const targetBtn = items[nextIdx];
-      this.triggerItemSelection(currentColumn, targetBtn.dataset.id);
+      this.triggerItemSelection(currentColumn, items[nextIdx].dataset.id);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       const prevIdx = (idx - 1 + items.length) % items.length;
-      const targetBtn = items[prevIdx];
-      this.triggerItemSelection(currentColumn, targetBtn.dataset.id);
+      this.triggerItemSelection(currentColumn, items[prevIdx].dataset.id);
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      if (currentColumn.classList.contains('miller__col--engines')) {
-        const nextCol = popover.querySelector('.miller__col--versions');
-        const target = nextCol?.querySelector('.is-selected') || nextCol?.querySelector('.miller__item');
-        target?.focus();
-      } else if (currentColumn.classList.contains('miller__col--versions')) {
-        const nextCol = popover.querySelector('.miller__col--storages');
-        const target = nextCol?.querySelector('.is-selected') || nextCol?.querySelector('.miller__item');
-        target?.focus();
-      }
+      this.#handlePopoverArrowRight(currentColumn, popover);
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      if (currentColumn.classList.contains('miller__col--storages')) {
-        const prevCol = popover.querySelector('.miller__col--versions');
-        const target = prevCol?.querySelector('.is-selected') || prevCol?.querySelector('.miller__item');
-        target?.focus();
-      } else if (currentColumn.classList.contains('miller__col--versions')) {
-        const prevCol = popover.querySelector('.miller__col--engines');
-        const target = prevCol?.querySelector('.is-selected') || prevCol?.querySelector('.miller__item');
-        target?.focus();
-      }
+      this.#handlePopoverArrowLeft(currentColumn, popover);
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (currentColumn.classList.contains('miller__col--storages')) {
-        this.confirmDraftEngine();
-      } else {
-        this.triggerItemSelection(currentColumn, currentItem.dataset.id);
+      this.#handlePopoverAction(currentColumn, currentItem);
+    }
+  }
+
+  #handlePopoverArrowRight(currentColumn, popover) {
+    if (currentColumn.classList.contains('miller__col--engines')) {
+      const nextCol = popover.querySelector('.miller__col--versions');
+      const target = nextCol?.querySelector('.is-selected') || nextCol?.querySelector('.miller__item');
+      if (typeof window !== 'undefined' && window.innerWidth <= 560) this.setStep(2);
+      target?.focus();
+    } else if (currentColumn.classList.contains('miller__col--versions')) {
+      const nextCol = popover.querySelector('.miller__col--storages');
+      const target = nextCol?.querySelector('.is-selected') || nextCol?.querySelector('.miller__item');
+      if (typeof window !== 'undefined' && window.innerWidth <= 560) this.setStep(3);
+      target?.focus();
+    }
+  }
+
+  #handlePopoverArrowLeft(currentColumn, popover) {
+    if (currentColumn.classList.contains('miller__col--storages')) {
+      const prevCol = popover.querySelector('.miller__col--versions');
+      const target = prevCol?.querySelector('.is-selected') || prevCol?.querySelector('.miller__item');
+      if (typeof window !== 'undefined' && window.innerWidth <= 560) this.setStep(2);
+      target?.focus();
+    } else if (currentColumn.classList.contains('miller__col--versions')) {
+      const prevCol = popover.querySelector('.miller__col--engines');
+      const target = prevCol?.querySelector('.is-selected') || prevCol?.querySelector('.miller__item');
+      if (typeof window !== 'undefined' && window.innerWidth <= 560) this.setStep(1);
+      target?.focus();
+    }
+  }
+
+  #handlePopoverAction(currentColumn, currentItem) {
+    if (currentColumn.classList.contains('miller__col--storages')) {
+      this.confirmDraftEngine();
+      return;
+    }
+    this.triggerItemSelection(currentColumn, currentItem.dataset.id);
+    if (typeof window !== 'undefined' && window.innerWidth <= 560) {
+      if (currentColumn.classList.contains('miller__col--engines')) {
+        this.setStep(2);
+      } else if (currentColumn.classList.contains('miller__col--versions')) {
+        this.setStep(3);
       }
     }
   }
@@ -1084,6 +1194,36 @@ export class EngineManager extends EventTarget {
     }
   }
 
+  setStep(step) {
+    if (!this.el.popover) return;
+    const clamped = Math.max(1, Math.min(3, step));
+    this.el.popover.dataset.step = String(clamped);
+
+    const isMobile = Boolean(window?.matchMedia?.('(max-width: 560px)')?.matches);
+    const cols = [
+      this.el.popover.querySelector('.miller__col--engines'),
+      this.el.popover.querySelector('.miller__col--versions'),
+      this.el.popover.querySelector('.miller__col--storages')
+    ];
+
+    cols.forEach((col, idx) => {
+      if (!col) return;
+      if (isMobile) {
+        col.inert = (idx !== clamped - 1);
+        col.setAttribute('aria-hidden', String(idx !== clamped - 1));
+      } else {
+        col.inert = false;
+        col.removeAttribute('aria-hidden');
+      }
+    });
+
+    if (isMobile) {
+      const activeCol = cols[clamped - 1];
+      const activeBtn = activeCol?.querySelector('.is-selected') || activeCol?.querySelector('.miller__item');
+      activeBtn?.focus({ preventScroll: true });
+    }
+  }
+
   togglePicker() {
     if (this.isPickerOpen) {
       this.closePicker(true);
@@ -1095,7 +1235,10 @@ export class EngineManager extends EventTarget {
   openPicker() {
     if (this.catalog.length === 0) return;
     this.isPickerOpen = true;
-    if (this.el.popover) this.el.popover.hidden = false;
+    if (this.el.popover) {
+      this.el.popover.hidden = false;
+      this.setStep(1);
+    }
     if (this.el.addBtn) this.el.addBtn.setAttribute('aria-expanded', 'true');
     this.renderMillerColumns();
 
@@ -1124,16 +1267,42 @@ export class EngineManager extends EventTarget {
       engine.storages?.[0] ||
       null;
     this.renderMillerColumns({ colClass: '.miller__col--engines', id: engine.id });
+    if (typeof window !== 'undefined' && window.innerWidth <= 560) {
+      this.setStep(2);
+    }
   }
 
   selectVersion(version) {
     this.draftVersion = version;
     this.renderMillerColumns({ colClass: '.miller__col--versions', id: version.id });
+    if (typeof window !== 'undefined' && window.innerWidth <= 560) {
+      this.setStep(3);
+    }
   }
 
   selectStorage(storage) {
     this.draftStorage = storage;
     this.renderMillerColumns({ colClass: '.miller__col--storages', id: storage.id });
+  }
+
+  #animateChipsFlip(chips, targetKey, firstLefts) {
+    chips.forEach((c) => {
+      const k = c.dataset.key;
+      if (k !== targetKey && firstLefts.has(k)) {
+        const firstLeft = firstLefts.get(k);
+        const lastLeft = c.getBoundingClientRect().left;
+        const dx = firstLeft - lastLeft;
+        if (Math.abs(dx) > 0.5) {
+          c.animate([
+            { transform: `translateX(${dx}px)` },
+            { transform: 'translateX(0)' }
+          ], {
+            duration: 200,
+            easing: 'cubic-bezier(0.2, 0, 0, 1)'
+          });
+        }
+      }
+    });
   }
 
   confirmDraftEngine() {
@@ -1154,85 +1323,71 @@ export class EngineManager extends EventTarget {
     );
 
     if (exists) {
-      // Toggle off: remove from active comparison with animation
-      if (this.activeEngines.length > 1) {
-        const escapedKey = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(targetKey) : targetKey;
-        const chipEl = this.el.chipsContainer?.querySelector(`[data-key="${escapedKey}"]`);
-        if (chipEl) {
-          this.animateAndRemoveChip(chipEl);
-        } else {
-          this.removeEngine(target);
-        }
-        this.closePicker(true);
-      } else {
-        this.announce('At least one engine must remain selected');
-      }
+      this.#confirmRemoveEngine(target, targetKey);
     } else {
-      // Toggle on: add to active comparison with FLIP entrance animation
-      const container = this.el.chipsContainer;
-      const firstLefts = new Map();
-      if (container) {
-        this.getChipElements().forEach((c) => {
-          if (c.dataset.key) {
-            firstLefts.set(c.dataset.key, c.getBoundingClientRect().left);
-          }
-        });
-      }
+      this.#confirmAddEngine(target, targetKey);
+    }
+  }
 
-      this.activeEngines.push(target);
-      this.renderChips();
-      this.dispatchChangeEvent();
-      this.closePicker(true);
+  #confirmRemoveEngine(target, targetKey) {
+    if (this.activeEngines.length <= 1) {
+      this.announce('At least one engine must remain selected');
+      return;
+    }
 
-      const engMeta = this.catalog.find((item) => item.id === target.engineId);
-      const engName = engMeta?.shortName || engMeta?.name || target.engineId;
-      this.announce(`${engName} added to comparison`);
+    const escapedKey = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(targetKey) : targetKey;
+    const chipEl = this.el.chipsContainer?.querySelector(`[data-key="${escapedKey}"]`);
+    if (chipEl) {
+      this.animateAndRemoveChip(chipEl);
+    } else {
+      this.removeEngine(target);
+    }
+    this.closePicker(true);
+  }
 
-      const prefersReducedMotion = typeof window !== 'undefined' &&
-        window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      this.safeRaf(() => {
-        const chips = this.getChipElements();
-        const newChip = chips.find((c) => c.dataset.key === targetKey);
-
-        if (!prefersReducedMotion) {
-          // FLIP shift existing chips
-          chips.forEach((c) => {
-            const k = c.dataset.key;
-            if (k !== targetKey && firstLefts.has(k)) {
-              const firstLeft = firstLefts.get(k);
-              const lastLeft = c.getBoundingClientRect().left;
-              const dx = firstLeft - lastLeft;
-              if (Math.abs(dx) > 0.5) {
-                c.animate([
-                  { transform: `translateX(${dx}px)` },
-                  { transform: 'translateX(0)' }
-                ], {
-                  duration: 200,
-                  easing: 'cubic-bezier(0.2, 0, 0, 1)'
-                });
-              }
-            }
-          });
-
-          // Animate entrance of the new chip
-          if (newChip) {
-            newChip.animate([
-              { opacity: 0, transform: 'scale(0.85) translateX(12px)' },
-              { opacity: 1, transform: 'scale(1) translateX(0)' }
-            ], {
-              duration: 180,
-              easing: 'cubic-bezier(0, 0, 0.2, 1)'
-            });
-          }
-        }
-
-        if (newChip) {
-          newChip.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  #confirmAddEngine(target, targetKey) {
+    const firstLefts = new Map();
+    if (this.el.chipsContainer) {
+      this.getChipElements().forEach((c) => {
+        if (c.dataset.key) {
+          firstLefts.set(c.dataset.key, c.getBoundingClientRect().left);
         }
       });
     }
+
+    this.activeEngines.push(target);
+    this.renderChips();
+    this.dispatchChangeEvent();
+    this.closePicker(true);
+
+    const engMeta = this.catalog.find((item) => item.id === target.engineId);
+    const engName = engMeta?.shortName || engMeta?.name || target.engineId;
+    this.announce(`${engName} added to comparison`);
+
+    const prefersReducedMotion = Boolean(window?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+
+    this.safeRaf(() => {
+      const chips = this.getChipElements();
+      const newChip = chips.find((c) => c.dataset.key === targetKey);
+
+      if (!prefersReducedMotion) {
+        this.#animateChipsFlip(chips, targetKey, firstLefts);
+
+        if (newChip) {
+          newChip.animate([
+            { opacity: 0, transform: 'scale(0.85) translateX(12px)' },
+            { opacity: 1, transform: 'scale(1) translateX(0)' }
+          ], {
+            duration: 180,
+            easing: 'cubic-bezier(0, 0, 0.2, 1)'
+          });
+        }
+      }
+
+      if (newChip) {
+        newChip.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+      }
+    });
   }
 
   animateAndRemoveChip(chip) {
@@ -1259,9 +1414,7 @@ export class EngineManager extends EventTarget {
     this.clearHighlight();
 
     // Check prefers-reduced-motion
-    const prefersReducedMotion = typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prefersReducedMotion = Boolean(window?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
 
     if (prefersReducedMotion) {
       this.removeEngine(targetEng);
@@ -1290,7 +1443,6 @@ export class EngineManager extends EventTarget {
     const ghost = chip.cloneNode(true);
     ghost.className = 'engine-chip engine-chip--ghost';
     delete ghost.dataset.key;
-    ghost.removeAttribute('data-key');
     ghost.removeAttribute('tabindex');
     ghost.style.position = 'absolute';
     ghost.style.left = `${chip.offsetLeft}px`;
@@ -1357,7 +1509,8 @@ export class EngineManager extends EventTarget {
         easing: 'cubic-bezier(0.4, 0, 1, 1)'
       });
       ghostAnim.addEventListener('finish', cleanupGhost, { once: true });
-    } catch (_) {
+    } catch {
+      // Element.animate is unsupported or aborted in testing environments
       cleanupGhost();
     }
 
@@ -1423,8 +1576,7 @@ export class EngineManager extends EventTarget {
         el.style.transform = '';
         el.style.transition = '';
         el.style.zIndex = '';
-        el.classList.remove('is-dragging');
-        el.classList.remove('is-settling');
+        el.classList.remove('is-dragging', 'is-settling');
       });
     }
 
@@ -1440,7 +1592,7 @@ export class EngineManager extends EventTarget {
   }
 
   renderChips() {
-    if (!this.el || !this.el.chipsContainer) return;
+    if (!this.el?.chipsContainer) return;
     this.cancelPendingDrag();
     this.el.chipsContainer.innerHTML = '';
 
@@ -1458,11 +1610,10 @@ export class EngineManager extends EventTarget {
         ? `Persistent Disk Storage (${storageLabel})`
         : 'In-Memory Store';
 
-      const chip = document.createElement('div');
+      const chip = document.createElement('li');
       chip.className = 'engine-chip';
       chip.dataset.index = String(idx);
       chip.dataset.key = chipKey;
-      chip.setAttribute('role', 'listitem');
       chip.setAttribute('tabindex', '0');
       chip.setAttribute('aria-roledescription', 'sortable engine');
       chip.setAttribute('aria-label', `${engineName} ${versionLabel} ${storageLabel}, ${storageDescription}. Position ${idx + 1} of ${selectedList.length}. Use Alt+Arrow keys to reorder. Delete to remove.`);
@@ -1505,159 +1656,177 @@ export class EngineManager extends EventTarget {
 
       if (!colEngines || !colVersions || !colStorages) return;
 
-      // 1. Column Engines
-      colEngines.innerHTML = '';
-      this.catalog.forEach((eng) => {
-        const isSelected = eng.id === this.draftEngine.id;
-        const official = getOfficialFamilies();
-        const family = Object.prototype.hasOwnProperty.call(official, eng.id)
-          ? official[eng.id]
-          : generateDistinctFamily(eng.id, eng.color);
-        const safeBaseColor = sanitizeColor(family.base, '#0072b2');
+      this.#renderEnginesColumn(colEngines);
+      this.#renderVersionsColumn(colVersions);
+      this.#renderStoragesColumn(colStorages);
+      this.#updateMillerFooter(previewEl);
 
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `miller__item ${isSelected ? 'is-selected' : ''}`;
-        btn.setAttribute('role', 'option');
-        btn.setAttribute('aria-selected', String(isSelected));
-        btn.dataset.id = eng.id;
-        btn.innerHTML = `
-          <span class="miller__dot" style="background-color: ${safeBaseColor}"></span>
-          <span class="miller__label">${escapeHtml(eng.name)}</span>
-          <span class="miller__arrow" aria-hidden="true">›</span>
-        `;
-        btn.addEventListener('click', () => {
-          this.selectEngine(eng);
-        });
-        colEngines.appendChild(btn);
-      });
-
-      // 2. Column Versions
-      colVersions.innerHTML = '';
-      this.draftEngine.versions.forEach((v) => {
-        const isSelected = this.draftVersion && v.id === this.draftVersion.id;
-        const previewStyle = getEngineStyle({
-          engineId: this.draftEngine.id,
-          versionId: v.id,
-          storageId: 'in-memory'
-        }, this.catalog);
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `miller__item ${isSelected ? 'is-selected' : ''}`;
-        btn.setAttribute('role', 'option');
-        btn.setAttribute('aria-selected', String(isSelected));
-        btn.dataset.id = v.id;
-
-        const tagHtml = v.isLatest
-          ? '<span class="miller__tag">latest</span>'
-          : v.type === 'branch'
-          ? '<span class="miller__tag">dev</span>'
-          : '';
-
-        const glyphSvg = renderEngineIndicatorSvg(previewStyle);
-
-        btn.innerHTML = `
-          <span class="miller__glyph">${glyphSvg}</span>
-          <span class="miller__label">${escapeHtml(v.label)}</span>
-          ${tagHtml}
-          <span class="miller__arrow" aria-hidden="true">›</span>
-        `;
-        btn.addEventListener('click', () => {
-          this.selectVersion(v);
-        });
-        colVersions.appendChild(btn);
-      });
-
-      // 3. Column Storage
-      colStorages.innerHTML = '';
-      (this.draftEngine?.storages || []).forEach((s) => {
-        const isSelected = this.draftStorage && s.id === this.draftStorage.id;
-        const previewStyle = getEngineStyle({
-          engineId: this.draftEngine.id,
-          versionId: this.draftVersion?.id || 'latest',
-          storageId: s.id
-        }, this.catalog);
-
-        const isAlreadyActive = this.activeEngines.some(
-          (e) =>
-            e.engineId === this.draftEngine.id &&
-            e.versionId === this.draftVersion?.id &&
-            e.storageId === s.id
-        );
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `miller__item ${isSelected ? 'is-selected' : ''} ${isAlreadyActive ? 'is-active-in-bar' : ''}`;
-        btn.setAttribute('role', 'option');
-        btn.setAttribute('aria-selected', String(isSelected));
-        btn.dataset.id = s.id;
-
-        const glyphSvg = renderEngineIndicatorSvg(previewStyle);
-        const activeTag = isAlreadyActive ? '<span class="miller__tag miller__tag--active">✓ Active</span>' : '';
-
-        btn.innerHTML = `
-          <span class="miller__glyph">${glyphSvg}</span>
-          <span class="miller__label">${escapeHtml(s.label)}</span>
-          ${activeTag}
-        `;
-        btn.addEventListener('click', () => {
-          this.selectStorage(s);
-        });
-        colStorages.appendChild(btn);
-      });
-
-      // 4. Preview Text and Dynamic Action Button in footer
-      const isCurrentActive = this.activeEngines.some(
-        (e) =>
-          e.engineId === this.draftEngine.id &&
-          e.versionId === this.draftVersion?.id &&
-          e.storageId === this.draftStorage?.id
-      );
-
-      if (this.el.confirmBtn) {
-        if (isCurrentActive) {
-          this.el.confirmBtn.textContent = 'Remove';
-          this.el.confirmBtn.classList.add('miller__confirm-btn--remove');
-          if (this.activeEngines.length <= 1) {
-            this.el.confirmBtn.disabled = true;
-            this.el.confirmBtn.setAttribute('aria-disabled', 'true');
-            this.el.confirmBtn.title = 'At least one engine must remain selected';
-            this.el.confirmBtn.setAttribute('aria-label', 'At least one engine must remain selected');
-          } else {
-            this.el.confirmBtn.disabled = false;
-            this.el.confirmBtn.removeAttribute('aria-disabled');
-            this.el.confirmBtn.title = 'Remove this engine from comparison';
-            this.el.confirmBtn.setAttribute('aria-label', `Remove ${this.draftEngine.name} ${this.draftVersion?.label} from comparison`);
-          }
-        } else {
-          this.el.confirmBtn.disabled = false;
-          this.el.confirmBtn.removeAttribute('aria-disabled');
-          this.el.confirmBtn.textContent = 'Add';
-          this.el.confirmBtn.classList.remove('miller__confirm-btn--remove');
-          this.el.confirmBtn.title = 'Add this engine to comparison';
-          this.el.confirmBtn.setAttribute('aria-label', `Add ${this.draftEngine.name} ${this.draftVersion?.label} to comparison`);
-        }
-      }
-
-      if (previewEl && this.draftEngine && this.draftVersion && this.draftStorage) {
-        previewEl.textContent = `${this.draftEngine.name} · ${this.draftVersion.label} · ${this.draftStorage.label}`;
-      }
-
-      // 5. Restore focus to requested element synchronously (prevents focusout from firing on body)
-      if (focusTarget && focusTarget.colClass && focusTarget.id) {
+      // Restore focus to requested element synchronously (prevents focusout from firing on body)
+      if (focusTarget?.colClass && focusTarget.id) {
         const col = this.el.popover.querySelector(focusTarget.colClass);
         if (col) {
           const buttons = Array.from(col.querySelectorAll('button'));
           const targetBtn = buttons.find((b) => b.dataset.id === focusTarget.id);
           if (targetBtn) {
-            targetBtn.focus();
+            targetBtn.focus({ preventScroll: true });
           }
         }
       }
     } finally {
       this.#isRenderingColumns = false;
     }
+  }
+
+  #renderEnginesColumn(colEngines) {
+    colEngines.innerHTML = '';
+    this.catalog.forEach((eng) => {
+      const isSelected = eng.id === this.draftEngine.id;
+      const official = getOfficialFamilies();
+      const family = Object.hasOwn(official, eng.id)
+        ? official[eng.id]
+        : generateDistinctFamily(eng.id, eng.color);
+      const safeBaseColor = sanitizeColor(family.base, '#0072b2');
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `miller__item ${isSelected ? 'is-selected' : ''}`;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', String(isSelected));
+      btn.dataset.id = eng.id;
+      btn.innerHTML = `
+        <span class="miller__dot" style="background-color: ${safeBaseColor}"></span>
+        <span class="miller__label">${escapeHtml(eng.name)}</span>
+        <span class="miller__arrow" aria-hidden="true">›</span>
+      `;
+      btn.addEventListener('click', () => {
+        this.selectEngine(eng);
+      });
+      colEngines.appendChild(btn);
+    });
+  }
+
+  #renderVersionsColumn(colVersions) {
+    colVersions.innerHTML = '';
+    this.draftEngine.versions.forEach((v) => {
+      const isSelected = this.draftVersion && v.id === this.draftVersion.id;
+      const previewStyle = getEngineStyle({
+        engineId: this.draftEngine.id,
+        versionId: v.id,
+        storageId: 'in-memory'
+      }, this.catalog);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `miller__item ${isSelected ? 'is-selected' : ''}`;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', String(isSelected));
+      btn.dataset.id = v.id;
+
+      let tagHtml = '';
+      if (v.isLatest) {
+        tagHtml = '<span class="miller__tag">latest</span>';
+      } else if (v.type === 'branch') {
+        tagHtml = '<span class="miller__tag">dev</span>';
+      }
+
+      const glyphSvg = renderEngineIndicatorSvg(previewStyle);
+
+      btn.innerHTML = `
+        <span class="miller__glyph">${glyphSvg}</span>
+        <span class="miller__label">${escapeHtml(v.label)}</span>
+        ${tagHtml}
+        <span class="miller__arrow" aria-hidden="true">›</span>
+      `;
+      btn.addEventListener('click', () => {
+        this.selectVersion(v);
+      });
+      colVersions.appendChild(btn);
+    });
+  }
+
+  #renderStoragesColumn(colStorages) {
+    colStorages.innerHTML = '';
+    (this.draftEngine?.storages || []).forEach((s) => {
+      const isSelected = this.draftStorage && s.id === this.draftStorage.id;
+      const previewStyle = getEngineStyle({
+        engineId: this.draftEngine.id,
+        versionId: this.draftVersion?.id || 'latest',
+        storageId: s.id
+      }, this.catalog);
+
+      const isAlreadyActive = this.activeEngines.some(
+        (e) =>
+          e.engineId === this.draftEngine.id &&
+          e.versionId === this.draftVersion?.id &&
+          e.storageId === s.id
+      );
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `miller__item ${isSelected ? 'is-selected' : ''} ${isAlreadyActive ? 'is-active-in-bar' : ''}`;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', String(isSelected));
+      btn.dataset.id = s.id;
+
+      const glyphSvg = renderEngineIndicatorSvg(previewStyle);
+      const activeTag = isAlreadyActive ? '<span class="miller__tag miller__tag--active">✓ Active</span>' : '';
+
+      btn.innerHTML = `
+        <span class="miller__glyph">${glyphSvg}</span>
+        <span class="miller__label">${escapeHtml(s.label)}</span>
+        ${activeTag}
+      `;
+      btn.addEventListener('click', () => {
+        this.selectStorage(s);
+      });
+      colStorages.appendChild(btn);
+    });
+  }
+
+  #updateMillerFooter(previewEl) {
+    const isCurrentActive = this.activeEngines.some(
+      (e) =>
+        e.engineId === this.draftEngine.id &&
+        e.versionId === this.draftVersion?.id &&
+        e.storageId === this.draftStorage?.id
+    );
+
+    if (this.el.confirmBtn) {
+      if (isCurrentActive) {
+        this.#updateMillerRemoveButton();
+      } else {
+        this.#updateMillerAddButton();
+      }
+    }
+
+    if (previewEl && this.draftEngine && this.draftVersion && this.draftStorage) {
+      previewEl.textContent = `${this.draftEngine.name} · ${this.draftVersion.label} · ${this.draftStorage.label}`;
+    }
+  }
+
+  #updateMillerRemoveButton() {
+    this.el.confirmBtn.textContent = 'Remove';
+    this.el.confirmBtn.classList.add('miller__confirm-btn--remove');
+    if (this.activeEngines.length <= 1) {
+      this.el.confirmBtn.disabled = true;
+      this.el.confirmBtn.setAttribute('aria-disabled', 'true');
+      this.el.confirmBtn.title = 'At least one engine must remain selected';
+      this.el.confirmBtn.setAttribute('aria-label', 'At least one engine must remain selected');
+    } else {
+      this.el.confirmBtn.disabled = false;
+      this.el.confirmBtn.removeAttribute('aria-disabled');
+      this.el.confirmBtn.title = 'Remove this engine from comparison';
+      this.el.confirmBtn.setAttribute('aria-label', `Remove ${this.draftEngine.name} ${this.draftVersion?.label} from comparison`);
+    }
+  }
+
+  #updateMillerAddButton() {
+    this.el.confirmBtn.disabled = false;
+    this.el.confirmBtn.removeAttribute('aria-disabled');
+    this.el.confirmBtn.textContent = 'Add';
+    this.el.confirmBtn.classList.remove('miller__confirm-btn--remove');
+    this.el.confirmBtn.title = 'Add this engine to comparison';
+    this.el.confirmBtn.setAttribute('aria-label', `Add ${this.draftEngine.name} ${this.draftVersion?.label} to comparison`);
   }
 
   dispatchChangeEvent() {

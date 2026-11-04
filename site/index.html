@@ -7,12 +7,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inria+Sans:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=30">
+  <link rel="stylesheet" href="styles.css?v=36">
   <script>
     (function () {
       const mode = localStorage.getItem('corese-theme-mode') || 'system';
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const resolved = (mode === 'system') ? (systemDark ? 'dark' : 'light') : mode;
+      let resolved = mode;
+      if (mode === 'system') {
+        resolved = systemDark ? 'dark' : 'light';
+      }
       document.documentElement.dataset.theme = resolved;
     })();
   </script>
@@ -43,14 +46,14 @@
             </svg>
           </button>
 
-          <ul class="menu__list" id="suite-menu" role="menu" aria-label="Corese Suite" hidden>
-            <li role="none"><a role="menuitem" class="menu__item" href="https://github.com/corese-stack/corese-core" target="_blank" rel="noopener">Corese Core</a></li>
-            <li role="none"><a role="menuitem" class="menu__item" href="https://corese.inria.fr/" target="_blank" rel="noopener">Corese Server</a></li>
-            <li role="none"><a role="menuitem" class="menu__item" href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese Command</a></li>
-            <li role="none"><a role="menuitem" class="menu__item" href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese GUI</a></li>
-            <li role="separator" class="menu__divider" aria-hidden="true"></li>
-            <li role="none"><a role="menuitem" class="menu__item is-active" href="#" aria-current="page">Benchmark</a></li>
-            <li role="none"><a role="menuitem" class="menu__item" href="https://corese-stack.github.io/corese-w3c/" target="_blank" rel="noopener">W3C Conformance</a></li>
+          <ul class="menu__list" id="suite-menu" aria-label="Corese Suite" hidden>
+            <li><a class="menu__item" href="https://github.com/corese-stack/corese-core" target="_blank" rel="noopener">Corese Core</a></li>
+            <li><a class="menu__item" href="https://corese.inria.fr/" target="_blank" rel="noopener">Corese Server</a></li>
+            <li><a class="menu__item" href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese Command</a></li>
+            <li><a class="menu__item" href="https://project.inria.fr/corese/" target="_blank" rel="noopener">Corese GUI</a></li>
+            <li class="menu__divider" aria-hidden="true"></li>
+            <li><a class="menu__item is-active" href="#" aria-current="page">Benchmark</a></li>
+            <li><a class="menu__item" href="https://corese-stack.github.io/corese-w3c/" target="_blank" rel="noopener">W3C Conformance</a></li>
           </ul>
         </div>
       </nav>
@@ -90,33 +93,34 @@
     <div class="engines-bar__inner">
       <span class="engines-bar__label">Engines:</span>
       <div class="engines-bar__scroller" id="engines-scroller">
-        <div class="engines-bar__chips" id="active-engines-chips" role="list" aria-label="Selected engines for benchmark comparison">
+        <ul class="engines-bar__chips" id="active-engines-chips" aria-label="Selected engines for benchmark comparison">
           <!-- Rendered dynamically from real report data -->
-        </div>
+        </ul>
       </div>
       <div class="sr-only" id="chips-announcer" aria-live="polite" aria-atomic="true"></div>
 
       <!-- Add Engine Button with Miller Columns Popover -->
       <div class="engine-picker">
-        <button class="engine-picker__btn" id="btn-add-engine" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="miller-popover" title="Add benchmark engine">
+        <button class="engine-picker__btn" id="btn-add-engine" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="miller-popover" aria-label="Add benchmark engine" title="Add benchmark engine">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
             <path d="M6 2.5v7M2.5 6h7"/>
           </svg>
-          <span>Add Engine</span>
+          <span class="engine-picker__text">Add Engine</span>
         </button>
 
-        <!-- 3-Column Miller Popover -->
-        <div class="miller-popover" id="miller-popover" role="dialog" aria-label="Select Engine, Version and Storage" aria-modal="false" hidden>
+        <!-- 3-Column Miller Popover: custom multi-column selector widget -->
+        <div class="miller-popover" id="miller-popover" aria-label="Select Engine, Version and Storage" data-step="1" hidden>
           <div class="miller-popover__header">
+            <button type="button" class="miller__back" id="btn-miller-back"><span aria-hidden="true">‹ </span>Back</button>
             <span class="miller-popover__step">1. Engine</span>
             <span class="miller-popover__step">2. Version</span>
             <span class="miller-popover__step">3. Storage</span>
           </div>
 
           <div class="miller-popover__body">
-            <div class="miller__col miller__col--engines" role="listbox" aria-label="Engines"></div>
-            <div class="miller__col miller__col--versions" role="listbox" aria-label="Versions"></div>
-            <div class="miller__col miller__col--storages" role="listbox" aria-label="Storage"></div>
+            <div class="miller__col miller__col--engines" aria-label="Engines"></div>
+            <div class="miller__col miller__col--versions" aria-label="Versions"></div>
+            <div class="miller__col miller__col--storages" aria-label="Storage"></div>
           </div>
 
           <div class="miller-popover__footer">
@@ -134,7 +138,7 @@
   <main class="dashboard-main" id="dashboard-main">
   </main>
 
-  <script type="module" src="./js/main.js?v=30"></script>
+  <script type="module" src="./js/main.js?v=36"></script>
 
   <script>
     (function () {
@@ -178,7 +182,10 @@
       }
 
       function applyTheme(mode) {
-        const resolved = (mode === 'system') ? (mediaQuery.matches ? 'dark' : 'light') : mode;
+        let resolved = mode;
+        if (mode === 'system') {
+          resolved = mediaQuery.matches ? 'dark' : 'light';
+        }
         document.documentElement.dataset.theme = resolved;
         themeToggle.dataset.themeMode = mode;
         themeToggle.setAttribute('aria-label', LABELS[mode]);

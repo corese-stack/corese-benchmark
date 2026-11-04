@@ -19,6 +19,7 @@
   --tag-active-bg: rgba(26, 127, 55, 0.12);
   --tag-active-text: #1a7f37;
   --tag-active-border: rgba(26, 127, 55, 0.35);
+  --chip-settle-duration: 180ms;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -397,10 +398,6 @@ body {
   border: 0;
 }
 
-:root {
-  --chip-settle-duration: 180ms;
-}
-
 .engine-chip {
   display: inline-flex;
   align-items: center;
@@ -432,10 +429,10 @@ body {
 }
 
 .engine-chip--ghost {
-  position: absolute !important;
-  pointer-events: none !important;
-  z-index: 50 !important;
-  margin: 0 !important;
+  position: absolute;
+  pointer-events: none;
+  z-index: 50;
+  margin: 0;
 }
 
 /* Unhighlighted chips: soft, dignified dimming (0.75 floor) so chips remain readable and never look disabled */
@@ -465,7 +462,7 @@ html[data-highlighted-engine] [data-engine-key] {
 }
 
 html[data-highlighted-engine] [data-engine-key].is-highlighted {
-  opacity: 1 !important;
+  opacity: 1;
   transition: opacity 0.14s cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -1067,7 +1064,10 @@ html[data-highlighted-engine] [data-engine-key].is-highlighted {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .pill-btn:hover {
@@ -1264,33 +1264,33 @@ html[data-highlighted-engine] [data-engine-key].is-highlighted {
 
 .engine-chip.is-dragging {
   cursor: grabbing;
-  z-index: 1000 !important;
+  z-index: 1000;
   will-change: transform;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.08);
   border-color: var(--focus);
   background: var(--bg);
-  transition: none !important;
+  transition: none;
 }
 
 .engine-chip.is-settling {
-  z-index: 999 !important;
+  z-index: 999;
   cursor: grabbing;
   will-change: transform;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  transition: transform var(--chip-settle-duration) cubic-bezier(.2, .8, .2, 1) !important;
+  transition: transform var(--chip-settle-duration) cubic-bezier(.2, .8, .2, 1);
 }
 
 .no-anim .engine-chip {
-  transition: none !important;
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .engine-chip,
   .engine-chip.is-settling {
-    transition: none !important;
-    animation: none !important;
+    transition: none;
+    animation: none;
   }
   .engine-chip--ghost {
-    display: none !important;
+    display: none;
   }
 }

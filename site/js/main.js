@@ -2,17 +2,18 @@
  * Corese Benchmark Dashboard - Main Orchestrator
  */
 
-import { loadBenchmarkReport } from './api.js?v=30';
-import { engineManager } from './engines.js?v=30';
-import { parseUrlEngines, updateUrlEngines } from './router.js?v=30';
+import { loadBenchmarkReport } from './api.js?v=36';
+import { engineManager } from './engines.js?v=36';
+import { parseUrlEngines, updateUrlEngines } from './router.js?v=36';
 
 class DashboardApp {
   #abortController = null;
+  data = null;
+  mainContainer = null;
+  unsubscribeEngines = null;
 
   constructor() {
-    this.data = null;
     this.mainContainer = document.getElementById('dashboard-main');
-    this.unsubscribeEngines = null;
   }
 
   destroy() {
@@ -47,6 +48,7 @@ class DashboardApp {
         {
           addBtn: document.getElementById('btn-add-engine'),
           popover: document.getElementById('miller-popover'),
+          backBtn: document.getElementById('btn-miller-back'),
           confirmBtn: document.getElementById('btn-confirm-engine'),
           chipsContainer: document.getElementById('active-engines-chips'),
           scroller: document.getElementById('engines-scroller')
@@ -90,4 +92,4 @@ class DashboardApp {
 
 // Bootstrap dashboard
 const app = new DashboardApp();
-app.init();
+void app.init();

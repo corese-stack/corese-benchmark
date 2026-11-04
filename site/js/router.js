@@ -74,7 +74,7 @@ export function updateUrlEngines(selectedEngines = [], push = false) {
   }
 
   // Preserve readable commas instead of %2C, and preserve existing location.hash
-  const query = params.toString().replace(/%2C/g, ',');
+  const query = params.toString().replaceAll('%2C', ',');
   const hash = window.location.hash || '';
   const newUrl = (query ? `${window.location.pathname}?${query}` : window.location.pathname) + hash;
 
