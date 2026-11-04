@@ -16,6 +16,7 @@ DEFAULT_BASELINE = str(
     Path(__file__).resolve().parent.parent / "site" / "data" / "baseline.json"
 )
 ARTIFACTS = {
+    "corese": ("fr.inria.corese", "corese-core"),
     "jena": ("org.apache.jena", "jena-arq"),
     "rdf4j": ("org.eclipse.rdf4j", "rdf4j-storage"),
 }

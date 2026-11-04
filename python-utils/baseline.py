@@ -116,15 +116,12 @@ def plan_engines(
     return ExecutionPlan(cached_engines=cached, fresh_engines=fresh)
 
 
-def merge_reports(
+def _merge_runs(
     baseline_data: dict,
     fresh_data: dict,
-    cached_engines: list[str] | set[str] | None = None,
-) -> dict:
-    """Merge baseline data and fresh data into a deterministic, unified report dictionary."""
-    cached_set = set(cached_engines) if cached_engines is not None else set(IMMUTABLE_ENGINES)
-
-    # 1. Merge runs: key = (dataset, engine, file)
+    cached_set: set[str],
+) -> list[dict]:
+    """Merge and deterministically sort benchmark runs from baseline and fresh reports."""
     merged_runs_map: dict[tuple[str, str, str], dict] = {}
     for r in baseline_data.get("runs", []):
         eng = r.get("engine")
@@ -138,10 +135,17 @@ def merge_reports(
         ds = r.get("dataset")
         f = r.get("file", "")
         if eng and ds:
-            # Fresh execution overwrites baseline
             merged_runs_map[(ds, eng, f)] = dict(r)
 
-    # 2. Merge queryRuns: key = (dataset, engine, queryId)
+    return [merged_runs_map[k] for k in sorted(merged_runs_map.keys())]
+
+
+def _merge_query_runs(
+    baseline_data: dict,
+    fresh_data: dict,
+    cached_set: set[str],
+) -> list[dict]:
+    """Merge and deterministically sort query runs from baseline and fresh reports."""
     merged_qruns_map: dict[tuple[str, str, str], dict] = {}
     for q in baseline_data.get("queryRuns", []):
         eng = q.get("engine")
@@ -157,12 +161,7 @@ def merge_reports(
         if eng and ds and qid:
             merged_qruns_map[(ds, eng, qid)] = dict(q)
 
-    # Sort deterministically
-    sorted_runs = [
-        merged_runs_map[k]
-        for k in sorted(merged_runs_map.keys())
-    ]
-    sorted_qruns = [
+    return [
         merged_qruns_map[k]
         for k in sorted(
             merged_qruns_map.keys(),
@@ -170,18 +169,22 @@ def merge_reports(
         )
     ]
 
-    # Merge metadata
+
+def _merge_metadata(
+    baseline_data: dict,
+    fresh_data: dict,
+    cached_set: set[str],
+) -> dict:
+    """Merge metadata dictionaries, preserving queries and dataset mappings."""
     meta = dict(baseline_data.get("metadata", {}))
     fresh_meta = fresh_data.get("metadata", {})
     meta.update(fresh_meta)
 
-    # Preserve datasetQueries mapping across both sources
     ds_queries = dict(baseline_data.get("metadata", {}).get("datasetQueries", {}))
     ds_queries.update(fresh_meta.get("datasetQueries", {}))
     if ds_queries:
         meta["datasetQueries"] = ds_queries
 
-    # Populate queries list for app.js backwards-compatibility if missing
     if "queries" not in meta or not meta["queries"]:
         for queries_list in ds_queries.values():
             if queries_list:
@@ -190,12 +193,23 @@ def merge_reports(
 
     meta["baselineEngines"] = sorted(cached_set)
     if "generatedAt" not in fresh_meta:
-        meta["generatedAt"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017 (Python 3.9 compatibility)
+        meta["generatedAt"] = datetime.now(timezone.utc).isoformat()
+
+    return meta
+
+
+def merge_reports(
+    baseline_data: dict,
+    fresh_data: dict,
+    cached_engines: list[str] | set[str] | None = None,
+) -> dict:
+    """Merge baseline data and fresh data into a deterministic, unified report dictionary."""
+    cached_set = set(cached_engines) if cached_engines is not None else set(IMMUTABLE_ENGINES)
 
     return {
-        "metadata": meta,
-        "runs": sorted_runs,
-        "queryRuns": sorted_qruns,
+        "metadata": _merge_metadata(baseline_data, fresh_data, cached_set),
+        "runs": _merge_runs(baseline_data, fresh_data, cached_set),
+        "queryRuns": _merge_query_runs(baseline_data, fresh_data, cached_set),
     }
 
 

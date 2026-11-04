@@ -19,9 +19,12 @@ def fake_response(versions):
     return resp
 
 
-def fake_urlopen(jena, rdf4j):
+def fake_urlopen(jena, rdf4j, corese=None):
+    corese_versions = corese if corese is not None else ["4.6.3"]
     def _open(request, timeout=None):
         url = request.full_url if hasattr(request, "full_url") else request
+        if "corese-core" in url:
+            return fake_response(corese_versions)
         return fake_response(jena if "jena-arq" in url else rdf4j)
 
     return _open
@@ -88,7 +91,7 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(got["rdf4j"], {"4.3.1"})
 
     def test_empty(self):
-        self.assertEqual(cnr.baseline_versions(None), {"jena": set(), "rdf4j": set()})
+        self.assertEqual(cnr.baseline_versions(None), {"corese": set(), "jena": set(), "rdf4j": set()})
 
 
 class MainTests(unittest.TestCase):
@@ -102,35 +105,35 @@ class MainTests(unittest.TestCase):
             json.dump({"metadata": {"engines": engines}}, fh)
         return path
 
-    def run_main(self, args, jena, rdf4j):
+    def run_main(self, args, jena, rdf4j, corese=None):
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen(jena, rdf4j)), \
+        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen(jena, rdf4j, corese)), \
                 redirect_stdout(out), redirect_stderr(err):
             code = cnr.main(args)
         return code, out.getvalue(), err.getvalue()
 
     def test_up_to_date(self):
-        path = self.baseline({"jena": "5.0.0", "rdf4j": "4.3.1"})
+        path = self.baseline({"corese": "4.6.5", "jena": "5.0.0", "rdf4j": "4.3.1"})
         code, out, _ = self.run_main(
-            ["--baseline", path, "--check"], ["5.0.0", "5.1.0-SNAPSHOT"], ["4.3.1", "5.0.0-M1"]
+            ["--baseline", path, "--check"], ["5.0.0", "5.1.0-SNAPSHOT"], ["4.3.1", "5.0.0-M1"], ["4.6.3"]
         )
         self.assertEqual(code, 0)
         self.assertIn("up-to-date", out)
 
     def test_missing_with_check(self):
-        path = self.baseline({"jena": "5.0.0", "rdf4j": "4.3.1"})
-        code, out, _ = self.run_main(["--baseline", path, "--check"], ["5.0.0", "5.1.0"], ["4.3.1"])
+        path = self.baseline({"corese": "4.6.5", "jena": "5.0.0", "rdf4j": "4.3.1"})
+        code, out, _ = self.run_main(["--baseline", path, "--check"], ["5.0.0", "5.1.0"], ["4.3.1"], ["4.6.3"])
         self.assertEqual(code, 1)
         self.assertIn("NEW", out)
 
     def test_missing_without_check_exits_zero(self):
-        path = self.baseline({"jena": "5.0.0", "rdf4j": "4.3.1"})
-        code, _, _ = self.run_main(["--baseline", path], ["5.1.0"], ["4.3.1"])
+        path = self.baseline({"corese": "4.6.5", "jena": "5.0.0", "rdf4j": "4.3.1"})
+        code, _, _ = self.run_main(["--baseline", path], ["5.1.0"], ["4.3.1"], ["4.6.3"])
         self.assertEqual(code, 0)
 
     def test_json_output(self):
-        path = self.baseline({"jena": "5.0.0", "rdf4j": "4.3.1"})
-        code, out, _ = self.run_main(["--baseline", path, "--json"], ["5.1.0"], ["4.3.1"])
+        path = self.baseline({"corese": "4.6.5", "jena": "5.0.0", "rdf4j": "4.3.1"})
+        code, out, _ = self.run_main(["--baseline", path, "--json"], ["5.1.0"], ["4.3.1"], ["4.6.3"])
         data = json.loads(out)
         self.assertEqual(code, 0)
         self.assertEqual(data["missing"], ["jena"])
@@ -138,8 +141,8 @@ class MainTests(unittest.TestCase):
         self.assertEqual(data["engines"]["jena"]["artifact"], "org.apache.jena:jena-arq")
 
     def test_verbose_logs_to_stderr(self):
-        path = self.baseline({"jena": "5.0.0", "rdf4j": "4.3.1"})
-        _, _, err = self.run_main(["--baseline", path, "--verbose"], ["5.0.0"], ["4.3.1"])
+        path = self.baseline({"corese": "4.6.5", "jena": "5.0.0", "rdf4j": "4.3.1"})
+        _, _, err = self.run_main(["--baseline", path, "--verbose"], ["5.0.0"], ["4.3.1"], ["4.6.3"])
         self.assertIn("jena: 1 versions fetched", err)
 
     def test_engine_absent_from_baseline(self):

@@ -49,82 +49,86 @@ def _download_generator(tools_dir: str) -> str:
     return jar_path
 
 
-def prepare(input_dir: str, scales: list[str] | None = None) -> str:
-    """
-    Generate BSBM datasets for the requested scales.
-    Returns the directory containing the generated .nt files.
-    """
-    scales = scales or ["small", "medium", "large"]
-    tools_dir  = os.path.join(input_dir, "_tools")
-    output_dir = os.path.join(input_dir, "bsbm", "unzip")
-    os.makedirs(tools_dir,  exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
+def _run_generator_for_scale(tools_dir: str, gen_dir: str, scale: str, n_products: int, out_file: str) -> None:
+    """Run BSBM generator for a specific scale and move result to out_file."""
+    tmp_dir = os.path.join(tools_dir, f"bsbm_gen_{scale}")
+    os.makedirs(tmp_dir, exist_ok=True)
+    print(f"  Generating BSBM {scale} ({n_products} products)...")
 
-    _download_generator(tools_dir)
+    lib_jars = [
+        os.path.join(gen_dir, "lib", f)
+        for f in os.listdir(os.path.join(gen_dir, "lib"))
+        if f.endswith(".jar")
+    ]
+    classpath = os.pathsep.join([gen_dir] + lib_jars)
+    cmd = [
+        "java", "-cp", classpath, "-Xmx256M",
+        "benchmark.generator.Generator",
+        "-pc", str(n_products),
+        "-fc",
+        "-fn", "dataset",
+        "-s", "nt",
+        "-dir", os.path.abspath(tmp_dir),
+    ]
+    subprocess.run(cmd, cwd=gen_dir, check=True)
 
-    for scale in scales:
-        if scale not in SCALES:
-            print(f"  Unknown scale '{scale}', skipping.")
-            continue
+    generated = os.path.join(tmp_dir, "dataset.nt")
+    if not os.path.exists(generated):
+        generated = os.path.join(gen_dir, "dataset.nt")
+    if os.path.exists(generated):
+        shutil.move(generated, out_file)
+        print(f"  Generated: bsbm_{scale}.nt")
+    else:
+        print(f"  Warning: expected output file not found for scale {scale}.")
 
-        n_products = SCALES[scale]
-        out_file   = os.path.join(output_dir, f"bsbm_{scale}.nt")
+    shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        if os.path.exists(out_file):
-            print(f"  Already generated: bsbm_{scale}.nt")
-            continue
 
-        # bsbmtools generates dataset.nt in the current directory
-        tmp_dir = os.path.join(tools_dir, f"bsbm_gen_{scale}")
-        os.makedirs(tmp_dir, exist_ok=True)
-
-        print(f"  Generating BSBM {scale} ({n_products} products)...")
-        gen_dir = os.path.abspath(os.path.join(tools_dir, GENERATOR_DIR))
-        lib_jars = [
-            os.path.join(gen_dir, "lib", f)
-            for f in os.listdir(os.path.join(gen_dir, "lib"))
-            if f.endswith(".jar")
-        ]
-        classpath = os.pathsep.join([gen_dir] + lib_jars)
-        tmp_dir_abs = os.path.abspath(tmp_dir)
-        cmd = [
-            "java", "-cp", classpath, "-Xmx256M",
-            "benchmark.generator.Generator",
-            "-pc", str(n_products),
-            "-fc",             # flat categories
-            "-fn", "dataset",  # output file prefix
-            "-s", "nt",        # N-Triples format
-            "-dir", tmp_dir_abs,  # output directory
-        ]
-        # Must run from gen_dir so titlewords.txt is found
-        subprocess.run(cmd, cwd=gen_dir, check=True)
-
-        # bsbmtools ignores -dir and writes dataset.nt in the current working dir (gen_dir)
-        generated = os.path.join(tmp_dir, "dataset.nt")
-        if not os.path.exists(generated):
-            generated = os.path.join(gen_dir, "dataset.nt")
-        if os.path.exists(generated):
-            shutil.move(generated, out_file)
-            print(f"  Generated: bsbm_{scale}.nt")
-        else:
-            print(f"  Warning: expected output file not found for scale {scale}.")
-
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    valid_scales = [s for s in scales if s in SCALES]
-    if len(valid_scales) == len(SCALES):
-        return output_dir
-
+def _create_view_dir(input_dir: str, output_dir: str, valid_scales: list[str]) -> str:
+    """Create a scoped directory with symlinks/copies for the requested scales."""
     view_dir = os.path.join(input_dir, "bsbm", "view_" + "_".join(valid_scales))
     os.makedirs(view_dir, exist_ok=True)
     for f in os.listdir(view_dir):
         os.remove(os.path.join(view_dir, f))
     for scale in valid_scales:
         src = os.path.join(output_dir, f"bsbm_{scale}.nt")
-        dst = os.path.join(view_dir,   f"bsbm_{scale}.nt")
+        dst = os.path.join(view_dir, f"bsbm_{scale}.nt")
         if os.path.exists(src):
             try:
                 os.symlink(src, dst)
             except (OSError, NotImplementedError):
                 shutil.copy2(src, dst)
     return view_dir
+
+
+def prepare(input_dir: str, scales: list[str] | None = None) -> str:
+    """
+    Generate BSBM datasets for the requested scales.
+    Returns the directory containing the generated .nt files.
+    """
+    scales = scales or ["small", "medium", "large"]
+    tools_dir = os.path.join(input_dir, "_tools")
+    output_dir = os.path.join(input_dir, "bsbm", "unzip")
+    os.makedirs(tools_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+
+    _download_generator(tools_dir)
+    gen_dir = os.path.abspath(os.path.join(tools_dir, GENERATOR_DIR))
+
+    for scale in scales:
+        if scale not in SCALES:
+            print(f"  Unknown scale '{scale}', skipping.")
+            continue
+
+        out_file = os.path.join(output_dir, f"bsbm_{scale}.nt")
+        if os.path.exists(out_file):
+            print(f"  Already generated: bsbm_{scale}.nt")
+            continue
+
+        _run_generator_for_scale(tools_dir, gen_dir, scale, SCALES[scale], out_file)
+
+    valid_scales = [s for s in scales if s in SCALES]
+    if len(valid_scales) == len(SCALES):
+        return output_dir
+
+    return _create_view_dir(input_dir, output_dir, valid_scales)

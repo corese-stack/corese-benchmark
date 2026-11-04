@@ -6,7 +6,9 @@ import shutil
 import subprocess
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
+
+JSON_SUFFIX = ".json"
 
 # Ensure Java 21 is used if JAVA_HOME is not already configured
 if "JAVA_HOME" not in os.environ:
@@ -332,7 +334,7 @@ def merge_json_files(file_list, output_file, no_delete=None):
             merged["metadata"]["queries"] = merged_queries
         if not merged["queryRuns"]:
             del merged["queryRuns"]
-        merged["metadata"]["generatedAt"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+        merged["metadata"]["generatedAt"] = datetime.now(timezone.utc).isoformat()
     with open(output_file, "w") as f:
         _json_early.dump(merged, f, indent=2)
     _keep = set(no_delete or [])
@@ -568,8 +570,10 @@ if args.engines:
                 fresh_other  = [e for e in fresh_engines if not needs_local_jar(e)]
 
                 if fresh_local and fresh_other:
-                    tmp1 = output_file.replace(".json", "_pass1.json")
-                    tmp2 = output_file.replace(".json", "_pass2.json")
+                    pass1_suffix = "_pass1" + JSON_SUFFIX
+                    pass2_suffix = "_pass2" + JSON_SUFFIX
+                    tmp1 = output_file.replace(JSON_SUFFIX, pass1_suffix)
+                    tmp2 = output_file.replace(JSON_SUFFIX, pass2_suffix)
 
                     extra1 = ["-PcoreseVersion=local"]
                     gradle_build(extra1)
@@ -698,6 +702,9 @@ if args.coreseCommits:
 _explicit = locals().get("_report_for_site")
 if _explicit and os.path.exists(_explicit):
     latest = _explicit
+elif not locals().get("dataset_names"):
+    # Module imported without execution
+    latest = None
 else:
     json_files = sorted(glob.glob(os.path.join(out_json_dir, "*.json")), key=os.path.getmtime)
     latest = json_files[-1] if json_files else None
