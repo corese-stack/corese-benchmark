@@ -152,13 +152,13 @@ export const DATASET_DESCRIPTORS = {
 			domain:
 				"Higher Education & Academia (universities, departments, professors, students, publications)",
 			expressivity:
-				"Univ-Bench ontology (OWL Lite / SHIQ). Evaluated in pattern-matching mode (inference disabled by default)",
+				"Univ-Bench ontology (OWL Lite / SHIF(D)). Evaluated in pattern-matching mode (inference disabled by default)",
 			stressFocus:
 				"Class hierarchies, star & chain joins, query planning on scalable university topologies",
-			workloadType: "Synthetic university evaluation (14 adapted UBA queries)",
+			workloadType: "Synthetic university evaluation (14 adapted queries)",
 		},
 		implementationNotes:
-			"Executes the 14 standard UBA queries adapted to local data fixtures. Runs in standard pattern-matching mode (the optional --inference flag for RDFS/OWL-RL reasoning is disabled by default in this report).",
+			"Executes 14 adapted queries based on the original LUBM suite. Runs in standard pattern-matching mode (the optional --inference flag for RDFS/OWL-RL reasoning is disabled by default in this report).",
 		scaleFactorMeaning:
 			"Number of universities generated (e.g. LUBM-1, LUBM-10, LUBM-50).",
 		generatorCli:
@@ -411,7 +411,7 @@ export const DATASET_DESCRIPTORS = {
 				"RDF/RDFS with light DBpedia OWL ontology; heterogeneous real-world vocabulary",
 			stressFocus:
 				"RDF parsing throughput, JVM heap footprint, streaming ingestion, multilingual literals",
-			workloadType: "Real-world dirty data ingestion & storage benchmarks",
+			workloadType: "Real-world RDF ingestion & memory analysis",
 		},
 		implementationNotes:
 			"Measures streaming RDF loading throughput (triples/s) and differential JVM heap footprint (before/after double GC) across 5 selected real-world Wikipedia slices. Not a standardized SPARQL query benchmark.",

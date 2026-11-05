@@ -79,7 +79,7 @@ export function bindBenchmarkCardEvents(container, descriptor) {
       <tr>
         <td><strong>${escapeHtml(s.name)}</strong> <span class="text-muted">(${escapeHtml(s.param || "")})</span></td>
         <td class="num-col font-mono">${escapeHtml(s.triples || "n/a")}</td>
-        <td><span class="status-badge ${s.tested ? "badge-pass" : "badge-skip"}">${s.tested ? "Testé ✓" : "Non testé"}</span></td>
+        <td><span class="status-badge ${s.tested ? "badge-pass" : "badge-skip"}">${s.tested ? "Measured ✓" : "Not measured"}</span></td>
       </tr>
     `,
 				)
@@ -184,7 +184,10 @@ export function bindBenchmarkCardEvents(container, descriptor) {
 							}, 1500);
 						})
 						.catch(() => {
-							copyBtn.textContent = "Failed";
+							copyBtn.textContent = "Copy Failed";
+							setTimeout(() => {
+								copyBtn.textContent = "Copy Command";
+							}, 1500);
 						});
 				});
 			}
@@ -193,25 +196,7 @@ export function bindBenchmarkCardEvents(container, descriptor) {
 
 function copyText(text) {
 	if (navigator.clipboard?.writeText) {
-		return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+		return navigator.clipboard.writeText(text);
 	}
-	return fallbackCopy(text);
-}
-
-function fallbackCopy(text) {
-	const ta = document.createElement("textarea");
-	ta.value = text;
-	ta.style.position = "fixed";
-	ta.style.opacity = "0";
-	document.body.appendChild(ta);
-	ta.focus();
-	ta.select();
-	try {
-		document.execCommand("copy");
-		ta.remove();
-		return Promise.resolve();
-	} catch (err) {
-		ta.remove();
-		return Promise.reject(err);
-	}
+	return Promise.reject(new Error("Clipboard API unavailable"));
 }
