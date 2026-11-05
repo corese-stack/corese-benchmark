@@ -69,6 +69,31 @@
       "warmup": 1,
       "repetitions": 3,
       "queryRepetitions": 3
+    },
+    "environment": {
+      "cpuModel": "Intel(R) Core(TM) Ultra 5 228V",
+      "cpuArchitecture": "amd64",
+      "cpuSockets": 1,
+      "cpuCores": 8,
+      "cpuThreads": 8,
+      "cpuFrequencyMhz": 3989.0,
+      "cpuGovernor": "powersave",
+      "ramTotalGb": 30.82,
+      "swapTotalGb": 54.4,
+      "swappiness": 6,
+      "osDistribution": "Fedora Linux 44 (Forty Four)",
+      "osKernel": "7.2.14-200.fc44.x86_64",
+      "jvmVendor": "Eclipse Adoptium",
+      "jvmVersion": "21.0.11",
+      "jvmFlags": [
+        "-XX:+UseG1GC",
+        "-Xms4g",
+        "-Xmx12g",
+        "-Dfile.encoding=UTF-8",
+        "-Duser.country=US",
+        "-Duser.language=en",
+        "-Duser.variant"
+      ]
     }
   },
   "runs": [
