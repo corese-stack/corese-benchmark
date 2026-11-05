@@ -20,9 +20,19 @@ export const DATASET_DESCRIPTORS = {
 		shortCitation: "Bizer & Schultz (2009)",
 		citation:
 			"Bizer, C. & Schultz, A. (2009). The Berlin SPARQL Benchmark. Int. Journal on Semantic Web and Information Systems (IJSWIS), 5(2), 1-24.",
+		paperUrl: "https://doi.org/10.4018/jswis.2009081901",
 		officialUrl:
 			"http://wbsg.informatik.uni-mannheim.de/bizer/berlinsparqlbenchmark/", // NOSONAR: Academic server without TLS
 		githubUrl: "https://github.com/dice-group/bsbm",
+		workloadProfile: {
+			domain: "E-Commerce (products, offers, vendors, consumer reviews)",
+			expressivity: "Pure SPARQL 1.0/1.1 (No ontology reasoning required)",
+			stressFocus:
+				"Multi-pattern graph joins, OPTIONAL clauses, UNION branches, numeric FILTERs, pagination",
+			workloadType: "Synthetic transactional & consumer exploration",
+		},
+		implementationNotes:
+			"12 adapted queries with frozen deterministic URIs, designed for repeatable single-JVM performance testing. Does not reproduce the randomized multi-client transaction mix of the original driver.",
 		scaleFactorMeaning:
 			"Product count multiplier (e.g. 1k, 50k, 500k products).",
 		generatorCli: "./generate -pc 1000 -s nt -fn bsbm_small",
@@ -136,7 +146,19 @@ export const DATASET_DESCRIPTORS = {
 		shortCitation: "Guo, Pan & Heflin (2005)",
 		citation:
 			"Guo, Y., Pan, Z., & Heflin, J. (2005). LUBM: A Benchmark for OWL Knowledge Base Systems. Journal of Web Semantics, 3(2-3), 158-182.",
+		paperUrl: "https://doi.org/10.1016/j.websem.2005.06.005",
 		officialUrl: "https://swat.cse.lehigh.edu/projects/lubm/",
+		workloadProfile: {
+			domain:
+				"Higher Education & Academia (universities, departments, professors, students, publications)",
+			expressivity:
+				"Univ-Bench ontology (OWL Lite / SHIQ). Evaluated in pattern-matching mode (inference disabled by default)",
+			stressFocus:
+				"Class hierarchies, star & chain joins, query planning on scalable university topologies",
+			workloadType: "Synthetic university evaluation (14 adapted UBA queries)",
+		},
+		implementationNotes:
+			"Executes the 14 standard UBA queries adapted to local data fixtures. Runs in standard pattern-matching mode (the optional --inference flag for RDFS/OWL-RL reasoning is disabled by default in this report).",
 		scaleFactorMeaning:
 			"Number of universities generated (e.g. LUBM-1, LUBM-10, LUBM-50).",
 		generatorCli:
@@ -150,7 +172,7 @@ export const DATASET_DESCRIPTORS = {
 			{
 				name: "LUBM-1",
 				param: "1 university",
-				triples: "102,737",
+				triples: "100,573",
 				file: "lubm_small.nt",
 				tested: true,
 			},
@@ -164,7 +186,7 @@ export const DATASET_DESCRIPTORS = {
 			{
 				name: "LUBM-50",
 				param: "50 universities",
-				triples: "6,650,000",
+				triples: "13,409,395",
 				file: "lubm_large.nt",
 				tested: true,
 			},
@@ -252,7 +274,7 @@ export const DATASET_DESCRIPTORS = {
 		description:
 			"Measures SPARQL 1.1 analytical query latency over synthetic academic data modeled on the European Bologna process.",
 		characteristics: [
-			{ label: "Queries", value: "17" },
+			{ label: "Queries", value: "17 analytical queries" },
 			{ label: "Workload", value: "Aggregation · Temporal filtering" },
 			{ label: "Dataset", value: "Synthetic university" },
 			{ label: "Focus", value: "Analytical query latency" },
@@ -260,7 +282,19 @@ export const DATASET_DESCRIPTORS = {
 		shortCitation: "Demartini et al. (2012)",
 		citation:
 			"Demartini, G., Enchev, I., Wylot, M., Gapany, J., & Cudré-Mauroux, P. (2012). BowlognaBench—Benchmarking RDF Analytics. In Data-Driven Process Discovery and Analysis (LNBIP 116), pp. 82–102.",
-		officialUrl: "https://doi.org/10.1007/978-3-642-36285-9_6",
+		paperUrl: "https://doi.org/10.1007/978-3-642-34044-4_5",
+		officialUrl: "https://doi.org/10.1007/978-3-642-34044-4_5",
+		workloadProfile: {
+			domain:
+				"University Bologna Reform (curricula, courses, evaluations, grades)",
+			expressivity:
+				"Light RDFS + SPARQL 1.1 Analytics (GROUP BY, HAVING, subqueries, aggregates)",
+			stressFocus:
+				"Analytical OLAP aggregations, multi-level join paths, nested subqueries, sorting",
+			workloadType: "Synthetic analytical & decision-support OLAP (17 queries)",
+		},
+		implementationNotes:
+			"Evaluates 17 SPARQL 1.1 analytical queries featuring intensive OLAP aggregations (COUNT, AVG, MAX, GROUP BY, HAVING) and nested subqueries on Bologna reform curriculum data.",
 		scaleFactorMeaning:
 			"Number of academic departments and faculties generated.",
 		generatorCli: "./generate_bowlogna -dept 10",
@@ -275,6 +309,20 @@ export const DATASET_DESCRIPTORS = {
 				param: "1 faculty department",
 				triples: "1,233,512",
 				file: "Department0.nt",
+				tested: true,
+			},
+			{
+				name: "Department 1",
+				param: "Faculty department 1",
+				triples: "1,241,828",
+				file: "Department1.nt",
+				tested: true,
+			},
+			{
+				name: "Department 2",
+				param: "Faculty department 2",
+				triples: "1,253,055",
+				file: "Department2.nt",
 				tested: true,
 			},
 		],
@@ -346,15 +394,27 @@ export const DATASET_DESCRIPTORS = {
 		description:
 			"Measures RDF loading time, throughput, and JVM heap delta using five selected N-Triples files from the Wikipedia-derived DBpedia 3.5.1 dataset.",
 		characteristics: [
-			{ label: "Workload", value: "Bulk RDF loading" },
+			{ label: "Workload", value: "Bulk RDF loading (5 files)" },
 			{ label: "Dataset", value: "Real-world · Wikipedia-derived" },
-			{ label: "Input", value: "5 N-Triples files" },
 			{ label: "Focus", value: "Loading throughput · JVM heap delta" },
+			{ label: "Queries", value: "None (Ingestion benchmark)" },
 		],
 		shortCitation: "Auer et al. (2007)",
 		citation:
 			"Auer, S., Bizer, C., Kobilarov, G., Lehmann, J., Cyganiak, R., & Ives, Z. (2007). DBpedia: A Nucleus for a Web of Open Data. In The Semantic Web (ISWC 2007), pp. 722-735.",
+		paperUrl: "https://doi.org/10.1007/978-3-540-76298-0_52",
 		officialUrl: "https://www.dbpedia.org/",
+		workloadProfile: {
+			domain:
+				"Encyclopedic General Knowledge (Wikipedia entity extracts, open web graph)",
+			expressivity:
+				"RDF/RDFS with light DBpedia OWL ontology; heterogeneous real-world vocabulary",
+			stressFocus:
+				"RDF parsing throughput, JVM heap footprint, streaming ingestion, multilingual literals",
+			workloadType: "Real-world dirty data ingestion & storage benchmarks",
+		},
+		implementationNotes:
+			"Measures streaming RDF loading throughput (triples/s) and differential JVM heap footprint (before/after double GC) across 5 selected real-world Wikipedia slices. Not a standardized SPARQL query benchmark.",
 		scaleFactorMeaning:
 			"Dumps extracted by property subset (disambiguations, mappingbased properties, persondata, labels).",
 		generatorCli: "curl -O https://downloads.dbpedia.org/3.5.1/en/...",
@@ -365,6 +425,13 @@ export const DATASET_DESCRIPTORS = {
 		},
 		scales: [
 			{
+				name: "Persondata",
+				param: "Biographical info",
+				triples: "356,914",
+				file: "persondata_en.nt",
+				tested: true,
+			},
+			{
 				name: "Category Labels",
 				param: "Wikipedia categories",
 				triples: "565,108",
@@ -374,7 +441,7 @@ export const DATASET_DESCRIPTORS = {
 			{
 				name: "Disambiguations",
 				param: "Disambiguation links",
-				triples: "768,924",
+				triples: "765,124",
 				file: "disambiguations_en.nt",
 				tested: true,
 			},
@@ -386,16 +453,9 @@ export const DATASET_DESCRIPTORS = {
 				tested: true,
 			},
 			{
-				name: "Persondata",
-				param: "Biographical info",
-				triples: "356,996",
-				file: "persondata_en.nt",
-				tested: true,
-			},
-			{
 				name: "Specific Properties",
 				param: "Mapping-based triples",
-				triples: "184,083",
+				triples: "182,530",
 				file: "specific_mappingbased_properties_en.nt",
 				tested: true,
 			},

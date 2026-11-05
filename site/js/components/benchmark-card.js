@@ -77,11 +77,9 @@ export function bindBenchmarkCardEvents(container, descriptor) {
 				.map(
 					(s) => `
       <tr>
-        <td><strong>${escapeHtml(s.name)}</strong></td>
-        <td>${escapeHtml(s.param || "n/a")}</td>
+        <td><strong>${escapeHtml(s.name)}</strong> <span class="text-muted">(${escapeHtml(s.param || "")})</span></td>
         <td class="num-col font-mono">${escapeHtml(s.triples || "n/a")}</td>
-        <td class="font-mono">${escapeHtml(s.file || "n/a")}</td>
-        <td><span class="status-badge ${s.tested ? "badge-pass" : "badge-skip"}">${s.tested ? "BENCHMARKED" : "REFERENCE"}</span></td>
+        <td><span class="status-badge ${s.tested ? "badge-pass" : "badge-skip"}">${s.tested ? "Testé ✓" : "Non testé"}</span></td>
       </tr>
     `,
 				)
@@ -98,41 +96,122 @@ export function bindBenchmarkCardEvents(container, descriptor) {
 				)
 				.join("");
 
+			const reproduceCmd =
+				descriptor.reproduceCli ||
+				`./gradlew run --args="--dataset ${descriptor.id}"`;
+			const profile = descriptor.workloadProfile || {};
+
 			modalDialog.open({
-				title: `${descriptor.name} – Technical Specifications`,
-				badge: "SPECIFICATION",
+				title: descriptor.name,
+				badge: profile.workloadType || "BENCHMARK SPECIFICATION",
 				badgeClass: "badge-pass",
 				bodyHtml: `
+        <!-- A. Corese Implementation -->
         <div class="info-row">
-          <span class="info-label">Full Academic Citation</span>
-          <div class="info-value font-italic">${escapeHtml(descriptor.citation || "Official specification")}</div>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Dataset Generation / Extraction CLI</span>
-          <pre class="info-code modal-preview-code"><code>${escapeHtml(descriptor.generatorCli || "Standard generator")}</code></pre>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Ontology & Namespaces</span>
-          <div class="tile-kv-list" style="margin-top: 4px;">
-            ${nsList || '<div class="text-faint">No specific prefixes defined.</div>'}
+          <span class="info-label">Corese Implementation & Workload</span>
+          <div class="info-value" style="margin-bottom: 6px;">
+            ${escapeHtml(descriptor.implementationNotes || descriptor.description)}
+          </div>
+          <div class="tile-kv-list">
+            <div class="kv-row"><span class="kv-k">Domain:</span><span class="kv-v">${escapeHtml(profile.domain || "n/a")}</span></div>
+            <div class="kv-row"><span class="kv-k">Expressivity:</span><span class="kv-v font-mono">${escapeHtml(profile.expressivity || "n/a")}</span></div>
+            <div class="kv-row"><span class="kv-k">Stress Focus:</span><span class="kv-v">${escapeHtml(profile.stressFocus || "n/a")}</span></div>
           </div>
         </div>
+
+        <!-- B. Dataset Files & Scales -->
         <div class="info-row">
-          <span class="info-label">Scales & Benchmark Topology</span>
+          <span class="info-label">${descriptor.id === "dbpedia" ? "N-Triples Files & Ingestion Status" : "Dataset Scales & Coverage"}</span>
           <table class="academic-table" style="margin-top: 6px;">
             <thead>
-              <tr><th>Scale</th><th>Parameter</th><th class="num-col">Triples</th><th>Fixture</th><th>Status</th></tr>
+              <tr><th>${descriptor.id === "dbpedia" ? "File & Slice Content" : "Scale & Parameter"}</th><th class="num-col">Triples</th><th>Status</th></tr>
             </thead>
             <tbody>
               ${scalesTable}
             </tbody>
           </table>
         </div>
+
+        <!-- C. Reproduction Commands -->
         <div class="info-row">
-          <span class="info-label">Local Reproduction Command</span>
-          <pre class="info-code modal-preview-code"><code>${escapeHtml(descriptor.reproduceCli || "./gradlew run")}</code></pre>
+          <div class="split" style="align-items: center; margin-bottom: 4px;">
+            <span class="info-label">Local Reproduction Command</span>
+            <button class="btn btn-xs btn-outline btn-copy-cli" type="button" data-cmd="${escapeHtml(reproduceCmd)}">Copy Command</button>
+          </div>
+          <pre class="info-code modal-preview-code"><code>${escapeHtml(reproduceCmd)}</code></pre>
+        </div>
+
+        <!-- D. Technical References (Foldable) -->
+        <details class="info-row advanced-namespaces-details" style="margin-top: 4px;">
+          <summary class="info-label" style="cursor: pointer; user-select: none;">Technical References & Namespaces ▾</summary>
+          <div style="margin-top: 8px;">
+            ${
+							descriptor.generatorCli
+								? `
+            <div style="margin-bottom: 8px;">
+              <span class="text-muted" style="font-size: 11px; font-weight: 600;">Original Generator / Source:</span>
+              <pre class="info-code" style="margin-top: 4px; padding: 4px 8px; font-size: 11px;"><code>${escapeHtml(descriptor.generatorCli)}</code></pre>
+            </div>
+            `
+								: ""
+						}
+            <div class="tile-kv-list">
+              ${nsList || '<div class="text-faint">No specific prefixes defined.</div>'}
+            </div>
+          </div>
+        </details>
+
+        <!-- E. Scientific Reference -->
+        <div class="info-row" style="border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+          <span class="info-label">Scientific Reference</span>
+          <div class="info-value">
+            ${escapeHtml(descriptor.citation || "Official academic specification")}
+            ${descriptor.paperUrl ? `· <a href="${escapeHtml(descriptor.paperUrl)}" target="_blank" rel="noopener noreferrer" class="link-paper">Publication [DOI] ↗</a>` : ""}
+          </div>
         </div>
       `,
 			});
+
+			const copyBtn = document.querySelector(".btn-copy-cli");
+			if (copyBtn) {
+				copyBtn.addEventListener("click", () => {
+					const cmd = copyBtn.dataset.cmd || "";
+					copyText(cmd)
+						.then(() => {
+							copyBtn.textContent = "Copied ✓";
+							setTimeout(() => {
+								copyBtn.textContent = "Copy Command";
+							}, 1500);
+						})
+						.catch(() => {
+							copyBtn.textContent = "Failed";
+						});
+				});
+			}
 		});
+}
+
+function copyText(text) {
+	if (navigator.clipboard?.writeText) {
+		return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+	}
+	return fallbackCopy(text);
+}
+
+function fallbackCopy(text) {
+	const ta = document.createElement("textarea");
+	ta.value = text;
+	ta.style.position = "fixed";
+	ta.style.opacity = "0";
+	document.body.appendChild(ta);
+	ta.focus();
+	ta.select();
+	try {
+		document.execCommand("copy");
+		ta.remove();
+		return Promise.resolve();
+	} catch (err) {
+		ta.remove();
+		return Promise.reject(err);
+	}
 }
