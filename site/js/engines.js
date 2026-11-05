@@ -2139,6 +2139,78 @@ export class EngineManager extends EventTarget {
 		});
 	}
 
+	#isCurrentDraftActive() {
+		if (!this.draftEngine || !this.draftVersion || !this.draftStorage) {
+			return false;
+		}
+		return this.activeEngines.some(
+			(e) =>
+				e.engineId === this.draftEngine.id &&
+				e.versionId === this.draftVersion.id &&
+				e.storageId === this.draftStorage.id,
+		);
+	}
+
+	#disableMillerButtonForStep(currentStep) {
+		const btn = this.el.confirmBtn;
+		btn.disabled = true;
+		btn.setAttribute("aria-disabled", "true");
+		btn.textContent = "Add";
+		btn.classList.remove("miller__confirm-btn--remove");
+		const msg =
+			currentStep === 1
+				? "Please select an engine to continue"
+				: "Please select a version to continue";
+		btn.title = msg;
+		btn.setAttribute("aria-label", msg);
+	}
+
+	#syncMillerConfirmButton(isLastStep, currentStep) {
+		if (!this.el.confirmBtn) return;
+
+		if (!isLastStep) {
+			this.#disableMillerButtonForStep(currentStep);
+			return;
+		}
+
+		if (this.#isCurrentDraftActive()) {
+			this.#updateMillerRemoveButton();
+		} else {
+			this.#updateMillerAddButton();
+		}
+	}
+
+	#getMillerPreviewInfo(isMobile, currentStep) {
+		if (isMobile && currentStep === 1) {
+			return { label: "Step 1/3:", text: "Choose an engine" };
+		}
+		if (isMobile && currentStep === 2) {
+			const name = this.draftEngine ? this.draftEngine.name : "Engine";
+			return { label: "Step 2/3:", text: `${name} · Choose a version` };
+		}
+		if (this.draftEngine && this.draftVersion && this.draftStorage) {
+			return {
+				label: "Engine:",
+				text: `${this.draftEngine.name} · ${this.draftVersion.label} · ${this.draftStorage.label}`,
+			};
+		}
+		return null;
+	}
+
+	#syncMillerPreview(previewEl, isMobile, currentStep) {
+		if (!previewEl) return;
+		const info = this.#getMillerPreviewInfo(isMobile, currentStep);
+		if (!info) return;
+
+		const previewLabel = this.el.popover?.querySelector(
+			".miller__preview-label",
+		);
+		if (previewLabel) {
+			previewLabel.textContent = info.label;
+		}
+		previewEl.textContent = info.text;
+	}
+
 	#updateMillerFooter(previewEl) {
 		const isMobile = this.#isMobile();
 		const currentStep = Number.parseInt(
@@ -2147,52 +2219,8 @@ export class EngineManager extends EventTarget {
 		);
 		const isLastStep = !isMobile || currentStep === 3;
 
-		const isCurrentActive = Boolean(
-			this.draftEngine &&
-				this.draftVersion &&
-				this.draftStorage &&
-				this.activeEngines.some(
-					(e) =>
-						e.engineId === this.draftEngine.id &&
-						e.versionId === this.draftVersion?.id &&
-						e.storageId === this.draftStorage?.id,
-				),
-		);
-
-		const previewLabel = this.el.popover?.querySelector(
-			".miller__preview-label",
-		);
-
-		if (this.el.confirmBtn) {
-			if (!isLastStep) {
-				this.el.confirmBtn.disabled = true;
-				this.el.confirmBtn.setAttribute("aria-disabled", "true");
-				this.el.confirmBtn.textContent = "Add";
-				this.el.confirmBtn.classList.remove("miller__confirm-btn--remove");
-				this.el.confirmBtn.title =
-					currentStep === 1
-						? "Please select an engine to continue"
-						: "Please select a version to continue";
-				this.el.confirmBtn.setAttribute("aria-label", this.el.confirmBtn.title);
-			} else if (isCurrentActive) {
-				this.#updateMillerRemoveButton();
-			} else {
-				this.#updateMillerAddButton();
-			}
-		}
-
-		if (previewEl) {
-			if (isMobile && currentStep === 1) {
-				if (previewLabel) previewLabel.textContent = "Step 1/3:";
-				previewEl.textContent = "Choose an engine";
-			} else if (isMobile && currentStep === 2) {
-				if (previewLabel) previewLabel.textContent = "Step 2/3:";
-				previewEl.textContent = `${this.draftEngine?.name || "Engine"} · Choose a version`;
-			} else if (this.draftEngine && this.draftVersion && this.draftStorage) {
-				if (previewLabel) previewLabel.textContent = "Engine:";
-				previewEl.textContent = `${this.draftEngine.name} · ${this.draftVersion.label} · ${this.draftStorage.label}`;
-			}
-		}
+		this.#syncMillerConfirmButton(isLastStep, currentStep);
+		this.#syncMillerPreview(previewEl, isMobile, currentStep);
 	}
 
 	#updateMillerRemoveButton() {
