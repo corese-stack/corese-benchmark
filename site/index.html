@@ -113,15 +113,17 @@
         <section class="miller-popover" id="miller-popover" aria-label="Select Engine, Version and Storage" data-step="1" hidden>
           <div class="miller-popover__header">
             <button type="button" class="miller__back" id="btn-miller-back"><span aria-hidden="true">‹ </span>Back</button>
-            <span class="miller-popover__step">1. Engine</span>
-            <span class="miller-popover__step">2. Version</span>
-            <span class="miller-popover__step">3. Storage</span>
+            <span class="miller-popover__step" data-step-title="1">1. Engine</span>
+            <span class="miller-popover__step" data-step-title="2">2. Version</span>
+            <span class="miller-popover__step" data-step-title="3">3. Storage</span>
           </div>
 
-          <div class="miller-popover__body">
-            <div class="miller__col miller__col--engines"></div>
-            <div class="miller__col miller__col--versions"></div>
-            <div class="miller__col miller__col--storages"></div>
+          <div class="miller-popover__viewport">
+            <div class="miller-popover__body">
+              <div class="miller__col miller__col--engines"></div>
+              <div class="miller__col miller__col--versions"></div>
+              <div class="miller__col miller__col--storages"></div>
+            </div>
           </div>
 
           <div class="miller-popover__footer">
@@ -139,29 +141,28 @@
   <nav class="benchmark-nav" aria-label="Benchmarks">
     <div class="benchmark-nav__inner">
       <div class="benchmark-tabs" role="tablist" aria-label="Benchmark Workloads" id="benchmark-tabs">
-        <button type="button" role="tab" class="benchmark-tab is-active" id="tab-bsbm" aria-selected="true" aria-controls="panel-bsbm" tabindex="0" data-view="bsbm">
+        <button type="button" role="tab" class="benchmark-tab is-active" id="tab-bsbm" aria-selected="true" aria-controls="benchmark-panel" tabindex="0" data-view="bsbm">
           BSBM
         </button>
-        <button type="button" role="tab" class="benchmark-tab" id="tab-lubm" aria-selected="false" aria-controls="panel-lubm" tabindex="-1" data-view="lubm">
+        <button type="button" role="tab" class="benchmark-tab" id="tab-lubm" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="lubm">
           LUBM
         </button>
-        <button type="button" role="tab" class="benchmark-tab" id="tab-bowlogna" aria-selected="false" aria-controls="panel-bowlogna" tabindex="-1" data-view="bowlogna">
+        <button type="button" role="tab" class="benchmark-tab" id="tab-bowlogna" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="bowlogna">
           Bowlogna
         </button>
-        <button type="button" role="tab" class="benchmark-tab" id="tab-dbpedia" aria-selected="false" aria-controls="panel-dbpedia" tabindex="-1" data-view="dbpedia">
+        <button type="button" role="tab" class="benchmark-tab" id="tab-dbpedia" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="dbpedia">
           DBpedia
         </button>
+        <span class="benchmark-tabs__indicator" aria-hidden="true" id="benchmark-tabs-indicator"></span>
       </div>
     </div>
   </nav>
 
   <main class="dashboard-main" id="dashboard-main">
-    <section class="benchmark-panel" id="benchmark-panel" role="tabpanel" aria-labelledby="tab-bsbm">
-      <!-- Dynamic content rendered by active benchmark view -->
-    </section>
+    <section class="benchmark-panel" id="benchmark-panel" role="tabpanel" aria-labelledby="tab-bsbm"></section>
   </main>
 
-  <script type="module" src="./js/main.js?v=36"></script>
+  <script type="module" src="./js/main.js?v=37"></script>
 
   <script>
     (() => {

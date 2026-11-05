@@ -14,6 +14,8 @@ import {
 
 class DashboardApp {
 	#abortController = null;
+	#indicatorRaf = null;
+	#resizeObserver = null;
 	data = null;
 	mainContainer =
 		typeof document !== "undefined"
@@ -35,6 +37,14 @@ class DashboardApp {
 		if (this.#abortController) {
 			this.#abortController.abort();
 			this.#abortController = null;
+		}
+		if (this.#indicatorRaf) {
+			cancelAnimationFrame(this.#indicatorRaf);
+			this.#indicatorRaf = null;
+		}
+		if (this.#resizeObserver) {
+			this.#resizeObserver.disconnect();
+			this.#resizeObserver = null;
 		}
 		if (this.unsubscribeEngines) {
 			this.unsubscribeEngines();
@@ -175,6 +185,58 @@ class DashboardApp {
 			},
 			{ signal },
 		);
+
+		// Setup ResizeObserver for responsive sliding indicator without animation glitch
+		if (typeof ResizeObserver !== "undefined") {
+			this.#resizeObserver = new ResizeObserver(() => {
+				this.updateIndicator({ immediate: true });
+			});
+			this.#resizeObserver.observe(this.tablistEl);
+			this.tablistEl.querySelectorAll('[role="tab"]').forEach((t) => {
+				this.#resizeObserver.observe(t);
+			});
+		}
+
+		// Recalculate indicator position when web fonts finish loading
+		if (typeof document !== "undefined" && "fonts" in document) {
+			void document.fonts.ready
+				.then(() => {
+					if (!signal.aborted) {
+						this.updateIndicator({ immediate: true });
+					}
+				})
+				.catch(() => {});
+		}
+	}
+
+	updateIndicator({ immediate = false } = {}) {
+		if (!this.tablistEl) return;
+		if (this.#indicatorRaf) {
+			cancelAnimationFrame(this.#indicatorRaf);
+		}
+		this.#indicatorRaf = requestAnimationFrame(() => {
+			this.#indicatorRaf = null;
+			if (!this.tablistEl) return;
+			const activeTab = this.tablistEl.querySelector(
+				'.benchmark-tab[aria-selected="true"]',
+			);
+			if (!activeTab) return;
+
+			if (immediate) {
+				this.tablistEl.classList.add("is-resizing");
+			}
+			const x = activeTab.offsetLeft;
+			const w = activeTab.offsetWidth;
+			this.tablistEl.style.setProperty("--tab-x", `${x}px`);
+			this.tablistEl.style.setProperty("--tab-w", `${w}px`);
+			this.tablistEl.classList.add("is-ready");
+
+			if (immediate) {
+				requestAnimationFrame(() => {
+					this.tablistEl?.classList.remove("is-resizing");
+				});
+			}
+		});
 	}
 
 	updateViewFromUrl() {
@@ -189,6 +251,9 @@ class DashboardApp {
 				tab.setAttribute("aria-selected", String(isActive));
 				tab.setAttribute("tabindex", isActive ? "0" : "-1");
 				tab.classList.toggle("is-active", isActive);
+			});
+			this.updateIndicator({
+				immediate: !this.tablistEl.classList.contains("is-ready"),
 			});
 		}
 

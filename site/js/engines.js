@@ -224,6 +224,14 @@ export class EngineManager extends EventTarget {
 		this.draftStorage = null;
 		this.isPickerOpen = false;
 		this.settleDurationMs = 180;
+		this.explicitChoices = { engine: false, version: false, storage: false };
+	}
+
+	#isMobile() {
+		return (
+			typeof window !== "undefined" &&
+			Boolean(window.matchMedia?.("(max-width: 560px)")?.matches)
+		);
 	}
 
 	#parseDurationMs(raw) {
@@ -1345,16 +1353,14 @@ export class EngineManager extends EventTarget {
 			const target =
 				nextCol?.querySelector(".is-selected") ||
 				nextCol?.querySelector(".miller__item");
-			if (typeof window !== "undefined" && window.innerWidth <= 560)
-				this.setStep(2);
+			if (this.#isMobile()) this.setStep(2);
 			target?.focus();
 		} else if (currentColumn.classList.contains("miller__col--versions")) {
 			const nextCol = popover.querySelector(".miller__col--storages");
 			const target =
 				nextCol?.querySelector(".is-selected") ||
 				nextCol?.querySelector(".miller__item");
-			if (typeof window !== "undefined" && window.innerWidth <= 560)
-				this.setStep(3);
+			if (this.#isMobile()) this.setStep(3);
 			target?.focus();
 		}
 	}
@@ -1365,16 +1371,14 @@ export class EngineManager extends EventTarget {
 			const target =
 				prevCol?.querySelector(".is-selected") ||
 				prevCol?.querySelector(".miller__item");
-			if (typeof window !== "undefined" && window.innerWidth <= 560)
-				this.setStep(2);
+			if (this.#isMobile()) this.setStep(2);
 			target?.focus();
 		} else if (currentColumn.classList.contains("miller__col--versions")) {
 			const prevCol = popover.querySelector(".miller__col--engines");
 			const target =
 				prevCol?.querySelector(".is-selected") ||
 				prevCol?.querySelector(".miller__item");
-			if (typeof window !== "undefined" && window.innerWidth <= 560)
-				this.setStep(1);
+			if (this.#isMobile()) this.setStep(1);
 			target?.focus();
 		}
 	}
@@ -1385,7 +1389,7 @@ export class EngineManager extends EventTarget {
 			return;
 		}
 		this.triggerItemSelection(currentColumn, currentItem.dataset.id);
-		if (typeof window !== "undefined" && window.innerWidth <= 560) {
+		if (this.#isMobile()) {
 			if (currentColumn.classList.contains("miller__col--engines")) {
 				this.setStep(2);
 			} else if (currentColumn.classList.contains("miller__col--versions")) {
@@ -1404,6 +1408,9 @@ export class EngineManager extends EventTarget {
 					(eng.storages || []).find((s) => s.isDefault) ||
 					eng.storages?.[0] ||
 					null;
+				this.explicitChoices.engine = true;
+				this.explicitChoices.version = false;
+				this.explicitChoices.storage = false;
 				this.renderMillerColumns({
 					colClass: ".miller__col--engines",
 					id: eng.id,
@@ -1413,6 +1420,12 @@ export class EngineManager extends EventTarget {
 			const ver = this.draftEngine?.versions.find((v) => v.id === itemId);
 			if (ver) {
 				this.draftVersion = ver;
+				this.explicitChoices.version = true;
+				this.draftStorage =
+					(this.draftEngine?.storages || []).find((s) => s.isDefault) ||
+					this.draftEngine?.storages?.[0] ||
+					null;
+				this.explicitChoices.storage = true;
 				this.renderMillerColumns({
 					colClass: ".miller__col--versions",
 					id: ver.id,
@@ -1424,6 +1437,7 @@ export class EngineManager extends EventTarget {
 			);
 			if (st) {
 				this.draftStorage = st;
+				this.explicitChoices.storage = true;
 				this.renderMillerColumns({
 					colClass: ".miller__col--storages",
 					id: st.id,
@@ -1437,9 +1451,7 @@ export class EngineManager extends EventTarget {
 		const clamped = Math.max(1, Math.min(3, step));
 		this.el.popover.dataset.step = String(clamped);
 
-		const isMobile = Boolean(
-			window?.matchMedia?.("(max-width: 560px)")?.matches,
-		);
+		const isMobile = this.#isMobile();
 		const cols = [
 			this.el.popover.querySelector(".miller__col--engines"),
 			this.el.popover.querySelector(".miller__col--versions"),
@@ -1464,6 +1476,9 @@ export class EngineManager extends EventTarget {
 				activeCol?.querySelector(".miller__item");
 			activeBtn?.focus({ preventScroll: true });
 		}
+
+		const previewEl = this.el.popover.querySelector(".miller__preview");
+		this.#updateMillerFooter(previewEl);
 	}
 
 	togglePicker() {
@@ -1477,6 +1492,12 @@ export class EngineManager extends EventTarget {
 	openPicker() {
 		if (this.catalog.length === 0) return;
 		this.isPickerOpen = true;
+		const isMobile = this.#isMobile();
+		this.explicitChoices = {
+			engine: !isMobile,
+			version: !isMobile,
+			storage: !isMobile,
+		};
 		if (this.el.popover) {
 			this.el.popover.hidden = false;
 			this.setStep(1);
@@ -1510,28 +1531,38 @@ export class EngineManager extends EventTarget {
 			(engine.storages || []).find((s) => s.isDefault) ||
 			engine.storages?.[0] ||
 			null;
+		this.explicitChoices.engine = true;
+		this.explicitChoices.version = false;
+		this.explicitChoices.storage = false;
 		this.renderMillerColumns({
 			colClass: ".miller__col--engines",
 			id: engine.id,
 		});
-		if (typeof window !== "undefined" && window.innerWidth <= 560) {
+		if (this.#isMobile()) {
 			this.setStep(2);
 		}
 	}
 
 	selectVersion(version) {
 		this.draftVersion = version;
+		this.explicitChoices.version = true;
+		this.draftStorage =
+			(this.draftEngine?.storages || []).find((s) => s.isDefault) ||
+			this.draftEngine?.storages?.[0] ||
+			null;
+		this.explicitChoices.storage = true;
 		this.renderMillerColumns({
 			colClass: ".miller__col--versions",
 			id: version.id,
 		});
-		if (typeof window !== "undefined" && window.innerWidth <= 560) {
+		if (this.#isMobile()) {
 			this.setStep(3);
 		}
 	}
 
 	selectStorage(storage) {
 		this.draftStorage = storage;
+		this.explicitChoices.storage = true;
 		this.renderMillerColumns({
 			colClass: ".miller__col--storages",
 			id: storage.id,
@@ -1562,6 +1593,14 @@ export class EngineManager extends EventTarget {
 	}
 
 	confirmDraftEngine() {
+		if (this.#isMobile()) {
+			const currentStep = Number.parseInt(
+				this.el.popover?.dataset.step || "1",
+				10,
+			);
+			if (currentStep < 3) return;
+		}
+
 		if (!this.draftEngine || !this.draftVersion || !this.draftStorage) return;
 
 		const target = {
@@ -1982,8 +2021,9 @@ export class EngineManager extends EventTarget {
 
 	#renderEnginesColumn(colEngines) {
 		colEngines.innerHTML = "";
+		const isMobile = this.#isMobile();
 		this.catalog.forEach((eng) => {
-			const isSelected = eng.id === this.draftEngine.id;
+			const isSelected = isMobile ? false : eng.id === this.draftEngine?.id;
 			const official = getOfficialFamilies();
 			const family = Object.hasOwn(official, eng.id)
 				? official[eng.id]
@@ -2010,8 +2050,11 @@ export class EngineManager extends EventTarget {
 
 	#renderVersionsColumn(colVersions) {
 		colVersions.innerHTML = "";
+		const isMobile = this.#isMobile();
 		this.draftEngine.versions.forEach((v) => {
-			const isSelected = this.draftVersion && v.id === this.draftVersion.id;
+			const isSelected = isMobile
+				? false
+				: Boolean(this.draftVersion && v.id === this.draftVersion.id);
 			const previewStyle = getEngineStyle(
 				{
 					engineId: this.draftEngine.id,
@@ -2053,7 +2096,9 @@ export class EngineManager extends EventTarget {
 	#renderStoragesColumn(colStorages) {
 		colStorages.innerHTML = "";
 		(this.draftEngine?.storages || []).forEach((s) => {
-			const isSelected = this.draftStorage && s.id === this.draftStorage.id;
+			const isSelected = Boolean(
+				this.draftStorage && s.id === this.draftStorage.id,
+			);
 			const previewStyle = getEngineStyle(
 				{
 					engineId: this.draftEngine.id,
@@ -2095,28 +2140,58 @@ export class EngineManager extends EventTarget {
 	}
 
 	#updateMillerFooter(previewEl) {
-		const isCurrentActive = this.activeEngines.some(
-			(e) =>
-				e.engineId === this.draftEngine.id &&
-				e.versionId === this.draftVersion?.id &&
-				e.storageId === this.draftStorage?.id,
+		const isMobile = this.#isMobile();
+		const currentStep = Number.parseInt(
+			this.el.popover?.dataset.step || "1",
+			10,
+		);
+		const isLastStep = !isMobile || currentStep === 3;
+
+		const isCurrentActive = Boolean(
+			this.draftEngine &&
+				this.draftVersion &&
+				this.draftStorage &&
+				this.activeEngines.some(
+					(e) =>
+						e.engineId === this.draftEngine.id &&
+						e.versionId === this.draftVersion?.id &&
+						e.storageId === this.draftStorage?.id,
+				),
+		);
+
+		const previewLabel = this.el.popover?.querySelector(
+			".miller__preview-label",
 		);
 
 		if (this.el.confirmBtn) {
-			if (isCurrentActive) {
+			if (!isLastStep) {
+				this.el.confirmBtn.disabled = true;
+				this.el.confirmBtn.setAttribute("aria-disabled", "true");
+				this.el.confirmBtn.textContent = "Add";
+				this.el.confirmBtn.classList.remove("miller__confirm-btn--remove");
+				this.el.confirmBtn.title =
+					currentStep === 1
+						? "Please select an engine to continue"
+						: "Please select a version to continue";
+				this.el.confirmBtn.setAttribute("aria-label", this.el.confirmBtn.title);
+			} else if (isCurrentActive) {
 				this.#updateMillerRemoveButton();
 			} else {
 				this.#updateMillerAddButton();
 			}
 		}
 
-		if (
-			previewEl &&
-			this.draftEngine &&
-			this.draftVersion &&
-			this.draftStorage
-		) {
-			previewEl.textContent = `${this.draftEngine.name} · ${this.draftVersion.label} · ${this.draftStorage.label}`;
+		if (previewEl) {
+			if (isMobile && currentStep === 1) {
+				if (previewLabel) previewLabel.textContent = "Step 1/3:";
+				previewEl.textContent = "Choose an engine";
+			} else if (isMobile && currentStep === 2) {
+				if (previewLabel) previewLabel.textContent = "Step 2/3:";
+				previewEl.textContent = `${this.draftEngine?.name || "Engine"} · Choose a version`;
+			} else if (this.draftEngine && this.draftVersion && this.draftStorage) {
+				if (previewLabel) previewLabel.textContent = "Engine:";
+				previewEl.textContent = `${this.draftEngine.name} · ${this.draftVersion.label} · ${this.draftStorage.label}`;
+			}
 		}
 	}
 
