@@ -658,28 +658,37 @@ if args.coreseCommits:
             shutil.rmtree(commit_dir)
         os.makedirs(commit_dir)
 
+        corese_repo = os.path.join(commit_dir, "corese-core")
         try:
             subprocess.run(
                 ["git", "clone", "https://github.com/corese-stack/corese-core"],
                 cwd=commit_dir, check=True
             )
             subprocess.run(
+                ["git", "fetch", "origin", "feature/corese-next"],
+                cwd=corese_repo, check=True
+            )
+            subprocess.run(
                 ["git", "checkout", commit_hash],
-                cwd=os.path.join(commit_dir, "corese-core"), check=True
+                cwd=corese_repo, check=True
             )
             corese_gradlew = os.path.join(
-                commit_dir, "corese-core",
+                corese_repo,
                 "gradlew.bat" if sys.platform == "win32" else "gradlew"
             )
             subprocess.run(
-                [corese_gradlew, "shadowJar"],
-                cwd=os.path.join(commit_dir, "corese-core"), check=True
+                [corese_gradlew, "shadowJar", "--no-daemon", "-q"],
+                cwd=corese_repo, check=True
             )
         except subprocess.CalledProcessError as e:
-            print(f"Error building commit {commit_hash}: {e}")
+            print(f"Error building commit {commit_hash}: {e}", file=sys.stderr)
             continue
 
-        libs_path   = os.path.join(commit_dir, "corese-core", "build", "libs") + os.sep
+        libs_path   = os.path.join(corese_repo, "build", "libs") + os.sep
+        jars = glob.glob(os.path.join(corese_repo, "build", "libs", "*.jar"))
+        if not jars:
+            print(f"No JAR produced for commit {commit_hash}, skipping.", file=sys.stderr)
+            continue
         engine_name = f"corese.commit.{commit_hash[:8]}"
         ds_files    = []
         for ds in dataset_names:

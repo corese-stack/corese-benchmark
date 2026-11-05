@@ -66,7 +66,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DEFAULT_CORESE_NEXT_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
+  DEFAULT_CORESE_NEXT_COMMIT: 9422e9c2c86d5304185eb231589b529aefae10c0
   BASE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
   ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm
 
@@ -201,7 +201,9 @@ jobs:
             || fail "datasets, engines and scales must not be empty"
 
           EXTRA=()
-          [ -n "$COMMIT" ]                 && EXTRA+=("--coreseCommits=$COMMIT")
+          if [ -n "$COMMIT" ] && ! [[ "$ENGINES" =~ corese\.next ]]; then
+            EXTRA+=("--coreseCommits=$COMMIT")
+          fi
           [ "$INFERENCE" = "true" ]        && EXTRA+=("--inference")
           [ -n "$CACHED" ]                 && EXTRA+=("--cached-engines=$CACHED")
           [ "$FORCE" = "true" ]            && EXTRA+=("--force-all-engines")
@@ -213,6 +215,7 @@ jobs:
             echo "engines=$ENGINES"
             echo "datasets=$DATASETS"
             echo "scales=$SCALES"
+            echo "commit=$COMMIT"
             echo "trigger=$TRIGGER"
             echo "extra_args=${EXTRA[*]:-}"
           } >> "$GITHUB_OUTPUT"
@@ -246,7 +249,7 @@ jobs:
       - name: Build corese.next JAR
         if: contains(steps.params.outputs.engines, 'corese.next')
         env:
-          CORESE_COMMIT: ${{ env.DEFAULT_CORESE_NEXT_COMMIT }}
+          CORESE_COMMIT: ${{ steps.params.outputs.commit || env.DEFAULT_CORESE_NEXT_COMMIT }}
         run: |
           CORESE_DIR="$HOME/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then
