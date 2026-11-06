@@ -113,7 +113,7 @@ public class BenchmarkHarness {
      * Returns one QueryResult per (engine, query).
      */
     public List<QueryResult> runQueryBenchmark(String datasetDir, List<String> queries) throws Exception {
-        File[] files = discoverFiles(datasetDir);
+        File[] files = discoverQueryFiles(datasetDir);
 
         List<QueryResult> results = new ArrayList<>();
         driver.init();
@@ -306,6 +306,24 @@ public class BenchmarkHarness {
                 buffers.statuses()[rep]  = STATUS_ERROR;
             }
         }
+    }
+
+    /**
+     * Discovers files for the query benchmark: prefers .nt files if present (to avoid loading
+     * multiple formats of the same dataset), falls back to all supported files otherwise.
+     */
+    private File[] discoverQueryFiles(String datasetDir) {
+        File dir = new File(datasetDir);
+        if (!dir.exists() || !dir.isDirectory()) {
+            throw new IllegalArgumentException("Dataset directory does not exist or is not a directory: " + datasetDir);
+        }
+        File[] ntFiles = dir.listFiles(f -> f.isFile() && f.getName().endsWith(".nt") && driver.supports(f));
+        if (ntFiles != null && ntFiles.length > 0) {
+            Arrays.sort(ntFiles);
+            log.info("  Query benchmark: using {} .nt file(s) (skipping other formats)", ntFiles.length);
+            return ntFiles;
+        }
+        return discoverFiles(datasetDir);
     }
 
     /**

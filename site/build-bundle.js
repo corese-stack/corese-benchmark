@@ -47,6 +47,7 @@ for (const file of FILES) {
 
   const cleaned = src
     .split('\n')
+    .map(line => line.replace(/\r$/, ''))          // normalize CRLF → LF (Windows)
     .filter(line => !line.match(/^'use strict';?$/))
     .filter(line => !line.match(/^import .+from .+;$/))
     .filter(line => !line.match(/^export default \w+;$/))

@@ -605,6 +605,7 @@ function buildLoadingTable(container, runs) {
     { label: 'Engine',      key: r => getEngineLabel(r.engine),               fmt: r => getEngineLabel(r.engine),                                                      cls: '' },
     { label: 'Dataset',     key: r => r.dataset,                                 fmt: r => r.dataset,                                                                     cls: '' },
     { label: 'File',        key: r => r.file || '',                              fmt: r => r.file || '\u2014',                                                            cls: '' },
+    { label: 'Format',      key: r => getFileFormat(r.file),                     fmt: r => getFileFormat(r.file) || '\u2014',                                              cls: 'font-mono' },
     { label: 'Triples',     key: r => r.triples || 0,                           fmt: r => fmt(r.triples),                                                                cls: 'text-right font-mono' },
     { label: 'Median Time', key: r => r.loadingTimeMs || 0,                     fmt: r => fmtMs(r.loadingTimeMs),                                                        cls: 'text-right font-mono' },
     { label: 'Throughput',  key: r => r.throughputTriplesPerSec || 0,           fmt: r => fmtThroughput(r.throughputTriplesPerSec),                                       cls: 'text-right font-mono' },
@@ -690,6 +691,15 @@ function buildLoadingTable(container, runs) {
   container.appendChild(wrapper);
 }
 
+function getFileFormat(file) {
+  if (!file) return '';
+  if (file.endsWith('.nt'))   return 'NT';
+  if (file.endsWith('.ttl'))  return 'Turtle';
+  if (file.endsWith('.trig')) return 'TriG';
+  if (file.endsWith('.nq'))   return 'NQuads';
+  return '';
+}
+
 /**
  * Build a loading table preceded by an All / Best-per-file filter bar.
  * @param {HTMLElement} container
@@ -709,17 +719,21 @@ function buildLoadingTableWithFilter(container, allRuns) {
   }
 
   let tableFilter = 'all';
+  let formatFilter = 'all';
 
-  const LOADING_FILTERS = [
-    { key: 'all',  label: 'All Results' },
-    { key: 'best', label: '\ud83c\udfc6 Best per File' },
-  ];
+  const formats = [...new Set(allRuns.map(r => getFileFormat(r.file)).filter(Boolean))].sort();
+  const hasMultipleFormats = formats.length > 1;
 
   const filterBar = document.createElement('div');
   filterBar.className = 'table-filter-bar';
 
   const tableContainer = document.createElement('div');
 
+  // All / Best filter
+  const LOADING_FILTERS = [
+    { key: 'all',  label: 'All Results' },
+    { key: 'best', label: '\ud83c\udfc6 Best per File' },
+  ];
   const btns = LOADING_FILTERS.map(f => {
     const btn = document.createElement('button');
     btn.className = 'table-filter-btn' + (f.key === 'all' ? ' active' : '');
@@ -734,8 +748,30 @@ function buildLoadingTableWithFilter(container, allRuns) {
     return btn;
   });
 
+  // Format filter (only shown when multiple formats exist)
+  if (hasMultipleFormats) {
+    const sep = document.createElement('span');
+    sep.className = 'table-filter-sep';
+    filterBar.appendChild(sep);
+
+    const formatBtns = [{ key: 'all', label: 'All Formats' }, ...formats.map(f => ({ key: f, label: f }))].map(f => {
+      const btn = document.createElement('button');
+      btn.className = 'table-filter-btn' + (f.key === 'all' ? ' active' : '');
+      btn.textContent = f.label;
+      btn.addEventListener('click', () => {
+        formatFilter = f.key;
+        formatBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        render();
+      });
+      filterBar.appendChild(btn);
+      return btn;
+    });
+  }
+
   function render() {
-    const runs = tableFilter === 'best' ? getBest(allRuns) : allRuns;
+    let runs = tableFilter === 'best' ? getBest(allRuns) : allRuns;
+    if (formatFilter !== 'all') runs = runs.filter(r => getFileFormat(r.file) === formatFilter);
     buildLoadingTable(tableContainer, runs);
   }
 

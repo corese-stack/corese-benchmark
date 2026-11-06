@@ -113,6 +113,15 @@ application {
     mainClass = 'fr.inria.corese.benchmark.Main'
 }
 
+task convertDatasets(type: JavaExec) {
+    group = 'benchmark'
+    description = 'Convert N-Triples benchmark datasets to Turtle and TriG formats'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'fr.inria.corese.benchmark.ConvertDatasets'
+    workingDir = projectDir
+    jvmArgs = ['-Xmx4g']
+}
+
 task runBenchmark(type: JavaExec) {
     group = 'benchmark'
     description = 'Run the benchmark harness'
