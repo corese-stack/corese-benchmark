@@ -164,9 +164,9 @@ public final class BenchmarkReport {
                 pw.println("engine,dataset,queryId,queryCategory,medianMs,medianTtfrMs,heapDeltaMb,rowCount,resultHash,status," + qRepHeaders);
                 for (QueryResult r : queryResults) {
                     String reps = Arrays.stream(r.repetitionsMs())
-                        .mapToObj(String::valueOf)
+                        .mapToObj(v -> String.format(Locale.US, "%.3f", v))
                         .collect(Collectors.joining(","));
-                    pw.printf(Locale.US, "%s,%s,%s,%s,%d,%d,%.3f,%d,%s,%s,%s%n",
+                    pw.printf(Locale.US, "%s,%s,%s,%s,%.3f,%.3f,%.3f,%d,%s,%s,%s%n",
                         r.engine(), r.dataset(), r.queryId(), r.queryCategory(),
                         r.medianMs(), r.medianTtfrMs(), r.heapDeltaMb(),
                         r.rowCount(), r.resultHash(), r.status(), reps);

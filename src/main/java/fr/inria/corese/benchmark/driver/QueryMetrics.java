@@ -3,23 +3,31 @@ package fr.inria.corese.benchmark.driver;
 /**
  * Snapshot of metrics collected during a single SPARQL query execution.
  *
- * @param totalMs        total wall-clock time in milliseconds (first result to last result + parse + plan)
+ * @param totalMs        total wall-clock time in milliseconds (fractional for sub-ms precision)
  * @param ttfrMs         time-to-first-result in milliseconds;
  *                       equals {@code totalMs} for engines that materialise results eagerly (e.g. Corese 4.x);
- *                       {@code -1} if the query failed or produced no results before timeout
+ *                       {@code -1.0} if the query failed or produced no results before timeout
  * @param resultCount    number of result rows/triples returned; {@code -1} if not applicable or not counted
  * @param heapDeltaBytes heap memory delta in bytes (used-after minus used-before, without forced GC);
  *                       may be negative if GC ran during query execution
  * @param resultHash     canonical SHA-256 hash of result bindings (empty string if not computed)
  */
 public record QueryMetrics(
-    long totalMs,
-    long ttfrMs,
+    double totalMs,
+    double ttfrMs,
     long resultCount,
     long heapDeltaBytes,
     String resultHash
 ) {
-    public QueryMetrics(long totalMs, long ttfrMs, long resultCount, long heapDeltaBytes) {
+    public QueryMetrics(double totalMs, double ttfrMs, long resultCount, long heapDeltaBytes) {
         this(totalMs, ttfrMs, resultCount, heapDeltaBytes, "");
+    }
+
+    public QueryMetrics(long totalMs, long ttfrMs, long resultCount, long heapDeltaBytes) {
+        this((double) totalMs, (double) ttfrMs, resultCount, heapDeltaBytes, "");
+    }
+
+    public QueryMetrics(long totalMs, long ttfrMs, long resultCount, long heapDeltaBytes, String resultHash) {
+        this((double) totalMs, (double) ttfrMs, resultCount, heapDeltaBytes, resultHash);
     }
 }

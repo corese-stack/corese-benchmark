@@ -68,6 +68,38 @@ public interface TripleStoreDriver {
         return new QueryMetrics(total, total, -1L, heapDelta);
     }
 
+    /**
+     * Executes an independent validation pass to compute the canonical SHA-256 hash of result bindings.
+     * Executed strictly outside the performance-timed block to prevent cryptographic hashing
+     * overhead from distorting query latency measurements.
+     *
+     * @param sparql the SPARQL query string
+     * @return canonical SHA-256 hash of result bindings (empty string if unavailable or not applicable)
+     * @throws Exception if validation execution fails
+     */
+    default String computeResultHash(String sparql) throws Exception {
+        return validateResult(sparql).hash();
+    }
+
+    /**
+     * Executes an independent validation pass returning both the canonical SHA-256 hash and
+     * a flag indicating if blank nodes are present in the solution sequence.
+     *
+     * @param sparql the SPARQL query string
+     * @return validation result containing canonical hash and blank node flag
+     * @throws Exception if validation fails
+     */
+    default ValidationResult validateResult(String sparql) throws Exception {
+        return ValidationResult.EMPTY;
+    }
+
+    /**
+     * Validation outcome containing canonical hash and blank node detection flag.
+     */
+    record ValidationResult(String hash, boolean hasBlankNodes) {
+        public static final ValidationResult EMPTY = new ValidationResult("", false);
+    }
+
     /** Returns current used heap in bytes without a forced GC. */
     private static long usedHeapBytes() {
         Runtime rt = Runtime.getRuntime();

@@ -36,6 +36,7 @@ public final class SparqlResultHasher {
     private final MessageDigest streamingDigest;
     private final List<byte[]> bufferedRows = new ArrayList<>();
     private long rowCount;
+    private boolean hasBlankNodes;
 
     /** Unordered mode: rows are sorted before hashing. */
     public SparqlResultHasher() {
@@ -60,6 +61,14 @@ public final class SparqlResultHasher {
 
     /** Adds a row whose values are already ordered by variable name; null elements are unbound. */
     public SparqlResultHasher addRow(List<String> values) {
+        if (values != null) {
+            for (String val : values) {
+                if (val != null && val.startsWith("_:")) {
+                    hasBlankNodes = true;
+                    break;
+                }
+            }
+        }
         byte[] encoded = encode(values == null ? List.of() : values);
         if (ordered) {
             streamingDigest.update(encoded);
@@ -72,6 +81,11 @@ public final class SparqlResultHasher {
 
     public long getRowCount() {
         return rowCount;
+    }
+
+    /** Returns whether any blank node identifier (starting with {@code "_:"}) was encountered. */
+    public boolean hasBlankNodes() {
+        return hasBlankNodes;
     }
 
     /** Lowercase hex SHA-256 of the rows so far; repeatable, rows may be added afterwards. */
@@ -110,9 +124,29 @@ public final class SparqlResultHasher {
             writeInt(out, NULL_MARKER);
             return;
         }
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        String normalized = normalizeTerm(value);
+        byte[] bytes = normalized.getBytes(StandardCharsets.UTF_8);
         writeInt(out, bytes.length);
         out.writeBytes(bytes);
+    }
+
+    private static String normalizeTerm(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (Character.isDigit(first) || first == '-' || first == '+') {
+            try {
+                java.math.BigDecimal bd = new java.math.BigDecimal(value);
+                if (bd.compareTo(java.math.BigDecimal.ZERO) == 0) {
+                    return "0";
+                }
+                return bd.stripTrailingZeros().toPlainString();
+            } catch (NumberFormatException ignored) {
+                // Not a valid number, keep original string
+            }
+        }
+        return value;
     }
 
     private static void writeInt(ByteArrayOutputStream out, int v) {

@@ -268,14 +268,8 @@ def gradle_build(extra_args=None):
         raise
 
 
-QUERIES_FILES = {
-    "bowlogna": os.path.join(project_dir, "src", "main", "resources",
-                             "Bowlogna_bench_data", "bowlogna-queries.txt"),
-    "lubm":     os.path.join(project_dir, "src", "main", "resources",
-                             "lubm", "lubm-queries.txt"),
-    "bsbm":     os.path.join(project_dir, "src", "main", "resources",
-                             "bsbm", "bsbm-queries.txt"),
-}
+# Query workloads will be provided via the new versioned catalogue (Corese Benchmark Suite v1.0)
+QUERIES_FILES = {}
 
 
 def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_props=None):
@@ -746,4 +740,5 @@ if latest:
             save_baseline(merged_baseline, args.baseline)
 
 else:
-    print("No JSON report found in out/")
+    print("[ERROR] No JSON report found or generated in out/ — benchmark failed", file=sys.stderr)
+    sys.exit(1)

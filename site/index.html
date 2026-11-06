@@ -140,18 +140,15 @@
 
   <nav class="benchmark-nav" aria-label="Benchmarks">
     <div class="benchmark-nav__inner">
-      <div class="benchmark-tabs" role="tablist" aria-label="Benchmark Workloads" id="benchmark-tabs">
-        <button type="button" role="tab" class="benchmark-tab is-active" id="tab-bsbm" aria-selected="true" aria-controls="benchmark-panel" tabindex="0" data-view="bsbm">
-          BSBM
+      <div class="benchmark-tabs" role="tablist" aria-label="Benchmark Capabilities" id="benchmark-tabs">
+        <button type="button" role="tab" class="benchmark-tab is-active" id="tab-overview" aria-selected="true" aria-controls="benchmark-panel" tabindex="0" data-view="overview">
+          Overview
         </button>
-        <button type="button" role="tab" class="benchmark-tab" id="tab-lubm" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="lubm">
-          LUBM
+        <button type="button" role="tab" class="benchmark-tab" id="tab-loading" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="loading">
+          RDF Loading
         </button>
-        <button type="button" role="tab" class="benchmark-tab" id="tab-bowlogna" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="bowlogna">
-          Bowlogna
-        </button>
-        <button type="button" role="tab" class="benchmark-tab" id="tab-dbpedia" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="dbpedia">
-          DBpedia
+        <button type="button" role="tab" class="benchmark-tab" id="tab-sparql" aria-selected="false" aria-controls="benchmark-panel" tabindex="-1" data-view="sparql">
+          SPARQL Queries
         </button>
         <span class="benchmark-tabs__indicator" aria-hidden="true" id="benchmark-tabs-indicator"></span>
       </div>
@@ -159,7 +156,7 @@
   </nav>
 
   <main class="dashboard-main" id="dashboard-main">
-    <section class="benchmark-panel" id="benchmark-panel" role="tabpanel" aria-labelledby="tab-bsbm"></section>
+    <section class="benchmark-panel" id="benchmark-panel" role="tabpanel" aria-labelledby="tab-overview"></section>
   </main>
 
   <script type="module" src="./js/main.js?v=37"></script>

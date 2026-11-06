@@ -75,54 +75,82 @@ public class CoreseDriver implements TripleStoreDriver {
     @Override
     public long query(String sparql) throws Exception {
         QueryProcess exec = QueryProcess.create(graph);
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
         exec.query(sparql);
-        return System.currentTimeMillis() - start;
+        return (System.nanoTime() - start) / 1_000_000L;
     }
 
     /**
      * Executes a SPARQL query and returns metrics.
      * Corese 4.x {@code QueryProcess.query()} materialises all results eagerly,
      * so TTFR equals total execution time.
+     * Validation hash computation is performed separately in {@link #computeResultHash(String)}
+     * to eliminate cryptographic hashing distortion from latency measurements.
      */
     @Override
     public QueryMetrics queryWithMetrics(String sparql) throws Exception {
         long heapBefore = MetricsCollector.usedHeapBytes();
         QueryProcess exec = QueryProcess.create(graph);
-        long start = System.currentTimeMillis();
-        var res = exec.query(sparql);
-        long total = System.currentTimeMillis() - start;
+        long startNs = System.nanoTime();
+        Mappings maps = exec.query(sparql);
+        long totalNs = System.nanoTime() - startNs;
         long count = -1L;
-        String hash = "";
 
-        if (res instanceof Mappings maps) {
-            count = maps.size();
+        if (maps != null) {
+            count = maps.getGraph() != null ? maps.getGraph().size() : maps.size();
+        }
+
+        double totalMs = totalNs / 1_000_000.0;
+        return new QueryMetrics(totalMs, totalMs, count, MetricsCollector.usedHeapBytes() - heapBefore, "");
+    }
+
+    @Override
+    public ValidationResult validateResult(String sparql) throws Exception {
+        QueryProcess exec = QueryProcess.create(graph);
+        Object queryResult = exec.query(sparql);
+        if (queryResult instanceof Mappings maps) {
             SparqlResultHasher hasher = new SparqlResultHasher();
             List<String> sortedVarNames = maps.getSelect().stream()
                     .map(Node::getLabel)
                     .sorted()
                     .toList();
             for (Mapping m : maps) {
-                List<String> row = new ArrayList<>(sortedVarNames.size());
-                for (String varName : sortedVarNames) {
-                    Node val = m.getNode(varName);
-                    row.add(val != null ? val.getLabel() : null);
-                }
-                hasher.addRow(row);
+                hasher.addRow(extractMappingRow(m, sortedVarNames));
             }
-            hash = hasher.computeHash();
+            return new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
         }
-        return new QueryMetrics(total, total, count, MetricsCollector.usedHeapBytes() - heapBefore, hash);
+        return ValidationResult.EMPTY;
+    }
+
+    private static List<String> extractMappingRow(Mapping m, List<String> sortedVarNames) {
+        List<String> row = new ArrayList<>(sortedVarNames.size());
+        for (String varName : sortedVarNames) {
+            Node val = m.getNode(varName);
+            if (val == null) {
+                row.add(null);
+            } else if (val.isBlank()) {
+                String lbl = val.getLabel();
+                row.add(lbl != null && lbl.startsWith("_:") ? lbl : "_:" + lbl);
+            } else {
+                row.add(val.getLabel());
+            }
+        }
+        return row;
+    }
+
+    @Override
+    public String computeResultHash(String sparql) throws Exception {
+        return validateResult(sparql).hash();
     }
 
     /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */
     @Override
     public long[] queryWithCount(String sparql) throws Exception {
         QueryProcess exec = QueryProcess.create(graph);
-        long start = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         var maps = exec.query(sparql);
-        long elapsed = System.currentTimeMillis() - start;
-        return new long[]{ elapsed, maps != null ? maps.size() : -1L };
+        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000L;
+        return new long[]{ elapsedMs, maps instanceof Mappings m ? m.size() : -1L };
     }
 
     /** @return number of triples in the graph */

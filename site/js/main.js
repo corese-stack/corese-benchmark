@@ -3,7 +3,6 @@
  */
 
 import { loadBenchmarkReport } from "./api.js";
-import { BenchmarkDatasetView } from "./components/dataset-view.js";
 import { engineManager } from "./engines.js";
 import {
 	getCurrentView,
@@ -30,8 +29,7 @@ class DashboardApp {
 			? document.getElementById("benchmark-tabs")
 			: null;
 	unsubscribeEngines = null;
-	currentView = "bsbm";
-	viewsCache = new Map();
+	currentView = "overview";
 
 	destroy() {
 		if (this.#abortController) {
@@ -265,21 +263,8 @@ class DashboardApp {
 	}
 
 	renderActivePage() {
-		if (!this.panelContainer || !this.data) return;
-		const selectedEngines = engineManager.getSelectedEngines();
-
-		if (!this.viewsCache.has(this.currentView)) {
-			this.viewsCache.set(
-				this.currentView,
-				new BenchmarkDatasetView(this.currentView),
-			);
-		}
-
-		const viewInstance = this.viewsCache.get(this.currentView);
-		viewInstance.render(this.panelContainer, {
-			data: this.data,
-			activeEngines: selectedEngines,
-		});
+		if (!this.panelContainer) return;
+		this.panelContainer.replaceChildren();
 	}
 }
 

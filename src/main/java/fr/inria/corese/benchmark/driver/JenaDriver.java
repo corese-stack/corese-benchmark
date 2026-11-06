@@ -127,7 +127,7 @@ public class JenaDriver implements TripleStoreDriver {
      */
     @Override
     public long query(String sparql) {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
         Txn.executeRead(dataset, () -> {
             try (QueryExecution qe = QueryExecution.dataset(dataset).query(sparql).build()) {
                 if (qe.getQuery().isSelectType()) {
@@ -142,21 +142,63 @@ public class JenaDriver implements TripleStoreDriver {
                 }
             }
         });
-        return System.currentTimeMillis() - start;
+        return (System.nanoTime() - start) / 1_000_000L;
     }
 
     /**
      * Executes a SPARQL query and returns full metrics including TTFR and heap delta.
      * For SELECT queries, TTFR is recorded after the first {@code ResultSet.next()} call.
      * For other query forms, TTFR equals total time (no streaming API).
+     * Validation hash computation is performed separately in {@link #computeResultHash(String)}
+     * to eliminate cryptographic hashing distortion from latency measurements.
      */
     @Override
     public QueryMetrics queryWithMetrics(String sparql) {
         long heapBefore = MetricsCollector.usedHeapBytes();
-        long start = System.currentTimeMillis();
-        long[] resultHolder = new long[]{-1L, -1L}; // [ttfr, count]
-        String[] hashHolder = new String[]{""};
+        long startNs = System.nanoTime();
+        long[] resultHolder = new long[]{-1L, -1L}; // [ttfrNs, count]
 
+        Txn.executeRead(dataset, () -> {
+            try (QueryExecution qe = QueryExecution.dataset(dataset).query(sparql).build()) {
+                if (qe.getQuery().isSelectType()) {
+                    ResultSet rs = qe.execSelect();
+                    long count = 0;
+                    if (rs.hasNext()) {
+                        rs.next();
+                        count++;
+                        resultHolder[0] = System.nanoTime() - startNs;
+                        while (rs.hasNext()) {
+                            rs.next();
+                            count++;
+                        }
+                    } else {
+                        resultHolder[0] = System.nanoTime() - startNs;
+                    }
+                    resultHolder[1] = count;
+                } else if (qe.getQuery().isConstructType()) {
+                    qe.execConstruct();
+                    resultHolder[0] = System.nanoTime() - startNs;
+                } else if (qe.getQuery().isAskType()) {
+                    qe.execAsk();
+                    resultHolder[0] = System.nanoTime() - startNs;
+                } else if (qe.getQuery().isDescribeType()) {
+                    qe.execDescribe();
+                    resultHolder[0] = System.nanoTime() - startNs;
+                }
+            }
+        });
+
+        long totalNs = System.nanoTime() - startNs;
+        long ttfrNs = resultHolder[0] < 0 ? totalNs : resultHolder[0];
+        long count = resultHolder[1];
+        double totalMs = totalNs / 1_000_000.0;
+        double ttfrMs = ttfrNs / 1_000_000.0;
+        return new QueryMetrics(totalMs, ttfrMs, count, MetricsCollector.usedHeapBytes() - heapBefore, "");
+    }
+
+    @Override
+    public ValidationResult validateResult(String sparql) {
+        final ValidationResult[] holder = new ValidationResult[]{ValidationResult.EMPTY};
         Txn.executeRead(dataset, () -> {
             try (QueryExecution qe = QueryExecution.dataset(dataset).query(sparql).build()) {
                 if (qe.getQuery().isSelectType()) {
@@ -164,39 +206,20 @@ public class JenaDriver implements TripleStoreDriver {
                     List<String> varNames = new ArrayList<>(rs.getResultVars());
                     Collections.sort(varNames);
                     SparqlResultHasher hasher = new SparqlResultHasher();
-                    long count = 0;
-                    if (rs.hasNext()) {
+                    while (rs.hasNext()) {
                         QuerySolution qs = rs.next();
-                        count++;
                         addJenaRow(hasher, qs, varNames);
-                        resultHolder[0] = System.currentTimeMillis() - start;
-                        while (rs.hasNext()) {
-                            qs = rs.next();
-                            count++;
-                            addJenaRow(hasher, qs, varNames);
-                        }
-                    } else {
-                        resultHolder[0] = System.currentTimeMillis() - start;
                     }
-                    resultHolder[1] = count;
-                    hashHolder[0] = hasher.computeHash();
-                } else if (qe.getQuery().isConstructType()) {
-                    qe.execConstruct();
-                    resultHolder[0] = System.currentTimeMillis() - start;
-                } else if (qe.getQuery().isAskType()) {
-                    qe.execAsk();
-                    resultHolder[0] = System.currentTimeMillis() - start;
-                } else if (qe.getQuery().isDescribeType()) {
-                    qe.execDescribe();
-                    resultHolder[0] = System.currentTimeMillis() - start;
+                    holder[0] = new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
                 }
             }
         });
+        return holder[0];
+    }
 
-        long total = System.currentTimeMillis() - start;
-        long ttfr = resultHolder[0] < 0 ? total : resultHolder[0];
-        long count = resultHolder[1];
-        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore, hashHolder[0]);
+    @Override
+    public String computeResultHash(String sparql) {
+        return validateResult(sparql).hash();
     }
 
     private static void addJenaRow(SparqlResultHasher hasher, QuerySolution qs, List<String> sortedVarNames) {
@@ -214,14 +237,16 @@ public class JenaDriver implements TripleStoreDriver {
             return node.asLiteral().getLexicalForm();
         } else if (node.isURIResource()) {
             return node.asResource().getURI();
+        } else if (node.isAnon()) {
+            return "_:" + node.asResource().getId().getLabelString();
         }
         return node.toString();
     }
 
-    /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
+    /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */
     @Override
     public long[] queryWithCount(String sparql) {
-        long start = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         long[] countHolder = new long[]{-1L};
 
         Txn.executeRead(dataset, () -> {
@@ -244,7 +269,8 @@ public class JenaDriver implements TripleStoreDriver {
             }
         });
 
-        return new long[]{ System.currentTimeMillis() - start, countHolder[0] };
+        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000L;
+        return new long[]{ elapsedMs, countHolder[0] };
     }
 
     /**

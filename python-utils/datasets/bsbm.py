@@ -3,9 +3,9 @@ Berlin SPARQL Benchmark (BSBM) — e-commerce synthetic dataset.
 Generator: bsbmtools (Java), generates N-Triples at configurable scale.
 
 Scale tiers (products):
-  small  →  1 000 products  (~  50 000 triples)
-  medium →  50 000 products  (~   1 M  triples)
-  large  → 500 000 products  (~  10 M  triples)
+  small  →  1 000 products  (~ 350 K triples, ~90 MB)
+  medium →  5 000 products  (~ 1.7 M triples, ~450 MB)
+  large  → 30 000 products  (~ 10.5 M triples, ~2.5 GB)
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ GENERATOR_JAR  = "bsbm.jar"   # inside bsbmtools-0.2/lib/
 
 SCALES = {
     "small":  1_000,
-    "medium": 50_000,
-    "large":  500_000,
+    "medium": 5_000,
+    "large":  30_000,
 }
 
 

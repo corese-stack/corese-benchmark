@@ -69,7 +69,9 @@ class PersistentStorageDriverTest {
             assertNotNull(metrics);
             assertEquals(2, metrics.resultCount(), "Result count should match");
             assertTrue(metrics.totalMs() >= 0);
-            assertFalse(metrics.resultHash().isBlank(), "Result hash should not be empty");
+
+            String hash = driver.computeResultHash(sparql);
+            assertFalse(hash.isBlank(), "Result hash should not be empty");
 
             // Test clear()
             driver.clear();

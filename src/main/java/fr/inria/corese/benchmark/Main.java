@@ -75,7 +75,7 @@ public class Main {
         List<QueryResult> allQueryResults = new ArrayList<>();
 
         BenchmarkProtocol proto = BenchmarkProtocol.fromOptions(opts.quick(), opts.queryTimeoutSecs());
-        boolean shouldIsolate = opts.isolateProcess() && opts.engines().size() > 1;
+        boolean shouldIsolate = opts.isolateProcess();
         for (String engineName : opts.engines()) {
             String cleanName = engineName.trim();
             if (shouldIsolate) {
@@ -95,7 +95,13 @@ public class Main {
         }
     }
 
-    private static void crossValidateQueries(List<QueryResult> queryResults) {
+    private enum PeerComparison {
+        MATCH,
+        MISMATCH,
+        INCONCLUSIVE
+    }
+
+    public static void crossValidateQueries(List<QueryResult> queryResults) {
         if (queryResults == null || queryResults.isEmpty()) {
             return;
         }
@@ -111,29 +117,62 @@ public class Main {
                 continue;
             }
             List<QueryResult> peers = grouped.get(qr.dataset() + "::" + qr.queryId());
-            if (hasPeerMismatch(qr, peers)) {
+            PeerComparison comparison = evaluatePeerComparison(qr, peers);
+            if (comparison == PeerComparison.MISMATCH) {
                 log.warn("Cross-engine mismatch detected for query {} on dataset {}: engine {} produced hash {} (rows: {})",
                     qr.queryId(), qr.dataset(), qr.engine(), qr.resultHash().substring(0, Math.min(8, qr.resultHash().length())), qr.rowCount());
-                queryResults.set(i, new QueryResult(
-                    qr.engine(), qr.dataset(), qr.queryId(), qr.queryCategory(),
-                    qr.medianMs(), qr.repetitionsMs(), qr.medianTtfrMs(), qr.repetitionsTtfrMs(),
-                    qr.heapDeltaMb(), qr.rowCount(), qr.resultHash(), "MISMATCH"
-                ));
+                queryResults.set(i, withStatus(qr, "MISMATCH"));
+            } else if (comparison == PeerComparison.INCONCLUSIVE) {
+                log.info("Cross-engine comparison inconclusive for query {} on dataset {}: blank nodes present with matching row counts (rows: {})",
+                    qr.queryId(), qr.dataset(), qr.rowCount());
+                queryResults.set(i, withStatus(qr, "INCONCLUSIVE"));
             }
         }
     }
 
-    private static boolean hasPeerMismatch(QueryResult qr, List<QueryResult> peers) {
+    private static PeerComparison evaluatePeerComparison(QueryResult qr, List<QueryResult> peers) {
         if (peers == null || peers.size() <= 1) {
-            return false;
+            return PeerComparison.MATCH;
         }
+        PeerComparison overall = PeerComparison.MATCH;
         for (QueryResult peer : peers) {
-            if (peer != qr && "PASS".equals(peer.status()) && !peer.resultHash().isEmpty()
-                    && (!peer.resultHash().equals(qr.resultHash()) || peer.rowCount() != qr.rowCount())) {
-                return true;
+            PeerComparison c = comparePeers(qr, peer);
+            if (c == PeerComparison.MISMATCH) {
+                return PeerComparison.MISMATCH;
+            }
+            if (c == PeerComparison.INCONCLUSIVE) {
+                overall = PeerComparison.INCONCLUSIVE;
             }
         }
-        return false;
+        return overall;
+    }
+
+    private static PeerComparison comparePeers(QueryResult qr, QueryResult peer) {
+        if (peer == qr || !"PASS".equals(peer.status())) {
+            return PeerComparison.MATCH;
+        }
+        if (qr.resultHash().isEmpty() || peer.resultHash().isEmpty() || peer.rowCount() < 0 || qr.rowCount() < 0) {
+            return PeerComparison.MATCH;
+        }
+        if (peer.rowCount() != qr.rowCount()) {
+            return PeerComparison.MISMATCH;
+        }
+        if (peer.resultHash().equals(qr.resultHash())) {
+            return PeerComparison.MATCH;
+        }
+        if (qr.hasBlankNodes() || peer.hasBlankNodes()) {
+            return PeerComparison.INCONCLUSIVE;
+        }
+        return PeerComparison.MISMATCH;
+    }
+
+    private static QueryResult withStatus(QueryResult qr, String newStatus) {
+        return new QueryResult(
+            qr.engine(), qr.dataset(), qr.queryId(), qr.queryCategory(),
+            qr.medianMs(), qr.repetitionsMs(), qr.medianTtfrMs(), qr.repetitionsTtfrMs(),
+            qr.heapDeltaMb(), qr.rowCount(), qr.resultHash(), newStatus,
+            qr.repetitionsStatuses(), qr.repetitionErrors(), qr.hasBlankNodes()
+        );
     }
 
     private static BenchmarkOptions parseOptions(String[] args) {
@@ -281,7 +320,7 @@ public class Main {
         if (!Files.exists(tmp)) {
             return;
         }
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         JsonNode root = mapper.readTree(tmp.toFile());
         if (root.has("loadingRuns")) {
             FileResult[] frs = mapper.treeToValue(root.get("loadingRuns"), FileResult[].class);

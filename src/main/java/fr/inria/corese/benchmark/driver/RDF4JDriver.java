@@ -262,59 +262,88 @@ public class RDF4JDriver implements TripleStoreDriver {
      */
     @Override
     public long query(String sparql) {
-        long start = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         try (RepositoryConnection conn = repository.getConnection()) {
             TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
             try (TupleQueryResult result = q.evaluate()) {
                 while (result.hasNext()) result.next();
             }
         }
-        return System.currentTimeMillis() - start;
+        return (System.nanoTime() - startNs) / 1_000_000L;
     }
 
     /**
      * Executes a SPARQL SELECT query and returns full metrics including TTFR and heap delta.
      * RDF4J {@code TupleQueryResult} is a lazy cursor — TTFR is recorded after the first
      * {@code result.next()} call.
+     * Validation hash computation is performed separately in {@link #computeResultHash(String)}
+     * to eliminate cryptographic hashing distortion from latency measurements.
      */
     @Override
     public QueryMetrics queryWithMetrics(String sparql) {
         long heapBefore = MetricsCollector.usedHeapBytes();
-        long start = System.currentTimeMillis();
-        long ttfr;
+        long startNs = System.nanoTime();
+        long ttfrNs = -1L;
         long count = 0;
-        String hash = "";
+        try (RepositoryConnection conn = repository.getConnection()) {
+            TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
+            try (TupleQueryResult result = q.evaluate()) {
+                if (result.hasNext()) {
+                    result.next();
+                    count++;
+                    ttfrNs = System.nanoTime() - startNs;
+                    while (result.hasNext()) {
+                        result.next();
+                        count++;
+                    }
+                } else {
+                    ttfrNs = System.nanoTime() - startNs;
+                }
+            }
+        }
+        long totalNs = System.nanoTime() - startNs;
+        if (ttfrNs < 0) ttfrNs = totalNs;
+        double totalMs = totalNs / 1_000_000.0;
+        double ttfrMs = ttfrNs / 1_000_000.0;
+        return new QueryMetrics(totalMs, ttfrMs, count, MetricsCollector.usedHeapBytes() - heapBefore, "");
+    }
+
+    @Override
+    public ValidationResult validateResult(String sparql) {
         try (RepositoryConnection conn = repository.getConnection()) {
             TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
             try (TupleQueryResult result = q.evaluate()) {
                 List<String> bindingNames = new ArrayList<>(result.getBindingNames());
                 java.util.Collections.sort(bindingNames);
                 SparqlResultHasher hasher = new SparqlResultHasher();
-                if (result.hasNext()) {
+                while (result.hasNext()) {
                     BindingSet bs = result.next();
-                    count++;
                     addRdf4jRow(hasher, bs, bindingNames);
-                    ttfr = System.currentTimeMillis() - start;
-                    while (result.hasNext()) {
-                        bs = result.next();
-                        count++;
-                        addRdf4jRow(hasher, bs, bindingNames);
-                    }
-                } else {
-                    ttfr = System.currentTimeMillis() - start;
                 }
-                hash = hasher.computeHash();
+                return new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
             }
+        } catch (Exception e) {
+            log.error("Error computing RDF4J result hash: {}", e.getMessage(), e);
+            throw new IllegalStateException("RDF4J validation failed: " + e.getMessage(), e);
         }
-        long total = System.currentTimeMillis() - start;
-        return new QueryMetrics(total, ttfr, count, MetricsCollector.usedHeapBytes() - heapBefore, hash);
+    }
+
+    @Override
+    public String computeResultHash(String sparql) {
+        return validateResult(sparql).hash();
     }
 
     private static void addRdf4jRow(SparqlResultHasher hasher, BindingSet bs, List<String> bindingNames) {
         List<String> values = new ArrayList<>(bindingNames.size());
         for (String name : bindingNames) {
             Value val = bs.getValue(name);
-            values.add(val != null ? val.stringValue() : null);
+            if (val == null) {
+                values.add(null);
+            } else if (val instanceof org.eclipse.rdf4j.model.BNode) {
+                values.add("_:" + val.stringValue());
+            } else {
+                values.add(val.stringValue());
+            }
         }
         hasher.addRow(values);
     }
@@ -322,16 +351,16 @@ public class RDF4JDriver implements TripleStoreDriver {
     /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */
     @Override
     public long[] queryWithCount(String sparql) {
-        long start = System.currentTimeMillis();
-        long count;
+        long startNs = System.nanoTime();
+        long count = 0;
         try (RepositoryConnection conn = repository.getConnection()) {
             TupleQuery q = conn.prepareTupleQuery(QueryLanguage.SPARQL, sparql);
             try (TupleQueryResult result = q.evaluate()) {
-                count = 0;
                 while (result.hasNext()) { result.next(); count++; }
             }
         }
-        return new long[]{ System.currentTimeMillis() - start, count };
+        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000L;
+        return new long[]{ elapsedMs, count };
     }
 
     /**

@@ -80,19 +80,36 @@ class QueryResultAccuracyTest {
     @Test
     @DisplayName("Cross-validation flags MISMATCH when results or counts differ")
     void testCrossEngineMismatchDetection() {
-        QueryResult q1 = new QueryResult("engineA", "ds", "q1", "PATTERN", 10, new long[]{10}, 10, new long[]{10}, 0.1, 10, "hashAAA", "PASS");
-        QueryResult q2 = new QueryResult("engineB", "ds", "q1", "PATTERN", 12, new long[]{12}, 12, new long[]{12}, 0.1, 8, "hashBBB", "PASS");
+        QueryResult q1 = new QueryResult("engineA", "ds", "q1", "PATTERN", 10.0, new double[]{10.0}, 10.0, new double[]{10.0}, 0.1, 10, "hashAAA", "PASS");
+        QueryResult q2 = new QueryResult("engineB", "ds", "q1", "PATTERN", 12.0, new double[]{12.0}, 12.0, new double[]{12.0}, 0.1, 8, "hashBBB", "PASS");
 
         List<QueryResult> list = new java.util.ArrayList<>(List.of(q1, q2));
-        // Trigger reflection or call Main via CLI / method
-        try {
-            java.lang.reflect.Method m = fr.inria.corese.benchmark.Main.class.getDeclaredMethod("crossValidateQueries", List.class);
-            m.setAccessible(true);
-            m.invoke(null, list);
-            assertEquals("MISMATCH", list.get(0).status());
-            assertEquals("MISMATCH", list.get(1).status());
-        } catch (Exception e) {
-            fail("Reflection call failed: " + e.getMessage());
-        }
+        fr.inria.corese.benchmark.Main.crossValidateQueries(list);
+        assertEquals("MISMATCH", list.get(0).status());
+        assertEquals("MISMATCH", list.get(1).status());
+    }
+
+    @Test
+    @DisplayName("Cross-validation flags INCONCLUSIVE when results contain blank nodes and hashes differ with matching counts")
+    void testCrossEngineInconclusiveBlankNodes() {
+        QueryResult q1 = new QueryResult("engineA", "ds", "q1", "PATTERN", 10.0, new double[]{10.0}, 10.0, new double[]{10.0}, 0.1, 10, "hashAAA", "PASS", new String[]{"PASS"}, List.of(""), true);
+        QueryResult q2 = new QueryResult("engineB", "ds", "q1", "PATTERN", 12.0, new double[]{12.0}, 12.0, new double[]{12.0}, 0.1, 10, "hashBBB", "PASS", new String[]{"PASS"}, List.of(""), true);
+
+        List<QueryResult> list = new java.util.ArrayList<>(List.of(q1, q2));
+        fr.inria.corese.benchmark.Main.crossValidateQueries(list);
+        assertEquals("INCONCLUSIVE", list.get(0).status());
+        assertEquals("INCONCLUSIVE", list.get(1).status());
+    }
+
+    @Test
+    @DisplayName("Cross-validation flags MISMATCH when blank nodes are present but counts differ")
+    void testCrossEngineMismatchBlankNodesDifferingCount() {
+        QueryResult q1 = new QueryResult("engineA", "ds", "q1", "PATTERN", 10.0, new double[]{10.0}, 10.0, new double[]{10.0}, 0.1, 10, "hashAAA", "PASS", new String[]{"PASS"}, List.of(""), true);
+        QueryResult q2 = new QueryResult("engineB", "ds", "q1", "PATTERN", 12.0, new double[]{12.0}, 12.0, new double[]{12.0}, 0.1, 8, "hashBBB", "PASS", new String[]{"PASS"}, List.of(""), true);
+
+        List<QueryResult> list = new java.util.ArrayList<>(List.of(q1, q2));
+        fr.inria.corese.benchmark.Main.crossValidateQueries(list);
+        assertEquals("MISMATCH", list.get(0).status());
+        assertEquals("MISMATCH", list.get(1).status());
     }
 }

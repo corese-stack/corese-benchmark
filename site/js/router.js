@@ -89,19 +89,19 @@ export function updateUrlEngines(selectedEngines = [], push = false) {
 	}
 }
 
-export const VALID_VIEWS = ["bsbm", "lubm", "bowlogna", "dbpedia"];
+export const VALID_VIEWS = ["overview", "loading", "sparql"];
 
 /**
  * Extracts and validates the current active view from location.hash.
- * Fallback to 'bsbm' if hash is missing or unknown.
+ * Fallback to 'overview' if hash is missing or unknown.
  */
 export function getCurrentView() {
-	if (typeof window === "undefined") return "bsbm";
+	if (typeof window === "undefined") return "overview";
 	const rawHash = (window.location.hash || "")
 		.replace(/^#\/?/, "")
 		.trim()
 		.toLowerCase();
-	return VALID_VIEWS.includes(rawHash) ? rawHash : "bsbm";
+	return VALID_VIEWS.includes(rawHash) ? rawHash : "overview";
 }
 
 /**
@@ -109,6 +109,6 @@ export function getCurrentView() {
  */
 export function navigateToView(viewId) {
 	if (typeof window === "undefined") return;
-	const targetView = VALID_VIEWS.includes(viewId) ? viewId : "bsbm";
+	const targetView = VALID_VIEWS.includes(viewId) ? viewId : "overview";
 	window.location.hash = targetView;
 }
