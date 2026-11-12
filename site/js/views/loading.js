@@ -598,14 +598,15 @@ export class LoadingView {
 
 		const signal = this.#abortController?.signal;
 
-		// Formats for X-axis (only active ones)
-		const formats = ALL_FORMATS.filter((f) => this.#state.formats.has(f));
-		const formatLabels = formats.map((f) => `.${f.toUpperCase()}`);
+		// Formats for X-axis (only formats actually present in filtered rows AND selected)
+		const rowsFormats = new Set(rows.map((r) => r.format || r.file?.split(".").pop()).filter(Boolean));
+		const activeFormats = ALL_FORMATS.filter((f) => this.#state.formats.has(f) && (rowsFormats.size === 0 || rowsFormats.has(f)));
+		const formatLabels = activeFormats.map((f) => `.${f.toUpperCase()}`);
 
 		// Datasets strictly ordered and styled following engine selector norms
 		const datasets = orderedEngines.map((engConfig) => {
 			const color = engConfig.style.color;
-			const dataPoints = formats.map((fmt) => {
+			const dataPoints = activeFormats.map((fmt) => {
 				const r = rows.find(
 					(row) => {
 						const rowKey = formatEngineId(parseEngineId(row.engine));
@@ -650,7 +651,7 @@ export class LoadingView {
 							const dsIndex = elements[0].datasetIndex;
 							const dataIndex = elements[0].index;
 							const dataset = chart.data.datasets[dsIndex];
-							const format = formats[dataIndex];
+							const format = activeFormats[dataIndex];
 							const measureKey = `${dataset._engineKey}|${format}`;
 							focusStore.togglePin({ kind: "measure", key: measureKey });
 
@@ -821,7 +822,7 @@ export class LoadingView {
 					const hit = getBarElementAt(x, y);
 					if (hit) {
 						const dataset = chart.data.datasets[hit.datasetIndex];
-						const format = formats[hit.index];
+						const format = activeFormats[hit.index];
 						if (dataset && format) {
 							const measureKey = `${dataset._engineKey}|${format}`;
 							this.#canvasHover.set({ kind: "measure", key: measureKey });
