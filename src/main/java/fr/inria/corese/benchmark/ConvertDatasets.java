@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -115,5 +116,69 @@ public class ConvertDatasets {
             RDFDataMgr.write(out, dataset, RDFFormat.TRIG_PRETTY);
         }
         log.info("  Generated TriG: {} ({} bytes)", trigFile.getFileName(), Files.size(trigFile));
+
+        // 6. RDFa (.html) XHTML+RDFa 1.1 representation
+        Path htmlFile = ntFile.resolveSibling(baseName + ".html");
+        writeRdfaHtml(model, htmlFile, baseName);
+        log.info("  Generated RDFa: {} ({} bytes)", htmlFile.getFileName(), Files.size(htmlFile));
+    }
+
+    private static void writeRdfaHtml(Model model, Path htmlFile, String title) throws IOException {
+        try (var writer = Files.newBufferedWriter(htmlFile, StandardCharsets.UTF_8)) {
+            writer.write("<!DOCTYPE html>\n");
+            writer.write("<html xmlns=\"http://www.w3.org/1999/xhtml\" version=\"XHTML+RDFa 1.1\" prefix=\"rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns# rdfs: http://www.w3.org/2000/01/rdf-schema# xsd: http://www.w3.org/2001/XMLSchema#\">\n");
+            writer.write("<head><title>");
+            writer.write(escapeXml(title));
+            writer.write("</title></head>\n<body>\n<div>\n");
+
+            var it = model.listStatements();
+            while (it.hasNext()) {
+                var stmt = it.nextStatement();
+                var s = stmt.getSubject();
+                var p = stmt.getPredicate();
+                var o = stmt.getObject();
+
+                String subjAttr = s.isURIResource() ? " about=\"" + escapeXml(s.getURI()) + "\"" : "";
+                String predAttr = " property=\"" + escapeXml(p.getURI()) + "\"";
+
+                writer.write("  <span");
+                writer.write(subjAttr);
+                writer.write(predAttr);
+                if (o.isURIResource()) {
+                    writer.write(" resource=\"");
+                    writer.write(escapeXml(o.asResource().getURI()));
+                    writer.write("\"></span>\n");
+                } else if (o.isLiteral()) {
+                    var lit = o.asLiteral();
+                    String dt = lit.getDatatypeURI();
+                    String lang = lit.getLanguage();
+                    if (dt != null && !dt.isEmpty()) {
+                        writer.write(" datatype=\"");
+                        writer.write(escapeXml(dt));
+                        writer.write("\"");
+                    }
+                    if (lang != null && !lang.isEmpty()) {
+                        writer.write(" xml:lang=\"");
+                        writer.write(escapeXml(lang));
+                        writer.write("\"");
+                    }
+                    writer.write(">");
+                    writer.write(escapeXml(lit.getLexicalForm()));
+                    writer.write("</span>\n");
+                } else {
+                    writer.write("></span>\n");
+                }
+            }
+            writer.write("</div>\n</body>\n</html>\n");
+        }
+    }
+
+    private static String escapeXml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&apos;");
     }
 }

@@ -12,7 +12,7 @@ import {
 } from "../engines.js";
 import { focusStore, hoverSource } from "../focus-store.js";
 
-const ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld"];
+const ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
 const DEFAULT_BASELINE = "corese.4.6.5";
 const NEXT_ENGINE = "corese.next";
 
