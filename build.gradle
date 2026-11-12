@@ -106,6 +106,7 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
     useJUnitPlatform()
+    maxHeapSize = '4g'
     // The corese-next fat JAR bundles its own SLF4J classes (2.x) which conflict
     // with the project's logback-classic (SLF4J 1.x) at test runtime, causing
     // Jena/RDF4J class-loading failures. Remove it from the test classpath; its
@@ -124,6 +125,18 @@ task runBenchmark(type: JavaExec) {
     description = 'Run the benchmark harness'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'fr.inria.corese.benchmark.Main'
+    jvmArgs = [
+        '-Xmx12g',
+        '-Xms4g',
+        '-XX:+UseG1GC'
+    ]
+}
+
+task convertDatasets(type: JavaExec) {
+    group = 'benchmark'
+    description = 'Converts canonical N-Triples datasets to all supported W3C formats'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'fr.inria.corese.benchmark.ConvertDatasets'
     jvmArgs = [
         '-Xmx12g',
         '-Xms4g',

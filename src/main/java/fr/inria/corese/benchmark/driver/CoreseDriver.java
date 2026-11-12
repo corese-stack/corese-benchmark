@@ -59,6 +59,9 @@ public class CoreseDriver implements TripleStoreDriver {
             case NQUADS   -> Loader.format.NQUADS_FORMAT;
             case TURTLE   -> Loader.format.TURTLE_FORMAT;
             case TRIG     -> Loader.format.TRIG_FORMAT;
+            case RDFXML   -> Loader.format.RDFXML_FORMAT;
+            case JSONLD   -> Loader.format.JSONLD_FORMAT;
+            case RDFA     -> Loader.format.RDFA_FORMAT;
         };
         Load loader = Load.create(graph);
         loader.parse(filePath, coreseFormat);

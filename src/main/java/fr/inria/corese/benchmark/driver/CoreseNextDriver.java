@@ -71,6 +71,9 @@ public class CoreseNextDriver implements TripleStoreDriver {
             case NQUADS   -> RDFFormat.NQUADS;
             case TURTLE   -> RDFFormat.TURTLE;
             case TRIG     -> RDFFormat.TRIG;
+            case RDFXML   -> RDFFormat.RDFXML;
+            case JSONLD   -> RDFFormat.JSONLD;
+            case RDFA     -> RDFFormat.RDFA;
         };
 
         connection.load(path, coreseFormat);

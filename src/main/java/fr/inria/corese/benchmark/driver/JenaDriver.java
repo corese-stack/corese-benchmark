@@ -15,9 +15,11 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Benchmark driver for Apache Jena.
@@ -99,6 +101,19 @@ public class JenaDriver implements TripleStoreDriver {
         }
     }
 
+    @Override
+    public Set<BenchmarkFormat> getSupportedFormats() {
+        // Apache Jena RIOT does not have built-in RDFa parsing out-of-the-box
+        return EnumSet.of(
+            BenchmarkFormat.NTRIPLES,
+            BenchmarkFormat.NQUADS,
+            BenchmarkFormat.TURTLE,
+            BenchmarkFormat.TRIG,
+            BenchmarkFormat.RDFXML,
+            BenchmarkFormat.JSONLD
+        );
+    }
+
     /**
      * Loads an RDF file (.nt, .nq, .ttl, .trig) into the Jena dataset using RIOT.
      *
@@ -113,6 +128,9 @@ public class JenaDriver implements TripleStoreDriver {
             case NQUADS   -> Lang.NQ;
             case TURTLE   -> Lang.TURTLE;
             case TRIG     -> Lang.TRIG;
+            case RDFXML   -> Lang.RDFXML;
+            case JSONLD   -> Lang.JSONLD;
+            case RDFA     -> throw new UnsupportedOperationException("RDFa is not natively supported by Apache Jena RIOT");
         };
         Txn.executeWrite(dataset, () -> RDFDataMgr.read(dataset, filePath, lang));
     }

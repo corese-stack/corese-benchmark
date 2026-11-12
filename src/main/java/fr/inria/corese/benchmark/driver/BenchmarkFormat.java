@@ -13,7 +13,10 @@ public enum BenchmarkFormat {
     NTRIPLES("nt", false),
     NQUADS("nq", true),
     TURTLE("ttl", false),
-    TRIG("trig", true);
+    TRIG("trig", true),
+    RDFXML("rdf", false),
+    JSONLD("jsonld", true),
+    RDFA("html", false);
 
     private final String extension;
     private final boolean supportsNamedGraphs;
@@ -43,7 +46,9 @@ public enum BenchmarkFormat {
         }
         String lower = fileName.toLowerCase(Locale.ROOT);
         return Arrays.stream(values())
-                .filter(f -> lower.endsWith("." + f.extension))
+                .filter(f -> lower.endsWith("." + f.extension)
+                        || (f == RDFXML && lower.endsWith(".xml"))
+                        || (f == RDFA && (lower.endsWith(".xhtml") || lower.endsWith(".htm"))))
                 .findFirst();
     }
 

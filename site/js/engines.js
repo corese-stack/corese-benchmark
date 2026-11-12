@@ -10,6 +10,7 @@ import {
 	isBranchVersion,
 	sanitizeColor,
 } from "./engine-id.js";
+import { focusStore, hoverSource } from "./focus-store.js";
 
 export const SETTLE_TRANSITION_MS = 180;
 export const SETTLE_SAFETY_MS = 40;
@@ -214,6 +215,8 @@ export class EngineManager extends EventTarget {
 	#middleClickArmedKey = null;
 	#activeGhosts = new Set();
 	#ghostTimeouts = new Set();
+	#dragSuppressedClick = false;
+	#currentHoverToken = null;
 
 	constructor() {
 		super();
@@ -327,46 +330,19 @@ export class EngineManager extends EventTarget {
 		scroller.style.setProperty("--fade-right", canScrollRight ? "24px" : "0px");
 	}
 
-	setHighlight(key, immediate = false) {
-		if (this.#highlightTimeout) {
-			clearTimeout(this.#highlightTimeout);
-			this.#highlightTimeout = null;
-		}
+	#chipPointerHover = hoverSource();
+	#chipFocusHover = hoverSource();
 
-		const apply = () => {
-			if (typeof document === "undefined") return;
-			if (key) {
-				document.documentElement.dataset.highlightedEngine = key;
-				const escaped =
-					typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key;
-				document.querySelectorAll(".is-highlighted").forEach((el) => {
-					el.classList.remove("is-highlighted");
-				});
-				document
-					.querySelectorAll(
-						`[data-key="${escaped}"], [data-engine-key="${escaped}"]`,
-					)
-					.forEach((el) => {
-						el.classList.add("is-highlighted");
-					});
-			} else {
-				delete document.documentElement.dataset.highlightedEngine;
-				document.querySelectorAll(".is-highlighted").forEach((el) => {
-					el.classList.remove("is-highlighted");
-				});
-			}
-		};
-
-		if (immediate) {
-			apply();
-		} else {
-			const delay = key ? 50 : 60;
-			this.#highlightTimeout = setTimeout(apply, delay);
-		}
+	togglePinEngine(key) {
+		focusStore.togglePin({ kind: "engine", key });
 	}
 
-	clearHighlight(immediate = true) {
-		this.setHighlight(null, immediate);
+	setHighlight(key) {
+		this.#chipPointerHover.set(key ? { kind: "engine", key } : null);
+	}
+
+	clearHighlight() {
+		this.#chipPointerHover.clear();
 	}
 
 	#updateDragPosition(clientX) {
@@ -744,6 +720,40 @@ export class EngineManager extends EventTarget {
 			{ signal },
 		);
 
+		// Synchronize visual state of chips with FocusStore
+		focusStore.addEventListener(
+			"focus-changed",
+			(e) => {
+				const { focus, rawState } = e.detail;
+				const effectiveEngineKey =
+					focus?.target.kind === "engine"
+						? focus.target.key
+						: focus?.target.kind === "measure"
+							? focus.target.key.split("|")[0]
+							: null;
+
+				const pinnedEngineKey =
+					rawState.pinned?.kind === "engine"
+						? rawState.pinned.key
+						: null;
+
+				// 1. Highlighted engine attribute on <html>
+				if (effectiveEngineKey) {
+					document.documentElement.dataset.highlightedEngine = effectiveEngineKey;
+				} else {
+					delete document.documentElement.dataset.highlightedEngine;
+				}
+
+				// 2. Chip is-highlighted and is-pinned classes
+				document.querySelectorAll(".engine-chip").forEach((chip) => {
+					const key = chip.dataset.key;
+					chip.classList.toggle("is-highlighted", Boolean(effectiveEngineKey && key === effectiveEngineKey));
+					chip.classList.toggle("is-pinned", Boolean(pinnedEngineKey && key === pinnedEngineKey));
+				});
+			},
+			{ signal },
+		);
+
 		// Confirm button in picker
 		if (this.el.confirmBtn) {
 			this.el.confirmBtn.addEventListener(
@@ -831,6 +841,7 @@ export class EngineManager extends EventTarget {
 		if (!this.#activeDrag || e.pointerId !== this.#activeDrag.pointerId) return;
 		const d = this.#activeDrag;
 		this.#activeDrag = null;
+		this.#dragSuppressedClick = true; // Invariant: any recognized drag suppresses subsequent click action
 
 		try {
 			d.chip.releasePointerCapture(d.pointerId);
@@ -1037,7 +1048,7 @@ export class EngineManager extends EventTarget {
 						e.clientX - this.#pendingDrag.startX,
 						e.clientY - this.#pendingDrag.startY,
 					);
-					if (moveDist > 4) {
+					if (moveDist > 6) {
 						// Upgrade to active drag
 						this.#activeDrag = {
 							...this.#pendingDrag,
@@ -1225,30 +1236,47 @@ export class EngineManager extends EventTarget {
 			{ signal },
 		);
 
-		// 6. Click on remove button (via delegation)
+		// 6. Click on remove button or click to pin engine (via delegation)
 		container.addEventListener(
 			"click",
 			(e) => {
 				const removeBtn = e.target.closest(".engine-chip__remove");
-				if (!removeBtn) return;
-				e.stopPropagation();
+				if (removeBtn) {
+					e.stopPropagation();
+					const chip = removeBtn.closest(".engine-chip");
+					if (chip && !chip.classList.contains("is-removing")) {
+						this.animateAndRemoveChip(chip);
+					}
+					return;
+				}
 
-				const chip = removeBtn.closest(".engine-chip");
-				if (chip && !chip.classList.contains("is-removing")) {
-					this.animateAndRemoveChip(chip);
+				if (this.#dragSuppressedClick) {
+					this.#dragSuppressedClick = false;
+					e.preventDefault();
+					e.stopPropagation();
+					return;
+				}
+
+				const chip = e.target.closest(".engine-chip");
+				if (chip?.dataset.key && !chip.classList.contains("is-removing")) {
+					this.togglePinEngine(chip.dataset.key);
 				}
 			},
-			{ signal },
+			{ signal, capture: true },
 		);
 
-		// 6. Linked cross-highlighting on hover & focus
+		// 6. Linked cross-highlighting on hover & focus (with strict bidirectional internal-movement filters)
+		const chipAt = (node) => (node instanceof Element ? node.closest(".engine-chip") : null);
+
 		container.addEventListener(
 			"pointerover",
 			(e) => {
 				if (this.#activeDrag) return;
-				const chip = e.target.closest(".engine-chip");
-				if (chip?.dataset.key) {
-					this.setHighlight(chip.dataset.key, false);
+				const chip = chipAt(e.target);
+				if (!chip || !container.contains(chip)) return;
+				if (chip === chipAt(e.relatedTarget)) return; // Internal move within same chip
+				if (chip.dataset.key) {
+					this.#chipPointerHover.set({ kind: "engine", key: chip.dataset.key });
 				}
 			},
 			{ signal },
@@ -1258,36 +1286,15 @@ export class EngineManager extends EventTarget {
 			"pointerout",
 			(e) => {
 				if (this.#activeDrag) return;
-				const chip = e.target.closest(".engine-chip");
-				const related = e.relatedTarget?.closest?.(".engine-chip");
-				if (chip && chip !== related) {
-					this.setHighlight(null, false);
-				}
+				const chip = chipAt(e.target);
+				if (!chip || chip === chipAt(e.relatedTarget)) return; // Internal move within same chip
+				this.#chipPointerHover.clear();
 			},
 			{ signal },
 		);
 
-		container.addEventListener(
-			"focusin",
-			(e) => {
-				const chip = e.target.closest(".engine-chip");
-				if (chip?.dataset.key) {
-					this.setHighlight(chip.dataset.key, true);
-				}
-			},
-			{ signal },
-		);
-
-		container.addEventListener(
-			"focusout",
-			(e) => {
-				const related = e.relatedTarget?.closest?.(".engine-chip");
-				if (!related) {
-					this.setHighlight(null, true);
-				}
-			},
-			{ signal },
-		);
+		container.addEventListener("pointerleave", () => this.#chipPointerHover.clear(), { signal });
+		container.addEventListener("pointercancel", () => this.#chipPointerHover.clear(), { signal });
 	}
 
 	#handlePopoverTabKey(e, popover) {

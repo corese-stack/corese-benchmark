@@ -25,9 +25,11 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Benchmark driver for Eclipse RDF4J 5.
@@ -169,6 +171,19 @@ public class RDF4JDriver implements TripleStoreDriver {
         }
     }
 
+    @Override
+    public Set<BenchmarkFormat> getSupportedFormats() {
+        // Eclipse RDF4J Rio requires external non-bundled provider for RDFa
+        return EnumSet.of(
+            BenchmarkFormat.NTRIPLES,
+            BenchmarkFormat.NQUADS,
+            BenchmarkFormat.TURTLE,
+            BenchmarkFormat.TRIG,
+            BenchmarkFormat.RDFXML,
+            BenchmarkFormat.JSONLD
+        );
+    }
+
     /**
      * Loads an RDF file (.nt, .nq, .ttl, .trig) into the repository.
      * N-Triples files are parsed in batches with line-by-line fallback to tolerate malformed lines.
@@ -187,6 +202,9 @@ public class RDF4JDriver implements TripleStoreDriver {
             case NQUADS   -> RDFFormat.NQUADS;
             case TURTLE   -> RDFFormat.TURTLE;
             case TRIG     -> RDFFormat.TRIG;
+            case RDFXML   -> RDFFormat.RDFXML;
+            case JSONLD   -> RDFFormat.JSONLD;
+            case RDFA     -> throw new UnsupportedOperationException("RDFa is not natively supported by Eclipse RDF4J Rio");
         };
 
         if (benchFormat == BenchmarkFormat.NTRIPLES) {

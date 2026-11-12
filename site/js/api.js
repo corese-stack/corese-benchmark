@@ -132,9 +132,14 @@ export async function loadBenchmarkReport(
 		: [];
 	const queryRuns = rawQueryRuns.map(normalizeQueryRun);
 
+	const rawLoadingRuns = Array.isArray(rawData.loadingRuns)
+		? rawData.loadingRuns.filter((r) => r && typeof r === "object")
+		: [];
+
 	return {
 		metadata,
 		runs,
+		loadingRuns: rawLoadingRuns,
 		queryRuns,
 		enginesCatalog,
 	};

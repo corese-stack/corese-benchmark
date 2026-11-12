@@ -21,7 +21,10 @@ class BenchmarkFormatTest {
         "dataset.ttl, TURTLE, false",
         "dataset.TTL, TURTLE, false",
         "dataset.trig, TRIG, true",
-        "dataset.TRIG, TRIG, true"
+        "dataset.TRIG, TRIG, true",
+        "dataset.rdf, RDFXML, false",
+        "dataset.xml, RDFXML, false",
+        "dataset.jsonld, JSONLD, true"
     })
     void testFromFileName(String fileName, BenchmarkFormat expectedFormat, boolean supportsNamedGraphs) {
         Optional<BenchmarkFormat> opt = BenchmarkFormat.fromFileName(fileName);
@@ -47,7 +50,7 @@ class BenchmarkFormatTest {
     void testUnsupportedOrBlankExtensions() {
         assertFalse(BenchmarkFormat.fromFileName(null).isPresent());
         assertFalse(BenchmarkFormat.fromFileName("").isPresent());
-        assertFalse(BenchmarkFormat.fromFileName("data.xml").isPresent());
+        assertFalse(BenchmarkFormat.fromFileName("data.txt").isPresent());
         assertFalse(BenchmarkFormat.fromFileName("data.json").isPresent());
         assertFalse(BenchmarkFormat.fromFileName("data.unknown").isPresent());
     }

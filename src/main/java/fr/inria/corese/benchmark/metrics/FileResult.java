@@ -1,5 +1,7 @@
 package fr.inria.corese.benchmark.metrics;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import fr.inria.corese.benchmark.telemetry.TelemetryPoint;
 
 import java.util.Arrays;
@@ -24,29 +26,58 @@ import java.util.Objects;
  * @param timeSeries             real-time telemetry samples captured during ingestion
  */
 public record FileResult(
-    String engine,
-    String dataset,
-    String file,
-    long triples,
+    @JsonProperty("engine") String engine,
+    @JsonProperty("dataset") String dataset,
+    @JsonProperty("file") String file,
+    @JsonProperty("triples") long triples,
 
     // Loading metrics (median of repetitions)
-    long loadingTimeMs,
-    double throughputTriplesPerSec,
+    @JsonProperty("loadingTimeMs") long loadingTimeMs,
+    @JsonProperty("throughputTriplesPerSec") double throughputTriplesPerSec,
 
     // Memory metrics (median delta: after - before, with forced GC)
-    double memoryBeforeMb,
-    double memoryAfterMb,
-    double memoryDeltaMb,
+    @JsonProperty("memoryBeforeMb") double memoryBeforeMb,
+    @JsonProperty("memoryAfterMb") double memoryAfterMb,
+    @JsonProperty("memoryDeltaMb") double memoryDeltaMb,
 
     // CPU usage during loading
-    double cpuPercent,
+    @JsonProperty("cpuPercent") double cpuPercent,
 
     // Raw repetition values (for transparency)
-    long[] repetitionsMs,
+    @JsonProperty("repetitionsMs") long[] repetitionsMs,
 
     // Real-time telemetry samples during loading
-    List<TelemetryPoint> timeSeries
+    @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries
 ) {
+    @JsonCreator
+    public FileResult(
+        @JsonProperty("engine") String engine,
+        @JsonProperty("dataset") String dataset,
+        @JsonProperty("file") String file,
+        @JsonProperty("triples") long triples,
+        @JsonProperty("loadingTimeMs") long loadingTimeMs,
+        @JsonProperty("throughputTriplesPerSec") double throughputTriplesPerSec,
+        @JsonProperty("memoryBeforeMb") double memoryBeforeMb,
+        @JsonProperty("memoryAfterMb") double memoryAfterMb,
+        @JsonProperty("memoryDeltaMb") double memoryDeltaMb,
+        @JsonProperty("cpuPercent") double cpuPercent,
+        @JsonProperty("repetitionsMs") long[] repetitionsMs,
+        @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries
+    ) {
+        this.engine = engine;
+        this.dataset = dataset;
+        this.file = file;
+        this.triples = triples;
+        this.loadingTimeMs = loadingTimeMs;
+        this.throughputTriplesPerSec = throughputTriplesPerSec;
+        this.memoryBeforeMb = memoryBeforeMb;
+        this.memoryAfterMb = memoryAfterMb;
+        this.memoryDeltaMb = memoryDeltaMb;
+        this.cpuPercent = cpuPercent;
+        this.repetitionsMs = repetitionsMs != null ? repetitionsMs.clone() : new long[0];
+        this.timeSeries = timeSeries != null ? List.copyOf(timeSeries) : List.of();
+    }
+
     public FileResult(
         String engine,
         String dataset,

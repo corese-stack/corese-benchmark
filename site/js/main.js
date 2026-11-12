@@ -3,7 +3,8 @@
  */
 
 import { loadBenchmarkReport } from "./api.js";
-import { engineManager } from "./engines.js";
+import { engineManager } from "./engines.js?v=64";
+import { LoadingView } from "./views/loading.js?v=64";
 import {
 	getCurrentView,
 	navigateToView,
@@ -30,8 +31,13 @@ class DashboardApp {
 			: null;
 	unsubscribeEngines = null;
 	currentView = "overview";
+	activeViewInstance = null;
 
 	destroy() {
+		if (this.activeViewInstance?.destroy) {
+			this.activeViewInstance.destroy();
+			this.activeViewInstance = null;
+		}
 		if (this.#abortController) {
 			this.#abortController.abort();
 			this.#abortController = null;
@@ -264,10 +270,34 @@ class DashboardApp {
 
 	renderActivePage() {
 		if (!this.panelContainer) return;
+
+		if (this.currentView === "loading") {
+			const selectedEngines = engineManager.getSelectedEngines();
+			if (!this.activeViewInstance || !(this.activeViewInstance instanceof LoadingView)) {
+				this.activeViewInstance?.destroy?.();
+				this.activeViewInstance = new LoadingView(
+					this.panelContainer,
+					this.data,
+					selectedEngines
+				);
+				this.activeViewInstance.mount();
+			} else {
+				this.activeViewInstance.updateActiveEngines(selectedEngines);
+			}
+			return;
+		}
+
+		if (this.activeViewInstance) {
+			this.activeViewInstance.destroy?.();
+			this.activeViewInstance = null;
+		}
 		this.panelContainer.replaceChildren();
 	}
 }
 
 // Bootstrap dashboard
 const app = new DashboardApp();
+if (typeof window !== "undefined") {
+	window.app = app;
+}
 await app.init();
