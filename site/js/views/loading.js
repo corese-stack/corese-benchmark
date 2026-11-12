@@ -332,6 +332,16 @@ export class LoadingView {
 		leftGroup.style.gap = "16px";
 		leftGroup.style.alignItems = "center";
 
+		// Dynamic discovery of available datasets from report runs
+		const allRuns = this.#data?.loadingRuns || [];
+		const discoveredDatasets = [...new Set(allRuns.map((r) => r.dataset?.toLowerCase()).filter(Boolean))];
+		const availableDatasets = discoveredDatasets.length > 0 ? discoveredDatasets : ["bsbm", "lubm", "dbpedia", "bowlogna"];
+
+		// Ensure current dataset is valid
+		if (!availableDatasets.includes(this.#state.dataset.toLowerCase())) {
+			this.#state.dataset = availableDatasets[0];
+		}
+
 		// Dataset Segmented Control
 		const dsWrap = document.createElement("div");
 		dsWrap.style.display = "flex";
@@ -346,15 +356,13 @@ export class LoadingView {
 		const dsGroup = document.createElement("div");
 		dsGroup.className = "segmented-control";
 
-		["bsbm", "lubm", "dbpedia", "bowlogna"].forEach((ds) => {
+		availableDatasets.forEach((ds) => {
 			const btn = document.createElement("button");
 			btn.type = "button";
-			btn.className = `segmented-control__btn ${this.#state.dataset === ds ? "is-active" : ""}`;
+			btn.className = `segmented-control__btn ${this.#state.dataset.toLowerCase() === ds ? "is-active" : ""}`;
 			btn.textContent = ds.toUpperCase();
 			btn.addEventListener("click", () => {
 				this.#state.dataset = ds;
-				// Default scale when switching dataset
-				if (ds === "bsbm") this.#state.scale = "small";
 				this.render();
 			});
 			dsGroup.appendChild(btn);
@@ -362,34 +370,63 @@ export class LoadingView {
 		dsWrap.appendChild(dsGroup);
 		leftGroup.appendChild(dsWrap);
 
-		// Scale Segmented Control (only relevant for multi-scale datasets like LUBM/BSBM)
-		const scaleWrap = document.createElement("div");
-		scaleWrap.style.display = "flex";
-		scaleWrap.style.alignItems = "center";
-		scaleWrap.style.gap = "8px";
-
-		const scaleLabel = document.createElement("span");
-		scaleLabel.className = "text-xs text-muted font-medium";
-		scaleLabel.textContent = "SCALE:";
-		scaleWrap.appendChild(scaleLabel);
-
-		const scaleGroup = document.createElement("div");
-		scaleGroup.className = "segmented-control";
-
-		const availableScales = this.#state.dataset === "lubm" ? ["small", "medium", "large"] : ["small", "medium"];
-		availableScales.forEach((sc) => {
-			const btn = document.createElement("button");
-			btn.type = "button";
-			btn.className = `segmented-control__btn ${this.#state.scale === sc ? "is-active" : ""}`;
-			btn.textContent = sc.charAt(0).toUpperCase() + sc.slice(1);
-			btn.addEventListener("click", () => {
-				this.#state.scale = sc;
-				this.render();
-			});
-			scaleGroup.appendChild(btn);
+		// Dynamic discovery of scales present for the current dataset
+		const datasetRuns = allRuns.filter((r) => r.dataset?.toLowerCase() === this.#state.dataset.toLowerCase());
+		const discoveredScales = new Set();
+		datasetRuns.forEach((r) => {
+			const lower = (r.file || "").toLowerCase();
+			if (lower.includes("small")) discoveredScales.add("small");
+			if (lower.includes("medium")) discoveredScales.add("medium");
+			if (lower.includes("large")) discoveredScales.add("large");
 		});
-		scaleWrap.appendChild(scaleGroup);
-		leftGroup.appendChild(scaleWrap);
+
+		const scaleOrder = ["small", "medium", "large"];
+		const availableScales = scaleOrder.filter((s) => discoveredScales.has(s));
+
+		// Show scale selector only if the dataset actually has scale variations
+		if (availableScales.length > 1) {
+			if (!availableScales.includes(this.#state.scale)) {
+				this.#state.scale = availableScales[0];
+			}
+
+			const scaleWrap = document.createElement("div");
+			scaleWrap.style.display = "flex";
+			scaleWrap.style.alignItems = "center";
+			scaleWrap.style.gap = "8px";
+
+			const scaleLabel = document.createElement("span");
+			scaleLabel.className = "text-xs text-muted font-medium";
+			scaleLabel.textContent = "SCALE:";
+			scaleWrap.appendChild(scaleLabel);
+
+			const scaleGroup = document.createElement("div");
+			scaleGroup.className = "segmented-control";
+
+			availableScales.forEach((sc) => {
+				const btn = document.createElement("button");
+				btn.type = "button";
+				btn.className = `segmented-control__btn ${this.#state.scale === sc ? "is-active" : ""}`;
+				btn.textContent = sc.charAt(0).toUpperCase() + sc.slice(1);
+				btn.addEventListener("click", () => {
+					this.#state.scale = sc;
+					this.render();
+				});
+				scaleGroup.appendChild(btn);
+			});
+			scaleWrap.appendChild(scaleGroup);
+			leftGroup.appendChild(scaleWrap);
+		} else if (availableScales.length === 1) {
+			this.#state.scale = availableScales[0];
+		} else {
+			this.#state.scale = "small";
+		}
+
+		// Dynamic discovery of formats available for the current dataset and scale
+		const currentViewRuns = datasetRuns.filter((r) => this.#matchScale(r.file, this.#state.scale));
+		const discoveredFormats = new Set(
+			currentViewRuns.map((r) => r.format || r.file?.split(".").pop()).filter(Boolean)
+		);
+		const formatsToDisplay = ALL_FORMATS.filter((fmt) => discoveredFormats.size === 0 || discoveredFormats.has(fmt));
 
 		// Multi-Select Format Pills (Togglable)
 		const fmtWrap = document.createElement("div");
@@ -407,7 +444,7 @@ export class LoadingView {
 		pillsContainer.setAttribute("role", "group");
 		pillsContainer.setAttribute("aria-label", "RDF Formats Multi-select");
 
-		ALL_FORMATS.forEach((fmt) => {
+		formatsToDisplay.forEach((fmt) => {
 			const isPressed = this.#state.formats.has(fmt);
 			const pill = document.createElement("button");
 			pill.type = "button";
