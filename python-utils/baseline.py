@@ -123,14 +123,16 @@ def _merge_runs(
 ) -> list[dict]:
     """Merge and deterministically sort benchmark runs from baseline and fresh reports."""
     merged_runs_map: dict[tuple[str, str, str], dict] = {}
-    for r in baseline_data.get("runs", []):
+    baseline_runs = baseline_data.get("runs") or baseline_data.get("loadingRuns") or []
+    for r in baseline_runs:
         eng = r.get("engine")
         ds = r.get("dataset")
         f = r.get("file", "")
         if eng in cached_set and ds:
             merged_runs_map[(ds, eng, f)] = dict(r)
 
-    for r in fresh_data.get("runs", []):
+    fresh_runs = fresh_data.get("runs") or fresh_data.get("loadingRuns") or []
+    for r in fresh_runs:
         eng = r.get("engine")
         ds = r.get("dataset")
         f = r.get("file", "")
@@ -205,10 +207,12 @@ def merge_reports(
 ) -> dict:
     """Merge baseline data and fresh data into a deterministic, unified report dictionary."""
     cached_set = set(cached_engines) if cached_engines is not None else set(IMMUTABLE_ENGINES)
+    merged_runs = _merge_runs(baseline_data, fresh_data, cached_set)
 
     return {
         "metadata": _merge_metadata(baseline_data, fresh_data, cached_set),
-        "runs": _merge_runs(baseline_data, fresh_data, cached_set),
+        "runs": merged_runs,
+        "loadingRuns": list(merged_runs),
         "queryRuns": _merge_query_runs(baseline_data, fresh_data, cached_set),
     }
 

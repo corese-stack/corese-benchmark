@@ -17,9 +17,9 @@ on:
         required: false
         default: 'dbpedia,bowlogna,lubm'
       engines:
-        description: 'Comma-separated engines (e.g. corese.4.6.5,jena.6.2.0)'
+        description: 'Comma-separated engines (e.g. corese.next,corese.4.6.5,jena.6.2.0)'
         required: false
-        default: 'corese.4.6.5,jena.6.2.0,rdf4j.5.3.2'
+        default: 'corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2'
       scales:
         description: 'Dataset scales (comma-separated)'
         required: false
@@ -66,7 +66,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DEFAULT_CORESE_NEXT_COMMIT: 22eafa6d7e777969b1001d6b6f4be724db89656b
+  DEFAULT_CORESE_NEXT_COMMIT: 489efac76510c91673c24f240408b71ba30a5874
   BASE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
   ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm
 

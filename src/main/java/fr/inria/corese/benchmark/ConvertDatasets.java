@@ -27,20 +27,41 @@ public class ConvertDatasets {
     private static final Logger log = LoggerFactory.getLogger(ConvertDatasets.class);
 
     public static void main(String[] args) throws IOException {
-        List<Path> targetFiles = List.of(
-                Path.of("input/bsbm/unzip/bsbm_small.nt"),
-                Path.of("input/bsbm/unzip/bsbm_medium.nt"),
-                Path.of("input/lubm/unzip/lubm_small.nt"),
-                Path.of("input/lubm/unzip/lubm_medium.nt"),
-                Path.of("input/dbpedia/unzip/persondata_en.nt")
-        );
+        if (args.length == 0) {
+            // Default target files if no directories are supplied
+            List<Path> targetFiles = List.of(
+                    Path.of("input/bsbm/unzip/bsbm_small.nt"),
+                    Path.of("input/bsbm/unzip/bsbm_medium.nt"),
+                    Path.of("input/lubm/unzip/lubm_small.nt"),
+                    Path.of("input/lubm/unzip/lubm_medium.nt"),
+                    Path.of("input/dbpedia/unzip/persondata_en.nt")
+            );
 
-        for (Path ntFile : targetFiles) {
-            if (!Files.exists(ntFile)) {
-                log.warn("Skipping file (not found): {}", ntFile);
-                continue;
+            for (Path ntFile : targetFiles) {
+                if (!Files.exists(ntFile)) {
+                    log.warn("Skipping file (not found): {}", ntFile);
+                    continue;
+                }
+                convertFile(ntFile);
             }
-            convertFile(ntFile);
+        } else {
+            for (String arg : args) {
+                Path directory = Path.of(arg);
+                if (!Files.exists(directory)) {
+                    log.warn("Directory does not exist: {}", directory);
+                    continue;
+                }
+                try (var stream = Files.list(directory)) {
+                    List<Path> ntFiles = stream
+                            .filter(p -> p.getFileName().toString().endsWith(".nt"))
+                            .sorted()
+                            .toList();
+
+                    for (Path ntFile : ntFiles) {
+                        convertFile(ntFile);
+                    }
+                }
+            }
         }
 
         log.info("Conversion completed successfully.");

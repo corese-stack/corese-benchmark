@@ -249,6 +249,17 @@ for ds in dataset_names:
     dataset_dirs[ds] = prepare_dataset(ds)
     print(f"Dataset ready at: {dataset_dirs[ds]}")
 
+# Automated multi-format conversion: generate canonical W3C formats (.nt, .ttl, .nq, .trig, .rdf, .jsonld)
+unique_dirs = sorted(set(dataset_dirs.values()))
+for target_dir in unique_dirs:
+    print(f"\n=== Ensuring multi-format conversions in: {target_dir} ===")
+    cmd_convert = [gradle_wrapper, "convertDatasets", f"--args={target_dir}"]
+    try:
+        subprocess.run(cmd_convert, cwd=project_dir, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"[WARN] convertDatasets failed for {target_dir}: {e}", file=sys.stderr)
+
+
 ####################################################################################
 # Step 2: Build and run benchmark
 ####################################################################################
@@ -298,6 +309,14 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
         raise
 
 
+def _extract_report_entries(r: dict) -> tuple[list, list, list]:
+    """Helper to extract loading runs, query runs, and sparql queries from a report dict."""
+    runs = list(r.get("runs", [])) or list(r.get("loadingRuns", []))
+    qruns = list(r.get("queryRuns", []))
+    queries = r.get("metadata", {}).get("queries")
+    return runs, qruns, queries
+
+
 def merge_json_files(file_list, output_file, no_delete=None):
     """Merge multiple JSON reports into one, combining runs and queryRuns arrays.
     metadata.queries is taken from whichever report contains them (queries are
@@ -309,28 +328,31 @@ def merge_json_files(file_list, output_file, no_delete=None):
     for path in file_list:
         with open(path) as f:
             r = _json_early.load(f)
-        # Collect SPARQL query texts from metadata (any report that has them)
-        q = r.get("metadata", {}).get("queries")
+        runs, qruns, q = _extract_report_entries(r)
         if q:
             merged_queries = q
         if merged is None:
             merged = {
                 "metadata": r["metadata"],
-                "runs": list(r.get("runs", [])),
-                "queryRuns": list(r.get("queryRuns", [])),
+                "runs": runs,
+                "loadingRuns": list(runs),
+                "queryRuns": qruns,
             }
         else:
-            merged["runs"]      += r.get("runs", [])
-            merged["queryRuns"] += r.get("queryRuns", [])
+            merged["runs"]        += runs
+            merged["loadingRuns"] += runs
+            merged["queryRuns"]   += qruns
+
     if merged:
-        # Ensure metadata.queries is preserved from any contributing report
         if merged_queries:
             merged["metadata"]["queries"] = merged_queries
         if not merged["queryRuns"]:
             del merged["queryRuns"]
         merged["metadata"]["generatedAt"] = datetime.now(timezone.utc).isoformat()
+
     with open(output_file, "w") as f:
         _json_early.dump(merged, f, indent=2)
+
     _keep = set(no_delete or [])
     for path in file_list:
         if path not in _keep:
@@ -518,9 +540,12 @@ if args.engines:
         dst  = os.path.join(cache_dir, f"{safe}_{ds}.json")
         with open(src_file) as _f:
             _data = _json_early.load(_f)
+        runs_source = _data.get("runs") or _data.get("loadingRuns") or []
+        filtered_runs = [r for r in runs_source if r.get("engine") == engine]
         filtered = {
             "metadata": _data.get("metadata", {}),
-            "runs": [r for r in _data.get("runs", []) if r.get("engine") == engine],
+            "runs": filtered_runs,
+            "loadingRuns": list(filtered_runs),
             "queryRuns": [r for r in _data.get("queryRuns", []) if r.get("engine") == engine],
         }
         if not filtered["queryRuns"]:
