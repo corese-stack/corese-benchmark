@@ -43,7 +43,7 @@ public class ConvertDatasets {
                     log.warn("Skipping file (not found): {}", ntFile);
                     continue;
                 }
-                convertFile(ntFile);
+                safeConvertFile(ntFile);
             }
         } else {
             for (String arg : args) {
@@ -59,13 +59,31 @@ public class ConvertDatasets {
                             .toList();
 
                     for (Path ntFile : ntFiles) {
-                        convertFile(ntFile);
+                        safeConvertFile(ntFile);
                     }
                 }
             }
         }
 
         log.info("Conversion completed successfully.");
+    }
+
+    private static void safeConvertFile(Path ntFile) {
+        try {
+            // Guard against massive files (> 2 GB) that would cause Java heap OOM during monolithic in-memory parsing
+            long sizeBytes = Files.size(ntFile);
+            if (sizeBytes > 1_500_000_000L) { // > 1.5 GB
+                log.warn("Skipping multi-format conversion for very large file: {} ({} MB) to protect heap",
+                        ntFile.getFileName(), sizeBytes / (1024 * 1024));
+                return;
+            }
+            convertFile(ntFile);
+        } catch (OutOfMemoryError oom) {
+            log.error("Out of memory converting file: {} — skipping to protect pipeline", ntFile.getFileName());
+            System.gc();
+        } catch (Exception e) {
+            log.error("Failed to convert file {}: {} — skipping", ntFile.getFileName(), e.getMessage());
+        }
     }
 
     public static void convertFile(Path ntFile) throws IOException {
@@ -84,43 +102,53 @@ public class ConvertDatasets {
         log.info("  Parsed {} triples from {}", tripleCount, ntFile.getFileName());
 
         // 1. Turtle (.ttl) with subject grouping & prefixes
-        try (OutputStream out = Files.newOutputStream(ttlFile)) {
-            RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY);
-        }
-        log.info("  Generated Turtle: {} ({} bytes)", ttlFile.getFileName(), Files.size(ttlFile));
+        safeGenerateFile(ttlFile, out -> RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY), "Turtle", ntFile);
 
         // 2. RDF/XML (.rdf) standard W3C XML representation
-        try (OutputStream out = Files.newOutputStream(rdfFile)) {
-            RDFDataMgr.write(out, model, RDFFormat.RDFXML_PLAIN);
-        }
-        log.info("  Generated RDF/XML: {} ({} bytes)", rdfFile.getFileName(), Files.size(rdfFile));
+        safeGenerateFile(rdfFile, out -> RDFDataMgr.write(out, model, RDFFormat.RDFXML_PLAIN), "RDF/XML", ntFile);
 
         // 3. JSON-LD (.jsonld) standard Web / Linked Data representation
-        try (OutputStream out = Files.newOutputStream(jsonldFile)) {
-            RDFDataMgr.write(out, model, RDFFormat.JSONLD_FLAT);
-        }
-        log.info("  Generated JSON-LD: {} ({} bytes)", jsonldFile.getFileName(), Files.size(jsonldFile));
+        safeGenerateFile(jsonldFile, out -> RDFDataMgr.write(out, model, RDFFormat.JSONLD_FLAT), "JSON-LD", ntFile);
 
         // 4. N-Quads (.nq) with named graph
         String graphIri = "urn:graph:" + baseName;
         Dataset dataset = DatasetFactory.create();
         dataset.addNamedModel(graphIri, model);
-
-        try (OutputStream out = Files.newOutputStream(nqFile)) {
-            RDFDataMgr.write(out, dataset, RDFFormat.NQUADS_UTF8);
-        }
-        log.info("  Generated N-Quads: {} ({} bytes)", nqFile.getFileName(), Files.size(nqFile));
+        safeGenerateFile(nqFile, out -> RDFDataMgr.write(out, dataset, RDFFormat.NQUADS_UTF8), "N-Quads", ntFile);
 
         // 5. TriG (.trig) with named graph block
-        try (OutputStream out = Files.newOutputStream(trigFile)) {
-            RDFDataMgr.write(out, dataset, RDFFormat.TRIG_PRETTY);
-        }
-        log.info("  Generated TriG: {} ({} bytes)", trigFile.getFileName(), Files.size(trigFile));
+        safeGenerateFile(trigFile, out -> RDFDataMgr.write(out, dataset, RDFFormat.TRIG_PRETTY), "TriG", ntFile);
 
         // 6. RDFa (.html) XHTML+RDFa 1.1 representation
         Path htmlFile = ntFile.resolveSibling(baseName + ".html");
-        writeRdfaHtml(model, htmlFile, baseName);
-        log.info("  Generated RDFa: {} ({} bytes)", htmlFile.getFileName(), Files.size(htmlFile));
+        safeGenerateFile(htmlFile, out -> {
+            try {
+                writeRdfaHtml(model, htmlFile, baseName);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }, "RDFa", ntFile);
+    }
+
+    @FunctionalInterface
+    private interface OutputWriter {
+        void write(OutputStream out) throws Exception;
+    }
+
+    private static void safeGenerateFile(Path targetFile, OutputWriter writer, String formatName, Path sourceNt) {
+        Path tempFile = targetFile.resolveSibling(targetFile.getFileName() + ".tmp");
+        try {
+            try (OutputStream out = Files.newOutputStream(tempFile)) {
+                writer.write(out);
+            }
+            Files.move(tempFile, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            log.info("  Generated {}: {} ({} bytes)", formatName, targetFile.getFileName(), Files.size(targetFile));
+        } catch (Throwable t) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (Exception ignored) {}
+            log.warn("  Could not generate {} for {}: {}", formatName, sourceNt.getFileName(), t.getMessage());
+        }
     }
 
     private static void writeRdfaHtml(Model model, Path htmlFile, String title) throws IOException {

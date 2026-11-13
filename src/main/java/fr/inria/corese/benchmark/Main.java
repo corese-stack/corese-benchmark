@@ -286,12 +286,10 @@ public class Main {
             if (!completed) {
                 p.destroyForcibly();
                 log.error("Engine {} timed out in isolated subprocess after {} minutes", engineName, CHILD_TIMEOUT_MINUTES);
-                return;
-            }
-            if (p.exitValue() != 0) {
+            } else if (p.exitValue() != 0) {
                 log.error("Engine {} failed in isolated subprocess with exit code {}", engineName, p.exitValue());
-                return;
             }
+            // Even if process failed partway through (e.g. OOM on one file), salvage whatever runs were recorded
             readChildReport(tmp, allFileResults, allQueryResults);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

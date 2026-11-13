@@ -66,11 +66,13 @@ dependencies {
     implementation "org.eclipse.rdf4j:rdf4j-sail-lmdb:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-repository-sail:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio:${rdf4jVersion}"
-    // RIO parsers — required for multi-format support (.nq, .ttl, .trig)
+    // RIO parsers — required for multi-format support (.nq, .ttl, .trig, .rdf, .jsonld)
     implementation "org.eclipse.rdf4j:rdf4j-rio-ntriples:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio-nquads:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio-turtle:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-rio-trig:${rdf4jVersion}"
+    implementation "org.eclipse.rdf4j:rdf4j-rio-rdfxml:${rdf4jVersion}"
+    implementation "org.eclipse.rdf4j:rdf4j-rio-jsonld:${rdf4jVersion}"
 
     // JSON output
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.0'
@@ -97,6 +99,8 @@ dependencies {
     testImplementation "org.eclipse.rdf4j:rdf4j-rio-nquads:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-rio-turtle:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-rio-trig:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio-rdfxml:${rdf4jVersionTest}"
+    testImplementation "org.eclipse.rdf4j:rdf4j-rio-jsonld:${rdf4jVersionTest}"
 }
 
 tasks.withType(JavaCompile).configureEach {
