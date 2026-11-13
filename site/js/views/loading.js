@@ -559,7 +559,7 @@ export class LoadingView {
 		if (!chart) return;
 
 		const focus = focusStore.effectiveFocus;
-		const formats = Array.from(this.#state.formats);
+		const activeFormats = chart._activeFormats || ALL_FORMATS.filter((f) => this.#state.formats.has(f));
 
 		chart.data.datasets.forEach((ds) => {
 			const eKey = ds._engineKey;
@@ -589,7 +589,7 @@ export class LoadingView {
 				ds.backgroundColor = isEngineMatch ? baseColor : toRgba(0.22);
 			} else if (focus.target.kind === "measure") {
 				const [targetEng, targetFmt] = focus.target.key.split("|");
-				const colors = formats.map((fmt) => {
+				const colors = activeFormats.map((fmt) => {
 					const isExactBar = eKey === targetEng && fmt === targetFmt;
 					return isExactBar ? baseColor : toRgba(0.22);
 				});
@@ -1282,6 +1282,7 @@ export class LoadingView {
 			// When scrolling, clear canvas hover so bars don't remain stuck under static pointer
 			window.addEventListener("scroll", clearCanvasState, { signal, passive: true });
 
+			chart._activeFormats = activeFormats;
 			this.#charts.set("summary", chart);
 		} catch (err) {
 			console.error("Failed to render Chart.js summary:", err);
