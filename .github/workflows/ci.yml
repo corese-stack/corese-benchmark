@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 0' # Weekly, Sunday 02:00 UTC
+    - cron: '0 2 * * 6' # Weekly, Saturday 02:00 UTC
   repository_dispatch:
     # client_payload: { corese_commit, release_tag, datasets, scales }
     types: [corese-release, benchmark-trigger]
