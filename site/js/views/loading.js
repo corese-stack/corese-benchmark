@@ -6,7 +6,6 @@
 
 import { escapeHtml, formatEngineId, isBranchVersion, parseEngineId } from "../engine-id.js";
 import {
-	engineManager,
 	getEngineStyle,
 	renderEngineIndicatorSvg,
 } from "../engines.js";
@@ -15,6 +14,415 @@ import { focusStore, hoverSource } from "../focus-store.js";
 const ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
 const DEFAULT_BASELINE = "corese.4.6.5";
 const NEXT_ENGINE = "corese.next";
+
+const scaledFile = (dataset, scale, parameter, triples) => ({
+	parameter,
+	triples,
+	files: [
+		{
+			name: `${dataset}_${scale}.nt`,
+			description: "Generated input",
+		},
+	],
+});
+
+const bowlognaScale = (departments, triples) => ({
+	parameter: `${departments} department${departments === 1 ? "" : "s"}`,
+	triples,
+	files: Array.from({ length: departments }, (_, index) => ({
+		name: `Department${index}.nt`,
+		description: "Department component",
+	})),
+});
+
+export const DATASET_METADATA = {
+	bsbm: {
+		name: "BSBM",
+		fullName: "Berlin SPARQL Benchmark",
+		kind: "Synthetic · e-commerce",
+		description: "Products, offers, vendors, producers, reviews, and product features.",
+		academic: {
+			title: "The Berlin SPARQL Benchmark",
+			authors: "Christian Bizer, Andreas Schultz",
+			year: 2009,
+			journal: "International Journal on Semantic Web and Information Systems (IJSWIS)",
+			doi: "10.4018/jswis.2009040101",
+		},
+		artifact: {
+			label: "bsbmtools project homepage",
+			url: "https://wbsg.informatik.uni-mannheim.de/bizer/berlinsparqlbenchmark/",
+			downloadLabel: "bsbmtools archive",
+			downloadUrl: "https://sourceforge.net/projects/bsbmtools/files/latest/download",
+			note: "The preparation script expects bsbmtools-0.2. The download URL resolves to latest and is not version-pinned.",
+			script: "python-utils/datasets/bsbm.py",
+		},
+		structure: {
+			schema: "BSBM vocabulary for e-commerce products, vendors, and reviews.",
+			queryPattern: "Product-centered star joins, connecting offers, vendors, and reviews.",
+			distribution: "Synthetic data scaled by product-count parameter.",
+		},
+		preparation:
+			"Downloads the BSBM Java generator and produces the source dataset in N-Triples. Multi-format variants (.ttl, .trig, .nq, .rdf, .jsonld) are then canonically derived ahead of measurement using Apache Jena RIOT (./gradlew convertDatasets) so all engines ingest identical files.",
+		scales: {
+			small: scaledFile("bsbm", "small", "1,000 products", "≈350,000"),
+			medium: scaledFile("bsbm", "medium", "5,000 products", "≈1.7 million"),
+			large: scaledFile("bsbm", "large", "30,000 products", "≈10.5 million"),
+		},
+	},
+
+	lubm: {
+		name: "LUBM",
+		fullName: "Lehigh University Benchmark",
+		kind: "Synthetic · universities",
+		description: "Universities, departments, faculty, students, courses, and publications.",
+		academic: {
+			title: "LUBM: A Benchmark for OWL Knowledge Base Systems",
+			authors: "Yuanbo Guo, Zhengxiang Pan, Jeff Heflin",
+			year: 2005,
+			journal: "Journal of Web Semantics",
+			doi: "10.1016/j.websem.2005.06.005",
+		},
+		artifact: {
+			label: "Lehigh UBA project homepage",
+			url: "https://swat.cse.lehigh.edu/projects/lubm/",
+			downloadLabel: "Lehigh UBA 1.7 generator",
+			downloadUrl: "https://swat.cse.lehigh.edu/projects/lubm/uba1.7.zip",
+			note: "Generated locally with university index 0 and random seed 0.",
+			script: "python-utils/datasets/lubm.py",
+		},
+		structure: {
+			schema: "Univ-Bench OWL ontology for universities and academic departments.",
+			queryPattern: "Conjunctive university queries combining hierarchical paths and star joins.",
+			distribution: "Repeatable synthetic generation parameterized by university count and seed.",
+		},
+		preparation:
+			"Downloads UBA 1.7, runs edu.lehigh.swat.bench.uba.Generator, parses RDF/XML with rdflib, and serializes canonical N-Triples. Multi-format variants are derived via Apache Jena RIOT (./gradlew convertDatasets).",
+		scales: {
+			small: scaledFile("lubm", "small", "1 university", "≈100,000"),
+			medium: scaledFile("lubm", "medium", "10 universities", "≈1 million"),
+			large: scaledFile("lubm", "large", "100 universities", "≈10 million"),
+		},
+	},
+
+	dbpedia: {
+		name: "DBpedia 3.5.1",
+		fullName: "DBpedia 3.5.1 · English component sample",
+		kind: "Extracted · Wikipedia",
+		description:
+			"Five selected English dump components extracted from Wikipedia. Real-world sample, not the full knowledge graph.",
+		academic: {
+			title: "DBpedia: A Nucleus for a Web of Open Data",
+			authors: "Sören Auer, Christian Bizer, Georgi Kobilarov, Jens Lehmann, Richard Cyganiak, Zachary Ives",
+			year: 2007,
+			journal: "6th International Semantic Web Conference (ISWC)",
+			doi: "10.1007/978-3-540-76298-0_52",
+		},
+		artifact: {
+			label: "DBpedia extraction framework",
+			url: "https://github.com/dbpedia/extraction-framework",
+			downloadLabel: "SLICES / P16 dump mirror",
+			downloadUrl: "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/",
+			note: "The academic reference describes DBpedia; the mirror provides the 3.5.1 dump components.",
+			script: "python-utils/datasets/dbpedia.py",
+		},
+		structure: {
+			schema: "DBpedia ontology and component properties extracted from English Wikipedia.",
+			queryPattern: "Heterogeneous graph joins across categories, homepages, disambiguations, and mapping properties.",
+			distribution: "Real-world Wikipedia distributions across heterogeneous predicate counts.",
+		},
+		preparation:
+			"Downloads named .nt.bz2 components from the SLICES mirror and decompresses to input/dbpedia/unzip. Multi-format variants are derived via Apache Jena RIOT (./gradlew convertDatasets).",
+		scales: {
+			default: {
+				parameter: "5 separate components · no scale tiers",
+				triples: "2,264,348 summed baseline triples",
+				files: [
+					{
+						name: "category_labels_en.nt",
+						description: "Category labels · 565,108 baseline triples",
+					},
+					{
+						name: "disambiguations_en.nt",
+						description: "Disambiguation links · 765,124 baseline triples",
+					},
+					{
+						name: "homepages_en.nt",
+						description: "Homepage links · 394,590 baseline triples",
+					},
+					{
+						name: "persondata_en.nt",
+						description: "Person data · 356,996 baseline triples",
+					},
+					{
+						name: "specific_mappingbased_properties_en.nt",
+						description: "Mapping-based properties · 182,530 baseline triples",
+					},
+				],
+			},
+		},
+	},
+
+	bowlogna: {
+		name: "Bowlogna",
+		fullName: "BowlognaBench",
+		kind: "Synthetic · higher education",
+		description: "University and student relationships designed for analytical queries and Bologna process aggregation.",
+		academic: {
+			title: "BowlognaBench—Benchmarking RDF Analytics",
+			authors: "Gianluca Demartini, Iliya Enchev, Marcin Wylot, Joël Gapany, Philippe Cudré-Mauroux",
+			year: 2011,
+			journal: "International Symposium on Data-Driven Process Discovery and Analysis (SIMPDA)",
+			doi: null,
+			url: "https://exascale.info/assets/pdf/BowlognaBenchSIMPDA2011.pdf",
+		},
+		artifact: {
+			label: "eXascale Infolab Bowlogna project",
+			url: "https://exascale.info/research/bowlognabench/",
+			downloadLabel: "DICE Research / HOBBIT dump",
+			downloadUrl: "https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip",
+			note: "Consumes the pre-generated HOBBIT benchmark dump.",
+			script: "python-utils/datasets/bowlogna.py",
+		},
+		structure: {
+			schema: "University domain vocabulary (Bologna process curriculum model).",
+			queryPattern: "Complex analytical queries with multi-level joins and heavy SPARQL aggregates.",
+			distribution: "Synthetic partitioned dataset across Department0.nt to Department9.nt.",
+		},
+		preparation:
+			"Downloads bowlogna-dump.zip and extracts the requested Department*.nt files.",
+		scales: {
+			small: bowlognaScale(1, "≈1.2 million across 1 file"),
+			medium: bowlognaScale(5, "≈6 million across 5 files"),
+			large: bowlognaScale(10, "≈12 million across 10 files"),
+		},
+	},
+};
+
+// Keyed by the persistent LoadingView state object, not its rebuilt container.
+const datasetCardInstances = new WeakMap();
+
+function cardElement(tag, className, text) {
+	const element = document.createElement(tag);
+	if (className) element.className = className;
+	if (text !== undefined) element.textContent = text;
+	return element;
+}
+
+function cardLink(label, href) {
+	const link = cardElement("a", "", label);
+	link.href = href;
+	link.target = "_blank";
+	link.rel = "noopener noreferrer";
+	return link;
+}
+
+function cardSection(title, modifier = "") {
+	const section = cardElement("section", `dataset-card__section ${modifier}`.trim());
+	section.append(cardElement("h3", "dataset-card__heading", title));
+	return section;
+}
+
+function cardFact(list, label, value) {
+	list.append(cardElement("dt", "", label), cardElement("dd", "", value));
+}
+
+function computeReportTriples(key, scale, allRuns) {
+	if (!scale?.files?.length) return null;
+	const targetNames = new Set(scale.files.map((f) => f.name.toLowerCase()));
+	const fileTriples = new Map();
+
+	const matchFileName = (file) => {
+		const lower = file.toLowerCase();
+		if (targetNames.has(lower)) return lower;
+		const baseNt = lower.replace(/\.[^.]+$/, ".nt");
+		return targetNames.has(baseNt) ? baseNt : null;
+	};
+
+	for (const r of allRuns) {
+		if (r.dataset?.toLowerCase() !== key || !r.triples || !r.file) continue;
+		const matched = matchFileName(r.file);
+		if (matched && !fileTriples.has(matched)) {
+			fileTriples.set(matched, r.triples);
+		}
+	}
+
+	if (fileTriples.size === 0) return null;
+	return Array.from(fileTriples.values()).reduce((a, b) => a + b, 0);
+}
+
+function renderDatasetLeftColumn(metadata, scale, measuredTriplesNumber) {
+	const colLeft = cardElement("div", "dataset-card__col");
+
+	const overview = cardSection("Dataset overview");
+	overview.append(
+		cardElement("p", "font-medium", metadata.fullName),
+		cardElement("p", "text-muted", metadata.description)
+	);
+	colLeft.append(overview);
+
+	const metrics = cardSection("Source input & files (N-Triples)");
+	if (scale) {
+		const metricFacts = cardElement("dl", "dataset-card__facts");
+		cardFact(metricFacts, "Configuration", scale.parameter);
+		if (measuredTriplesNumber) {
+			cardFact(metricFacts, "Reported triples", `${measuredTriplesNumber.toLocaleString()} (active report)`);
+			if (scale.triples) {
+				cardFact(metricFacts, "Estimated triples", `${scale.triples} (nominal)`);
+			}
+		} else {
+			cardFact(metricFacts, "Estimated triples", scale.triples);
+		}
+		cardFact(metricFacts, "Input files", `${scale.files.length} file${scale.files.length > 1 ? "s" : ""} · N-Triples`);
+		metrics.append(metricFacts);
+
+		const filesList = cardElement("div", "dataset-card__files");
+		for (const file of scale.files) {
+			const item = cardElement("div", "dataset-card__file-item");
+			item.append(cardElement("code", "", file.name), cardElement("span", "", file.description));
+			filesList.append(item);
+		}
+		metrics.append(filesList);
+	} else {
+		metrics.append(cardElement("p", "", "No metadata defined for this scale."));
+	}
+	colLeft.append(metrics);
+	return colLeft;
+}
+
+function renderDatasetRightColumn(metadata) {
+	const colRight = cardElement("div", "dataset-card__col");
+
+	const structure = cardSection("Structure & benchmark context");
+	const facts = cardElement("dl", "dataset-card__facts");
+	cardFact(facts, "Vocabulary", metadata.structure.schema);
+	cardFact(facts, "Query patterns", metadata.structure.queryPattern);
+	cardFact(facts, "Data model", metadata.structure.distribution);
+	structure.append(facts);
+	colRight.append(structure);
+
+	const provenance = cardSection("Provenance & citations");
+	const academic = metadata.academic;
+	provenance.append(
+		cardElement("h4", "dataset-card__subheading", "Academic citation"),
+		cardElement("p", "font-medium", academic.title),
+		cardElement("p", "text-muted", `${academic.authors} (${academic.year}) — ${academic.journal || ""}`)
+	);
+
+	const refParagraph = cardElement("p");
+	if (academic.doi) {
+		refParagraph.append(cardLink(`DOI: ${academic.doi} ↗`, `https://doi.org/${academic.doi}`));
+	} else if (academic.url) {
+		refParagraph.append(cardLink("Author manuscript PDF ↗", academic.url));
+	}
+	provenance.append(refParagraph);
+
+	provenance.append(cardElement("h4", "dataset-card__subheading", "Artifact & project sources"));
+	const linksBox = cardElement("div", "flex flex-wrap gap-2");
+	if (metadata.artifact.url) {
+		linksBox.append(cardLink(`${metadata.artifact.label} ↗`, metadata.artifact.url));
+	}
+	if (metadata.artifact.downloadUrl) {
+		linksBox.append(document.createTextNode(" · "));
+		linksBox.append(cardLink(`${metadata.artifact.downloadLabel || "Download archive"} ↗`, metadata.artifact.downloadUrl));
+	}
+	provenance.append(linksBox);
+	if (metadata.artifact.note) {
+		provenance.append(cardElement("p", "dataset-card__note", metadata.artifact.note));
+	}
+	colRight.append(provenance);
+	return colRight;
+}
+
+function renderDatasetPipeline(metadata, reportData) {
+	const preparation = cardSection("Data acquisition & format derivation", "dataset-card__section--full");
+	preparation.append(
+		cardElement("p", "", metadata.preparation),
+		cardElement(
+			"p",
+			"dataset-card__note",
+			"The source dataset is acquired or generated into input/, then converted canonically across all 7 W3C formats ahead of measurement. Existing files are reused."
+		)
+	);
+
+	const scriptNote = cardElement("p", "dataset-card__note flex items-center gap-2");
+	const repoRef = reportData?.metadata?.gitCommit || "main";
+	const ghScriptLink = cardLink(
+		`${metadata.artifact.script} ↗`,
+		`https://github.com/corese-stack/corese-benchmark/blob/${repoRef}/${metadata.artifact.script}`
+	);
+	scriptNote.append(document.createTextNode("Preparation handler: "), ghScriptLink);
+	preparation.append(scriptNote);
+	return preparation;
+}
+
+/**
+ * Render into a dedicated host element.
+ * Reuse the same state object across calls to retain disclosure state.
+ * Returns the <details> element, or null for an unknown dataset.
+ */
+export function renderDatasetCard(state, container, reportData = null) {
+	const key = String(state.dataset ?? "").trim().toLowerCase();
+	const metadata = Object.hasOwn(DATASET_METADATA, key) ? DATASET_METADATA[key] : null;
+
+	if (!metadata) {
+		container.replaceChildren();
+		container.hidden = true;
+		return null;
+	}
+
+	container.hidden = false;
+
+	let instance = datasetCardInstances.get(state);
+	if (!instance) {
+		const details = cardElement("details", "dataset-card");
+		const summary = cardElement("summary", "dataset-card__summary");
+		const title = cardElement("span", "dataset-card__title");
+		const context = cardElement("span", "dataset-card__context");
+		const chevron = cardElement("span", "dataset-card__chevron", "▾");
+		chevron.setAttribute("aria-hidden", "true");
+		const body = cardElement("div", "dataset-card__body");
+
+		summary.append(title, context, chevron);
+		details.append(summary, body);
+		instance = { details, title, context, body, signature: null };
+		datasetCardInstances.set(state, instance);
+	}
+
+	const { details, title, context, body } = instance;
+	const scaleKey = Object.hasOwn(metadata.scales, "default")
+		? "default"
+		: String(state.scale ?? "").trim().toLowerCase();
+	const scale = Object.hasOwn(metadata.scales, scaleKey) ? metadata.scales[scaleKey] : null;
+	const reportId = reportData?.metadata?.gitCommit || reportData?.metadata?.timestamp || "default";
+	const signature = `${key}:${scaleKey}:${reportId}`;
+
+	if (details.parentNode !== container) container.replaceChildren(details);
+	if (instance.signature === signature) return details;
+	instance.signature = signature;
+
+	// Extract measured triple count from actual report runs if available
+	const allRuns = reportData?.loadingRuns || [];
+	const measuredTriplesNumber = computeReportTriples(key, scale, allRuns);
+	let measuredTriplesLabel = measuredTriplesNumber ? `${measuredTriplesNumber.toLocaleString()} source triples` : null;
+
+	if (!measuredTriplesLabel && scale?.triples) {
+		measuredTriplesLabel = `${scale.triples} triples`;
+	}
+
+	title.textContent = metadata.name;
+	const contextParts = [metadata.kind];
+	if (scale?.parameter) contextParts.push(scale.parameter);
+	if (measuredTriplesLabel) contextParts.push(measuredTriplesLabel);
+	context.textContent = contextParts.join(" · ");
+
+	const colLeft = renderDatasetLeftColumn(metadata, scale, measuredTriplesNumber);
+	const colRight = renderDatasetRightColumn(metadata);
+	const preparation = renderDatasetPipeline(metadata, reportData);
+
+	body.replaceChildren(colLeft, colRight, preparation);
+	return details;
+}
+
 
 export class LoadingView {
 	#root = null;
@@ -25,7 +433,6 @@ export class LoadingView {
 	#canvasHover = hoverSource();
 	#legendHover = hoverSource();
 	#tableHover = hoverSource();
-	#chartAlphaMap = new Map();
 	#state = {
 		dataset: "bsbm",
 		scale: "small",
@@ -148,7 +555,7 @@ export class LoadingView {
 	}
 
 	#syncChartDimming() {
-		const chart = this.#charts.get("summary") || (typeof window.Chart !== "undefined" ? window.Chart.getChart("loading-summary-chart") : null);
+		const chart = this.#charts.get("summary") || (window.Chart !== undefined ? window.Chart.getChart("loading-summary-chart") : null);
 		if (!chart) return;
 
 		const focus = focusStore.effectiveFocus;
@@ -169,9 +576,9 @@ export class LoadingView {
 			if (typeof baseColor === "string" && baseColor.startsWith("#")) {
 				const hex = baseColor.replace("#", "");
 				if (hex.length === 6) {
-					r = parseInt(hex.substring(0, 2), 16);
-					g = parseInt(hex.substring(2, 4), 16);
-					b = parseInt(hex.substring(4, 6), 16);
+					r = Number.parseInt(hex.substring(0, 2), 16);
+					g = Number.parseInt(hex.substring(2, 4), 16);
+					b = Number.parseInt(hex.substring(4, 6), 16);
 				}
 			}
 
@@ -203,6 +610,12 @@ export class LoadingView {
 
 		// 1. Controls Header (Dataset, Scale, Multi-Select Format Pills)
 		section.appendChild(this.#renderControls());
+
+		// 1.1 Scientific Dataset Presentation Card (Progressive Disclosure)
+		const datasetCardHost = document.createElement("div");
+		datasetCardHost.className = "dataset-card-host";
+		renderDatasetCard(this.#state, datasetCardHost, this.#data);
+		section.appendChild(datasetCardHost);
 
 		// 2. Reproducibility Protocol Tile
 		section.appendChild(this.#renderProtocolTile());
@@ -459,7 +872,7 @@ export class LoadingView {
 					if (this.#state.formats.size === 1) {
 						// Guard: keep at least 1 format active
 						pill.classList.remove("is-denied");
-						void pill.offsetWidth;
+						pill.getBoundingClientRect();
 						pill.classList.add("is-denied");
 						return;
 					}
@@ -493,15 +906,17 @@ export class LoadingView {
 		const osDist = env.osDistribution || "Linux";
 		const jvmFlags = (env.jvmFlags || ["-Xms4g", "-Xmx12g", "-XX:+UseG1GC"]).join(" ");
 		const reps = proto.repetitions || 3;
+		const warmup = proto.warmup !== undefined ? proto.warmup : 1;
+		const datasetName = this.#state.dataset || "bsbm";
+		const scaleName = this.#state.scale;
+		const scaleArg = scaleName ? ` --scales ${scaleName}` : "";
+		const runWorkflowCmd = `python3 python-utils/workflow.py --dataset ${datasetName}${scaleArg}`;
+		const repoRef = meta.gitCommit || "main";
 
 		const summary = document.createElement("summary");
 		summary.innerHTML = `
-			<span class="protocol-title">Benchmark Protocol</span>
-			<span class="protocol-summary-meta">${escapeHtml(jvmVer)} · ${escapeHtml(cpuName)} · ${reps} isolated runs</span>
-			<div class="protocol-links" onclick="event.stopPropagation();">
-				<a class="protocol-link" href="./data/benchmark-report.json" target="_blank" download="benchmark-report.json" title="Download raw JSON report data">Raw JSON ↗</a>
-				<a class="protocol-link" href="https://github.com/corese-stack/corese-benchmark" target="_blank" rel="noopener" title="Source code on GitHub">Source ↗</a>
-			</div>
+			<span class="protocol-title">Measurement Protocol</span>
+			<span class="protocol-summary-meta">${reps} measured repetitions · Separate JVM per engine</span>
 			<span class="protocol-chevron" aria-hidden="true">▾</span>
 		`;
 		details.appendChild(summary);
@@ -509,42 +924,65 @@ export class LoadingView {
 		const body = document.createElement("div");
 		body.className = "protocol-body";
 
-		// Column 1: Reproduction Commands
+		// Column 1: Reproduction Workflow
 		const colCmds = document.createElement("div");
-		colCmds.innerHTML = `<h4 class="protocol-section-title">Reproduction Commands</h4>`;
-		const cmds = [
-			{ label: "Convert datasets", cmd: "./gradlew convertDatasets" },
-			{ label: "Verify canonical W3C parity", cmd: './gradlew test --tests "*DatasetParityTest*"' },
-			{ label: "Run ingestion benchmark", cmd: "./gradlew runBenchmark" },
-		];
-		cmds.forEach(({ label, cmd }) => {
-			const box = document.createElement("div");
-			box.className = "protocol-cmd-box";
-			box.innerHTML = `
-				<code title="${escapeHtml(label)}">${escapeHtml(cmd)}</code>
-				<button type="button" class="btn-copy-cmd" data-cmd="${escapeHtml(cmd)}">Copy</button>
-			`;
-			const copyBtn = box.querySelector(".btn-copy-cmd");
-			copyBtn.addEventListener("click", () => {
-				navigator.clipboard.writeText(cmd).then(() => {
+		colCmds.className = "protocol-col";
+		colCmds.innerHTML = `
+			<h4 class="protocol-section-title">Reproduce this benchmark</h4>
+			<p class="dataset-card__note" style="margin: 0 0 0.5rem;">
+				Run the complete, reproducible pipeline for the active dataset (handles acquisition, multi-format conversion, and isolated engine benchmarks):
+			</p>
+			<div class="protocol-cmd-box">
+				<code>${escapeHtml(runWorkflowCmd)}</code>
+				<button type="button" class="btn-copy-cmd" data-cmd="${escapeHtml(runWorkflowCmd)}">Copy</button>
+			</div>
+			<div style="display:flex;align-items:center;gap:1.25rem;margin-top:0.75rem;font-size:0.8125rem;">
+				<a class="protocol-link" href="./data/benchmark-report.json" target="_blank" download="benchmark-report.json" style="font-weight:600;">
+					Download report (.json) ⤓
+				</a>
+				<a class="protocol-link" href="https://github.com/corese-stack/corese-benchmark/blob/${escapeHtml(repoRef)}/src/main/java/fr/inria/corese/benchmark/harness/BenchmarkHarness.java" target="_blank" rel="noopener">
+					Harness implementation ↗
+				</a>
+			</div>
+		`;
+		const copyBtn = colCmds.querySelector(".btn-copy-cmd");
+		copyBtn.addEventListener("click", () => {
+			if (!navigator.clipboard?.writeText) {
+				copyBtn.textContent = "Error ✗";
+				setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
+				return;
+			}
+			navigator.clipboard.writeText(runWorkflowCmd).then(
+				() => {
 					copyBtn.textContent = "Copied ✓";
 					setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
-				});
-			});
-			colCmds.appendChild(box);
+				},
+				() => {
+					copyBtn.textContent = "Error ✗";
+					setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
+				}
+			);
 		});
 
 		// Column 2: Execution Environment (Live data from report metadata)
 		const colEnv = document.createElement("div");
+		colEnv.className = "protocol-col";
 		colEnv.innerHTML = `
-			<h4 class="protocol-section-title">Execution Environment & Flags</h4>
-			<ul class="protocol-info-list">
-				<li><strong>OS :</strong> ${escapeHtml(osDist)} (${escapeHtml(env.osKernel || "x86_64")})</li>
-				<li><strong>CPU :</strong> ${escapeHtml(cpuName)} (${env.cpuCores || 8} cores, ${env.cpuThreads || 8} threads)</li>
-				<li><strong>JVM Flags :</strong> <code>${escapeHtml(jvmFlags)}</code></li>
-				<li><strong>Isolation :</strong> Sequential runs in dedicated child JVM processes</li>
-				<li><strong>Metric :</strong> Median across ${reps} isolated runs (warmup: ${proto.warmup || 1})</li>
-			</ul>
+			<h4 class="protocol-section-title">Execution environment & measurement settings</h4>
+			<dl class="protocol-facts">
+				<dt>Operating system</dt>
+				<dd>${escapeHtml(osDist)} (${escapeHtml(env.osKernel || "x86_64")})</dd>
+				<dt>Java runtime</dt>
+				<dd>${escapeHtml(jvmVer)}</dd>
+				<dt>Hardware</dt>
+				<dd>${escapeHtml(cpuName)} · ${env.cpuCores || 8} cores, ${env.cpuThreads || 8} threads</dd>
+				<dt>JVM flags</dt>
+				<dd><code>${escapeHtml(jvmFlags)}</code></dd>
+				<dt>Isolation</dt>
+				<dd>Sequential runs in dedicated child JVM processes per engine</dd>
+				<dt>Measurement</dt>
+				<dd>Median of ${reps} measured repetitions (warm-up: ${warmup})</dd>
+			</dl>
 		`;
 
 		body.appendChild(colCmds);
@@ -559,9 +997,8 @@ export class LoadingView {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
 
-		const firstRow = rows[0];
-		const triplesCount = firstRow?.triples ? `${firstRow.triples.toLocaleString()} triples` : null;
-		const dsMeta = [triplesCount, "Median of 3 runs per engine/format"].filter(Boolean).join(" · ");
+		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
+		const dsMeta = `Median of ${reps} runs per engine/format`;
 
 		const header = document.createElement("div");
 		header.className = "section-header";
@@ -591,7 +1028,7 @@ export class LoadingView {
 	}
 
 	#initSummaryChart(rows, orderedEngines, catalog) {
-		if (typeof window.Chart === "undefined") return;
+		if (window.Chart === undefined) return;
 
 		const canvas = document.getElementById("loading-summary-chart");
 		if (!canvas) return;
@@ -704,9 +1141,9 @@ export class LoadingView {
 										if (typeof baseColor === "string" && baseColor.startsWith("#")) {
 											const hex = baseColor.replace("#", "");
 											if (hex.length === 6) {
-												r = parseInt(hex.substring(0, 2), 16);
-												g = parseInt(hex.substring(2, 4), 16);
-												b = parseInt(hex.substring(4, 6), 16);
+												r = Number.parseInt(hex.substring(0, 2), 16);
+												g = Number.parseInt(hex.substring(2, 4), 16);
+												b = Number.parseInt(hex.substring(4, 6), 16);
 											}
 										}
 
@@ -796,7 +1233,7 @@ export class LoadingView {
 					if (meta.hidden) continue;
 					for (let i = 0; i < meta.data.length; i++) {
 						const el = meta.data[i];
-						if (el && el.inRange(x, y)) {
+						if (el?.inRange(x, y)) {
 							return { datasetIndex: d, index: i, element: el };
 						}
 					}
