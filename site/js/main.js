@@ -3,8 +3,8 @@
  */
 
 import { loadBenchmarkReport } from "./api.js";
-import { engineManager } from "./engines.js?v=67";
-import { LoadingView } from "./views/loading.js?v=67";
+import { engineManager } from "./engines.js?v=68";
+import { LoadingView } from "./views/loading.js?v=68";
 import {
 	getCurrentView,
 	navigateToView,
