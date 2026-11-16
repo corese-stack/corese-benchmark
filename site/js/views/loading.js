@@ -41,15 +41,7 @@ export class LoadingView {
 
 		if (typeof window !== "undefined") {
 			const urlState = parseUrlLoading(window.location.search);
-			this.#state.dataset = urlState.dataset;
-			this.#state.scale = urlState.scale;
-			this.#state.formats = urlState.formats;
-			this.#state.telemetryFormat = urlState.telemetryFormat;
-			this.#state.section = urlState.section;
-			this.#state.pin = urlState.pin;
-			if (urlState.pin) {
-				focusStore.pin(urlState.pin);
-			}
+			this.restoreState(urlState, activeEngines);
 		}
 	}
 
@@ -384,9 +376,10 @@ export class LoadingView {
 		// Synchronize current focus visuals on fresh render
 		this.#syncFocusVisuals();
 
-		// Scroll to targeted section if present in URL
+		// Scroll to targeted section only once at initial mount/navigation
 		if (this.#state.section) {
 			const targetId = `section-loading-${this.#state.section}`;
+			this.#state.section = null;
 			requestAnimationFrame(() => {
 				const target = this.#root?.querySelector(`#${targetId}`);
 				if (target) {

@@ -102,7 +102,7 @@ export class FocusStore extends EventTarget {
 	 * Pin target directly.
 	 */
 	pin(target) {
-		if (!target?.key) return;
+		if (!target?.key || sameTarget(this.#state.pinned, target)) return;
 		this.#state = { ...this.#state, pinned: target };
 		this.#notify();
 	}
