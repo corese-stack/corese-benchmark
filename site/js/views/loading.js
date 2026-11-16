@@ -3,7 +3,7 @@
  * Evaluates ingestion throughput, retained heap, and JVM heap telemetry across engines.
  */
 
-import { attachChartPointerInteraction, colorWithAlpha, findBarElement } from "../chart-utils.js";
+import { attachChartPointerInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement } from "../chart-utils.js";
 import { renderDatasetCard } from "../datasets.js";
 import { escapeHtml, formatEngineId, isBranchVersion, parseEngineId } from "../engine-id.js";
 import {
@@ -196,7 +196,7 @@ export class LoadingView {
 		this.#charts.forEach((chart, chartKey) => {
 			if (!chart?.data?.datasets) return;
 
-			if (chartKey === "memory") {
+			if (chartKey === "memory" || chartKey === "disk") {
 				// Horizontal bar chart: 1 dataset, each bar = 1 engine
 				const ds = chart.data.datasets[0];
 				if (!ds || !chart._engineKeys) return;
@@ -354,15 +354,28 @@ export class LoadingView {
 			return activeEngineLabels.has(r.engine) || activeEngineKeys.has(r.engine) || activeEngineKeys.has(normalizedKey);
 		});
 
+		// Check whether in-memory and on-disk engines are present in selection
+		const hasInMemoryEngines = orderedEngineConfigs.some((e) => e.storageId !== "tdb2" && e.storageId !== "native" && e.storageId !== "lmdb");
+		const hasOnDiskEngines = orderedEngineConfigs.some((e) => e.storageId === "tdb2" || e.storageId === "native" || e.storageId === "lmdb");
+
 		// Multi-Format Throughput Summary Chart
 		const throughputEl = this.#renderSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
 		throughputEl.id = "section-loading-throughput";
 		section.appendChild(throughputEl);
 
-		// Retained Heap After Ingestion Chart
-		const memoryEl = this.#renderMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
-		memoryEl.id = "section-loading-retained-heap";
-		section.appendChild(memoryEl);
+		// Retained Heap After Ingestion Chart (displayed only if in-memory engines are active)
+		if (hasInMemoryEngines) {
+			const memoryEl = this.#renderMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+			memoryEl.id = "section-loading-retained-heap";
+			section.appendChild(memoryEl);
+		}
+
+		// On-Disk Storage Footprint Chart (displayed only if persistent engines are active)
+		if (hasOnDiskEngines) {
+			const diskEl = this.#renderDiskChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+			diskEl.id = "section-loading-disk-footprint";
+			section.appendChild(diskEl);
+		}
 
 		// Dynamic Ingestion Telemetry Profile
 		const telemetryEl = this.#renderTelemetryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
@@ -378,7 +391,12 @@ export class LoadingView {
 
 		// Render Chart.js instances after DOM mounting
 		this.#initSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
-		this.#initMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		if (hasInMemoryEngines) {
+			this.#initMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		}
+		if (hasOnDiskEngines) {
+			this.#initDiskChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		}
 		this.#initTelemetryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
 
 		// Synchronize current focus visuals on fresh render
@@ -786,83 +804,13 @@ export class LoadingView {
 						}
 					},
 					plugins: {
-						legend: {
-							position: "top",
-							onHover: (e, legendItem, legend) => {
-								const chart = legend.chart;
-								const dataset = chart.data.datasets[legendItem.datasetIndex];
-								if (dataset?._engineKey) {
-									this.#legendHover.set({ kind: "engine", key: dataset._engineKey });
-								}
-							},
-							onLeave: () => {
-								this.#legendHover.clear();
-							},
-							onClick: (e, legendItem, legend) => {
-								const chart = legend.chart;
-								const dataset = chart.data.datasets[legendItem.datasetIndex];
-								if (dataset?._engineKey) {
-									focusStore.togglePin({ kind: "engine", key: dataset._engineKey });
-								}
-							},
-							labels: {
-								generateLabels: (c) => {
-									const defaultGen = window.Chart.defaults.plugins.legend.labels.generateLabels;
-									const items = defaultGen(c);
-									const focus = focusStore.effectiveFocus;
-
-									return items.map((item) => {
-										const ds = c.data.datasets[item.datasetIndex];
-										if (!ds) return item;
-										const baseColor = ds._baseColor || "#888";
-
-										let isMatch = true;
-										if (focus) {
-											if (focus.target.kind === "engine") {
-												isMatch = ds._engineKey === focus.target.key;
-											} else if (focus.target.kind === "measure") {
-												const [targetEng] = focus.target.key.split("|");
-												isMatch = ds._engineKey === targetEng;
-											}
-										}
-
-										let r = 0, g = 0, b = 0;
-										if (typeof baseColor === "string" && baseColor.startsWith("#")) {
-											const hex = baseColor.replace("#", "");
-											if (hex.length === 6) {
-												r = Number.parseInt(hex.substring(0, 2), 16);
-												g = Number.parseInt(hex.substring(2, 4), 16);
-												b = Number.parseInt(hex.substring(4, 6), 16);
-											}
-										}
-
-										const fill = isMatch ? baseColor : `rgba(${r}, ${g}, ${b}, 0.22)`;
-										item.fillStyle = fill;
-										item.strokeStyle = fill;
-										return item;
-									});
-								},
-								color: (ctx) => {
-									const focus = focusStore.effectiveFocus;
-									const dsIndex = ctx.datasetIndex;
-									const ds = ctx.chart.data.datasets[dsIndex];
-									if (!ds || !focus) return textColor;
-
-									if (focus.target.kind === "measure") {
-										const [targetEng] = focus.target.key.split("|");
-										return ds._engineKey === targetEng ? textColor : "rgba(128, 128, 128, 0.4)";
-									}
-									if (focus.target.kind === "engine") {
-										return ds._engineKey === focus.target.key ? textColor : "rgba(128, 128, 128, 0.4)";
-									}
-									return textColor;
-								},
-								font: { family: "Inter, sans-serif", size: 12, weight: 500 },
-								usePointStyle: true,
-								boxWidth: 8,
-								padding: 16,
-							},
-						},
+						legend: createEngineLegendConfig({
+							onEngineHover: (key) => this.#legendHover.set({ kind: "engine", key }),
+							onEngineLeave: () => this.#legendHover.clear(),
+							onEngineTogglePin: (key) => focusStore.togglePin({ kind: "engine", key }),
+							focusStore,
+							textColor,
+						}),
 						tooltip: {
 							callbacks: {
 								label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw} kTriples/s`,
@@ -1165,6 +1113,254 @@ export class LoadingView {
 		}
 	}
 
+	#renderDiskChart(rows, orderedEngines, catalog) {
+		const section = document.createElement("div");
+		section.className = "dashboard-section";
+
+		const dsMeta = "Selected on-disk engines · Median across selected formats · Sorted by storage footprint ascending";
+
+		const header = document.createElement("div");
+		header.className = "section-header";
+		header.innerHTML = `
+			<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
+				<h3 style="margin:0;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;">
+					<span>On-Disk Storage Footprint</span>
+					<span class="tag-format">B / triple</span>
+				</h3>
+			</div>
+			<span class="section-meta">
+				<span class="meta-label">${escapeHtml(dsMeta)}</span>
+				<span class="badge-pinned" style="display:none;" aria-live="polite">Pinned · <kbd>Esc</kbd> to reset</span>
+			</span>
+		`;
+
+		section.appendChild(header);
+
+		const body = document.createElement("div");
+		body.className = "section-body";
+		body.style.position = "relative";
+		body.style.height = "260px";
+
+		const canvas = document.createElement("canvas");
+		canvas.id = "loading-disk-chart";
+		body.appendChild(canvas);
+
+		section.appendChild(body);
+		return section;
+	}
+
+	#initDiskChart(rows, orderedEngines, catalog) {
+		if (window.Chart === undefined) return;
+
+		const canvas = document.getElementById("loading-disk-chart");
+		if (!canvas) return;
+
+		const signal = this.#renderAbortController?.signal || this.#abortController?.signal;
+
+		// Strictly persistent on-disk engines
+		const diskEngines = orderedEngines.filter((eng) => {
+			return eng.storageId === "tdb2" || eng.storageId === "native" || eng.storageId === "lmdb";
+		});
+
+		// Compute per-engine disk footprint summary across active formats
+		const engineSummaries = diskEngines.map((engConfig) => {
+			const engineRows = rows.filter((r) => {
+				const rowKey = formatEngineId(parseEngineId(r.engine));
+				const fmt = r.format || r.file?.split(".").pop();
+				return (rowKey === engConfig.key || r.engine === engConfig.key) &&
+					this.#state.formats.has(fmt) &&
+					typeof r.diskFootprintBytes === "number" &&
+					Number.isFinite(r.diskFootprintBytes) &&
+					r.diskFootprintBytes > 0 &&
+					r.triples > 0;
+			});
+
+			const bValues = engineRows.map((r) => {
+				const bPerTriple = Math.round(r.diskFootprintBytes / r.triples);
+				const fmt = r.format || r.file?.split(".").pop();
+				const mib = r.diskFootprintBytes / (1024 * 1024);
+				return { format: fmt, bPerTriple, mib };
+			}).sort((a, b) => a.bPerTriple - b.bPerTriple);
+
+			let medianB = null;
+			let minB = null;
+			let maxB = null;
+			let medianMib = null;
+
+			if (bValues.length > 0) {
+				const mid = Math.floor(bValues.length / 2);
+				if (bValues.length % 2 === 1) {
+					medianB = bValues[mid].bPerTriple;
+					medianMib = bValues[mid].mib;
+				} else {
+					medianB = Math.round((bValues[mid - 1].bPerTriple + bValues[mid].bPerTriple) / 2);
+					medianMib = (bValues[mid - 1].mib + bValues[mid].mib) / 2;
+				}
+				minB = bValues[0].bPerTriple;
+				maxB = bValues[bValues.length - 1].bPerTriple;
+			}
+
+			return {
+				engineKey: engConfig.key,
+				label: engConfig.label,
+				color: engConfig.style.color,
+				medianB,
+				minB,
+				maxB,
+				medianMib,
+				details: bValues,
+			};
+		}).filter((item) => item.medianB !== null);
+
+		if (engineSummaries.length === 0) {
+			const parent = canvas.parentElement;
+			if (parent) {
+				parent.innerHTML = `
+					<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:13px;">
+						On-disk storage footprint measurements will be populated after the next benchmark run.
+					</div>
+				`;
+			}
+			return;
+		}
+
+		engineSummaries.sort((a, b) => (a.medianB ?? 999999) - (b.medianB ?? 999999));
+
+		const labels = engineSummaries.map((s) => s.label);
+		const dataValues = engineSummaries.map((s) => s.medianB);
+		const colors = engineSummaries.map((s) => s.color);
+		const engineKeys = engineSummaries.map((s) => s.engineKey);
+
+		const isDark = document.documentElement.dataset.theme === "dark";
+		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+		const textColor = isDark ? "#8b949e" : "#656d76";
+
+		try {
+			const chart = new window.Chart(canvas, {
+				type: "bar",
+				data: {
+					labels: labels,
+					datasets: [
+						{
+							label: "Median Disk Footprint",
+							data: dataValues,
+							backgroundColor: colors,
+							borderRadius: 4,
+							barThickness: 24,
+							_baseColors: colors,
+						},
+					],
+				},
+				options: {
+					indexAxis: "y",
+					responsive: true,
+					maintainAspectRatio: false,
+					animation: false,
+					plugins: {
+						legend: { display: false },
+						tooltip: {
+							callbacks: {
+								title: (items) => (items && items.length > 0 ? items[0].label : ""),
+								label: (ctx) => {
+									const summary = engineSummaries[ctx.dataIndex];
+									if (!summary) return "";
+									const mibStr = summary.medianMib ? ` (${summary.medianMib.toFixed(1)} MiB)` : "";
+									const rangeStr = summary.minB !== summary.maxB ? ` [range: ${summary.minB} – ${summary.maxB} B/t]` : "";
+									return ` Median: ${summary.medianB} B / triple${mibStr}${rangeStr}`;
+								},
+								afterBody: (items) => {
+									if (!items || items.length === 0) return [];
+									const summary = engineSummaries[items[0].dataIndex];
+									if (!summary?.details || summary.details.length <= 1) return [];
+									return [
+										"",
+										"Across formats:",
+										...summary.details.map((d) => `  .${d.format}: ${d.bPerTriple} B/t (${d.mib.toFixed(1)} MiB)`),
+									];
+								},
+							},
+						},
+					},
+					layout: { padding: { top: 8, bottom: 8 } },
+					scales: {
+						x: {
+							beginAtZero: true,
+							grid: { color: gridColor },
+							ticks: {
+								color: textColor,
+								font: { weight: 600 },
+								callback: (val) => `${val} B`,
+							},
+							title: {
+								display: true,
+								text: "Storage Footprint (Bytes / Triple) — Lower is better",
+								color: textColor,
+								font: { size: 11, weight: 600 },
+							},
+						},
+						y: {
+							grid: { display: false },
+							ticks: { color: textColor, font: { weight: 600, size: 12 } },
+						},
+					},
+				},
+			});
+
+			const clearCanvasState = () => {
+				this.#canvasHover.clear();
+				if (chart) {
+					chart.setActiveElements([]);
+					if (chart.tooltip) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+					chart.update("none");
+				}
+			};
+
+			canvas.addEventListener("pointerleave", clearCanvasState, { signal });
+			canvas.addEventListener("pointercancel", clearCanvasState, { signal });
+			canvas.addEventListener("mouseout", clearCanvasState, { signal });
+
+			canvas.addEventListener(
+				"pointermove",
+				(e) => {
+					const rect = canvas.getBoundingClientRect();
+					const x = e.clientX - rect.left;
+					const y = e.clientY - rect.top;
+
+					if (!chart.isPointInArea({ x, y })) {
+						clearCanvasState();
+						return;
+					}
+
+					const hit = findBarElement(chart, x, y);
+					if (hit) {
+						const summary = engineSummaries[hit.index];
+						if (summary) {
+							this.#canvasHover.set({ kind: "engine", key: summary.engineKey });
+							const activeElements = [{ datasetIndex: 0, index: hit.index }];
+							chart.setActiveElements(activeElements);
+							if (chart.tooltip) {
+								chart.tooltip.setActiveElements(activeElements, { x, y });
+							}
+							chart.update("none");
+						} else {
+							clearCanvasState();
+						}
+					} else {
+						clearCanvasState();
+					}
+				},
+				{ signal, passive: true },
+			);
+
+			window.addEventListener("scroll", clearCanvasState, { signal, passive: true });
+
+			chart._engineKeys = engineKeys;
+			this.#charts.set("disk", chart);
+		} catch (err) {
+			console.error("Failed to render Chart.js disk:", err);
+		}
+	}
+
 	#renderTelemetryChart(rows, orderedEngines, catalog) {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
@@ -1184,7 +1380,7 @@ export class LoadingView {
 		}
 
 		const currentFormat = this.#state.telemetryFormat;
-		const dsMeta = "Final recorded run · Sampled ≈100 ms";
+		const dsMeta = "Final repetition run · Sampled ≈100 ms during ingestion · Excludes native memory & OS page cache";
 
 		const header = document.createElement("div");
 		header.className = "section-header";
@@ -1203,43 +1399,43 @@ export class LoadingView {
 		h3.style.alignItems = "center";
 		h3.style.gap = "8px";
 		h3.innerHTML = `
-			<span>Heap Telemetry Profile</span>
+			<span>JVM Heap Used Over Time</span>
 			<span class="tag-format">MiB</span>
 		`;
 		titleGroup.appendChild(h3);
 
-		// Format switch: styled segmented radio-like selector matching Design System
+		// Format switch: styled segmented control matching Design System
 		if (availableFormats.length > 0) {
 			const selectorWrap = document.createElement("div");
-			selectorWrap.className = "telemetry-format-selector";
-			selectorWrap.setAttribute("role", "radiogroup");
-			selectorWrap.setAttribute("aria-label", "Telemetry profile format");
+			selectorWrap.style.display = "flex";
+			selectorWrap.style.alignItems = "center";
+			selectorWrap.style.gap = "8px";
 
 			const selectorLabel = document.createElement("span");
-			selectorLabel.className = "telemetry-format-label";
-			selectorLabel.textContent = "Format:";
+			selectorLabel.className = "text-xs text-muted font-medium";
+			selectorLabel.textContent = "FORMAT:";
 			selectorWrap.appendChild(selectorLabel);
 
-			const pillGroup = document.createElement("div");
-			pillGroup.style.display = "inline-flex";
-			pillGroup.style.alignItems = "center";
-			pillGroup.style.gap = "4px";
+			const segGroup = document.createElement("div");
+			segGroup.className = "segmented-control";
+			segGroup.setAttribute("role", "radiogroup");
+			segGroup.setAttribute("aria-label", "Telemetry format selection");
 
 			availableFormats.forEach((fmt) => {
 				const isChecked = fmt === currentFormat;
 				const btn = document.createElement("button");
 				btn.type = "button";
-				btn.className = `telemetry-pill-btn ${isChecked ? "is-active" : ""}`;
+				btn.className = `segmented-control__btn ${isChecked ? "is-active" : ""}`;
 				btn.setAttribute("role", "radio");
 				btn.setAttribute("aria-checked", String(isChecked));
-				btn.textContent = `.${fmt}`;
-				btn.title = `Show heap telemetry curve for .${fmt}`;
+				btn.textContent = `.${fmt.toUpperCase()}`;
+				btn.title = `Show heap telemetry profile for .${fmt}`;
 				btn.addEventListener("click", () => {
 					this.#updateState({ telemetryFormat: fmt }, { history: "replace" });
 				});
-				pillGroup.appendChild(btn);
+				segGroup.appendChild(btn);
 			});
-			selectorWrap.appendChild(pillGroup);
+			selectorWrap.appendChild(segGroup);
 			titleGroup.appendChild(selectorWrap);
 		}
 
@@ -1330,6 +1526,8 @@ export class LoadingView {
 
 			engineKeys.push(engConfig.key);
 
+			const isDisk = engConfig.storageId === "tdb2" || engConfig.storageId === "native" || engConfig.storageId === "lmdb";
+
 			datasets.push({
 				label: engConfig.label,
 				_engineKey: engConfig.key,
@@ -1337,6 +1535,7 @@ export class LoadingView {
 				_maxHeap: maxHeap,
 				_totalTriples: totalTriples,
 				_loadingDurSec: loadingDurSec,
+				_isDisk: isDisk,
 				data: validPoints,
 				borderColor: engConfig.style.color,
 				backgroundColor: "transparent",
@@ -1371,32 +1570,13 @@ export class LoadingView {
 						axis: "x",
 					},
 					plugins: {
-						legend: {
-							position: "top",
-							onHover: (e, legendItem, legend) => {
-								const c = legend.chart;
-								const ds = c.data.datasets[legendItem.datasetIndex];
-								if (ds?._engineKey) {
-									this.#legendHover.set({ kind: "engine", key: ds._engineKey });
-								}
-							},
-							onLeave: () => {
-								this.#legendHover.clear();
-							},
-							onClick: (e, legendItem, legend) => {
-								const c = legend.chart;
-								const ds = c.data.datasets[legendItem.datasetIndex];
-								if (ds?._engineKey) {
-									focusStore.togglePin({ kind: "engine", key: ds._engineKey });
-								}
-							},
-							labels: {
-								font: { family: "Inter, sans-serif", size: 12, weight: 500 },
-								usePointStyle: true,
-								boxWidth: 8,
-								padding: 16,
-							},
-						},
+						legend: createEngineLegendConfig({
+							onEngineHover: (key) => this.#legendHover.set({ kind: "engine", key }),
+							onEngineLeave: () => this.#legendHover.clear(),
+							onEngineTogglePin: (key) => focusStore.togglePin({ kind: "engine", key }),
+							focusStore,
+							textColor,
+						}),
 						tooltip: {
 							callbacks: {
 								title: (items) => {
@@ -1406,8 +1586,9 @@ export class LoadingView {
 								label: (ctx) => {
 									const ds = ctx.dataset;
 									const isLastPoint = ctx.raw?.isPostGcFinal;
-									const tag = isLastPoint ? " [final post-GC]" : "";
-									return ` ${ds.label}: ${ctx.parsed.y.toFixed(1)} MiB${tag}`;
+									const postGcTag = isLastPoint ? " [final post-GC]" : "";
+									const diskTag = ds._isDisk ? " [persistent buffer]" : "";
+									return ` ${ds.label}: ${ctx.parsed.y.toFixed(1)} MiB${postGcTag}${diskTag}`;
 								},
 								afterBody: (items) => {
 									if (!items || items.length === 0) return [];
@@ -1484,6 +1665,8 @@ export class LoadingView {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
 
+		const hasOnDiskEngines = orderedEngines.some((e) => e.storageId === "tdb2" || e.storageId === "native" || e.storageId === "lmdb");
+
 		// Group by format, then sort by throughput descending
 		const formatOrder = ALL_FORMATS.filter((f) => this.#state.formats.has(f));
 		const sortedRows = [...rows].sort((a, b) => {
@@ -1525,6 +1708,7 @@ export class LoadingView {
 				<th class="text-right">Median Time</th>
 				<th class="text-right">Throughput</th>
 				<th class="text-right">Net Heap</th>
+				${hasOnDiskEngines ? '<th class="text-right">Disk Size</th>' : ""}
 				<th class="text-right">Repetitions (ms)</th>
 			</tr>
 		`;
@@ -1532,9 +1716,10 @@ export class LoadingView {
 
 		const tbody = document.createElement("tbody");
 		let lastFormat = null;
+		const totalCols = hasOnDiskEngines ? 7 : 6;
 		if (sortedRows.length === 0) {
 			const tr = document.createElement("tr");
-			tr.innerHTML = `<td colspan="6" class="text-center text-muted" style="padding:24px;">No data matching active engines and format filters</td>`;
+			tr.innerHTML = `<td colspan="${totalCols}" class="text-center text-muted" style="padding:24px;">No data matching active engines and format filters</td>`;
 			tbody.appendChild(tr);
 		} else {
 			sortedRows.forEach((r) => {
@@ -1558,6 +1743,14 @@ export class LoadingView {
 
 				const repsStr = (r.repetitionsMs || []).join(", ");
 				const throughputK = (r.throughputTriplesPerSec / 1000).toFixed(0);
+				const isDisk = parsed.storageId === "tdb2" || parsed.storageId === "native" || parsed.storageId === "lmdb";
+				let diskText = "N/A";
+				if (isDisk) {
+					diskText = r.diskFootprintBytes ? `${(r.diskFootprintBytes / (1024 * 1024)).toFixed(1)} MiB` : "—";
+				}
+				const diskCell = hasOnDiskEngines
+					? `<td class="text-right font-mono text-muted">${diskText}</td>`
+					: "";
 
 				tr.innerHTML = `
 					<td>
@@ -1572,6 +1765,7 @@ export class LoadingView {
 					<td class="text-right font-mono font-medium">${r.loadingTimeMs ? `${r.loadingTimeMs} ms` : "—"}</td>
 					<td class="text-right font-mono font-medium" style="color:var(--focus);">${throughputK} k/s</td>
 					<td class="text-right font-mono text-muted">${r.memoryDeltaMb ? `${r.memoryDeltaMb.toFixed(1)} MiB` : "—"}</td>
+					${diskCell}
 					<td class="text-right font-mono text-xs text-muted">[${escapeHtml(repsStr)}]</td>
 				`;
 

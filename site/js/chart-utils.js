@@ -115,3 +115,80 @@ export function attachChartPointerInteraction(chart, canvas, activeFormats, hove
 
 	window.addEventListener("scroll", clearState, { signal, passive: true });
 }
+
+/**
+ * Builds standard Chart.js legend configuration with interactive circular color badges,
+ * focus dimming, and bidirectional pointer hover/pin interactions.
+ */
+export function createEngineLegendConfig({ onEngineHover, onEngineLeave, onEngineTogglePin, focusStore, textColor }) {
+	return {
+		position: "top",
+		onHover: (e, legendItem, legend) => {
+			const chart = legend.chart;
+			const dataset = chart.data.datasets[legendItem.datasetIndex];
+			if (dataset?._engineKey && onEngineHover) {
+				onEngineHover(dataset._engineKey);
+			}
+		},
+		onLeave: () => {
+			if (onEngineLeave) onEngineLeave();
+		},
+		onClick: (e, legendItem, legend) => {
+			const chart = legend.chart;
+			const dataset = chart.data.datasets[legendItem.datasetIndex];
+			if (dataset?._engineKey && onEngineTogglePin) {
+				onEngineTogglePin(dataset._engineKey);
+			}
+		},
+		labels: {
+			font: { family: "Inter, sans-serif", size: 12, weight: 500 },
+			usePointStyle: true,
+			pointStyle: "circle",
+			boxWidth: 8,
+			boxHeight: 8,
+			padding: 16,
+			generateLabels: (c) => {
+				const defaultGen = window.Chart.defaults.plugins.legend.labels.generateLabels;
+				const items = defaultGen(c);
+				const focus = focusStore.effectiveFocus;
+
+				return items.map((item) => {
+					const ds = c.data.datasets[item.datasetIndex];
+					if (!ds) return item;
+					const baseColor = ds._baseColor || "#888";
+
+					let isMatch = true;
+					if (focus) {
+						if (focus.target.kind === "engine") {
+							isMatch = ds._engineKey === focus.target.key;
+						} else if (focus.target.kind === "measure") {
+							const [targetEng] = focus.target.key.split("|");
+							isMatch = ds._engineKey === targetEng;
+						}
+					}
+
+					const fill = isMatch ? baseColor : colorWithAlpha(baseColor, 0.22);
+					item.fillStyle = fill;
+					item.strokeStyle = fill;
+					item.pointStyle = "circle";
+					return item;
+				});
+			},
+			color: (ctx) => {
+				const focus = focusStore.effectiveFocus;
+				const dsIndex = ctx.datasetIndex;
+				const ds = ctx.chart.data.datasets[dsIndex];
+				if (!ds || !focus) return textColor;
+
+				if (focus.target.kind === "measure") {
+					const [targetEng] = focus.target.key.split("|");
+					return ds._engineKey === targetEng ? textColor : "rgba(128, 128, 128, 0.4)";
+				}
+				if (focus.target.kind === "engine") {
+					return ds._engineKey === focus.target.key ? textColor : "rgba(128, 128, 128, 0.4)";
+				}
+				return textColor;
+			},
+		},
+	};
+}
