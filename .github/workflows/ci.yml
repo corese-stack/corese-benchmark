@@ -294,6 +294,13 @@ jobs:
       - name: Check site/data output
         run: ls -la ./site/data/
 
+      - name: Upload benchmark report data
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-data
+          path: ./site/data/
+          retention-days: 30
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
