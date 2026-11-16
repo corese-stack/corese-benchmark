@@ -377,9 +377,10 @@ export function renderDatasetCard(state, container, reportData = null) {
 	}
 
 	const { details, title, context, body } = instance;
+	const defaultScale = key === "lubm" ? "medium" : "small";
 	const scaleKey = Object.hasOwn(metadata.scales, "default")
 		? "default"
-		: String(state.scale ?? "").trim().toLowerCase();
+		: String(state.scale ?? defaultScale).trim().toLowerCase();
 	const scale = Object.hasOwn(metadata.scales, scaleKey) ? metadata.scales[scaleKey] : null;
 	const reportId = reportData?.metadata?.gitCommit || reportData?.metadata?.timestamp || "default";
 	const signature = `${key}:${scaleKey}:${reportId}`;

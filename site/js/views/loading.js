@@ -27,7 +27,6 @@ export class LoadingView {
 	#tableHover = hoverSource();
 	#state = {
 		dataset: "bsbm",
-		scale: "small",
 		formats: new Set(ALL_FORMATS),
 		telemetryFormat: null,
 		section: null,
@@ -56,7 +55,6 @@ export class LoadingView {
 		}
 		if (newState) {
 			this.#state.dataset = newState.dataset || "bsbm";
-			this.#state.scale = newState.scale || "small";
 			this.#state.formats = newState.formats || new Set(ALL_FORMATS);
 			this.#state.telemetryFormat = newState.telemetryFormat || null;
 			this.#state.section = newState.section || null;
@@ -315,21 +313,31 @@ export class LoadingView {
 		protocolEl.id = "section-loading-protocol";
 		section.appendChild(protocolEl);
 
-		// Filter runs by dataset, scale AND format uniformly
+		// Filter runs by dataset and format uniformly using canonical representative files
 		const allLoadingRuns = this.#data?.loadingRuns || [];
 		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
+		const isLubm = this.#state.dataset.toLowerCase() === "lubm";
+		const isBowlogna = this.#state.dataset.toLowerCase() === "bowlogna";
+
 		const datasetFilteredRows = allLoadingRuns.filter((r) => {
 			const matchDs = r.dataset?.toLowerCase() === this.#state.dataset.toLowerCase();
-			const matchScale = this.#matchScale(r.file, this.#state.scale);
 			const fmt = r.format || r.file?.split(".").pop();
 			const matchFormat = this.#state.formats.has(fmt);
 
-			// For DBpedia, use the canonical cross-format slice (persondata_en) across all views
+			// DBpedia: canonical cross-format slice (persondata_en)
 			if (isDbpedia && !r.file?.startsWith("persondata_en.")) {
 				return false;
 			}
+			// LUBM: canonical representative slice (medium, ~1.3M triples)
+			if (isLubm && !r.file?.includes("medium")) {
+				return false;
+			}
+			// Bowlogna: canonical representative department (Department0)
+			if (isBowlogna && !r.file?.startsWith("Department0.")) {
+				return false;
+			}
 
-			return matchDs && matchScale && matchFormat;
+			return matchDs && matchFormat;
 		});
 
 		// Order engines strictly following the active engine chips toolbar order
@@ -445,17 +453,6 @@ export class LoadingView {
 		});
 	}
 
-	#matchScale(fileName, scale) {
-		if (!fileName) return true;
-		const lower = fileName.toLowerCase();
-		if (scale === "small") {
-			return lower.includes("small") || (!lower.includes("large") && !lower.includes("medium"));
-		}
-		if (scale === "medium") return lower.includes("medium");
-		if (scale === "large") return lower.includes("large");
-		return true;
-	}
-
 	#renderControls() {
 		const bar = document.createElement("div");
 		bar.className = "view-controls";
@@ -513,58 +510,18 @@ export class LoadingView {
 		dsWrap.appendChild(dsGroup);
 		leftGroup.appendChild(dsWrap);
 
-		// Dynamic discovery of scales present for the current dataset
+		// Dynamic discovery of formats available for the current dataset (using canonical slices)
 		const datasetRuns = allRuns.filter((r) => r.dataset?.toLowerCase() === this.#state.dataset.toLowerCase());
-		const discoveredScales = new Set();
-		datasetRuns.forEach((r) => {
-			const lower = (r.file || "").toLowerCase();
-			if (lower.includes("small")) discoveredScales.add("small");
-			if (lower.includes("medium")) discoveredScales.add("medium");
-			if (lower.includes("large")) discoveredScales.add("large");
+		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
+		const isLubm = this.#state.dataset.toLowerCase() === "lubm";
+		const isBowlogna = this.#state.dataset.toLowerCase() === "bowlogna";
+
+		const currentViewRuns = datasetRuns.filter((r) => {
+			if (isDbpedia && !r.file?.startsWith("persondata_en.")) return false;
+			if (isLubm && !r.file?.includes("medium")) return false;
+			if (isBowlogna && !r.file?.startsWith("Department0.")) return false;
+			return true;
 		});
-
-		const scaleOrder = ["small", "medium", "large"];
-		const availableScales = scaleOrder.filter((s) => discoveredScales.has(s));
-
-		// Show scale selector only if the dataset actually has scale variations
-		if (availableScales.length > 1) {
-			if (!availableScales.includes(this.#state.scale)) {
-				this.#state.scale = availableScales[0];
-			}
-
-			const scaleWrap = document.createElement("div");
-			scaleWrap.style.display = "flex";
-			scaleWrap.style.alignItems = "center";
-			scaleWrap.style.gap = "8px";
-
-			const scaleLabel = document.createElement("span");
-			scaleLabel.className = "text-xs text-muted font-medium";
-			scaleLabel.textContent = "SCALE:";
-			scaleWrap.appendChild(scaleLabel);
-
-			const scaleGroup = document.createElement("div");
-			scaleGroup.className = "segmented-control";
-
-			availableScales.forEach((sc) => {
-				const btn = document.createElement("button");
-				btn.type = "button";
-				btn.className = `segmented-control__btn ${this.#state.scale === sc ? "is-active" : ""}`;
-				btn.textContent = sc.charAt(0).toUpperCase() + sc.slice(1);
-				btn.addEventListener("click", () => {
-					this.#updateState({ scale: sc }, { history: "push" });
-				});
-				scaleGroup.appendChild(btn);
-			});
-			scaleWrap.appendChild(scaleGroup);
-			leftGroup.appendChild(scaleWrap);
-		} else if (availableScales.length === 1) {
-			this.#state.scale = availableScales[0];
-		} else {
-			this.#state.scale = "small";
-		}
-
-		// Dynamic discovery of formats available for the current dataset and scale
-		const currentViewRuns = datasetRuns.filter((r) => this.#matchScale(r.file, this.#state.scale));
 		const discoveredFormats = new Set(
 			currentViewRuns.map((r) => r.format || r.file?.split(".").pop()).filter(Boolean)
 		);
@@ -638,9 +595,7 @@ export class LoadingView {
 		const reps = proto.repetitions || 3;
 		const warmup = proto.warmup !== undefined ? proto.warmup : 1;
 		const datasetName = this.#state.dataset || "bsbm";
-		const scaleName = this.#state.scale;
-		const scaleArg = scaleName ? ` --scales ${scaleName}` : "";
-		const runWorkflowCmd = `python3 python-utils/workflow.py --dataset ${datasetName}${scaleArg}`;
+		const runWorkflowCmd = `python3 python-utils/workflow.py --dataset ${datasetName}`;
 		const repoRef = meta.gitCommit || "main";
 
 		const summary = document.createElement("summary");

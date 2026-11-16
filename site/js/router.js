@@ -102,7 +102,6 @@ export function updateUrlEngines(selectedEngines = [], push = false) {
 }
 
 const VALID_DATASETS = new Set(["bsbm", "bowlogna", "dbpedia", "lubm"]);
-const VALID_SCALES = new Set(["small", "medium", "large"]);
 const DEFAULT_ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
 const VALID_FORMATS_SET = new Set(DEFAULT_ALL_FORMATS);
 export const VALID_LOADING_SECTIONS = new Set([
@@ -119,9 +118,6 @@ export function parseUrlLoading(searchStr) {
 
 	const rawDataset = (params.get("dataset") || "").trim().toLowerCase();
 	const dataset = VALID_DATASETS.has(rawDataset) ? rawDataset : "bsbm";
-
-	const rawScale = (params.get("scale") || "").trim().toLowerCase();
-	const scale = VALID_SCALES.has(rawScale) ? rawScale : "small";
 
 	let formats = new Set(DEFAULT_ALL_FORMATS);
 	if (params.has("formats")) {
@@ -149,7 +145,7 @@ export function parseUrlLoading(searchStr) {
 		pin = { kind: "measure", key: rawPin.slice(8) };
 	}
 
-	return { dataset, scale, formats, telemetryFormat, section, pin };
+	return { dataset, formats, telemetryFormat, section, pin };
 }
 
 function applyParam(params, key, value, defaultValue = null) {
@@ -166,7 +162,6 @@ export function updateUrlLoading(state, { history = "replace" } = {}) {
 	const params = new URLSearchParams(window.location.search);
 
 	applyParam(params, "dataset", state.dataset, "bsbm");
-	applyParam(params, "scale", state.scale, "small");
 
 	const hasCustomFormats = state.formats && state.formats.size < DEFAULT_ALL_FORMATS.length;
 	const serializedFormats = hasCustomFormats
