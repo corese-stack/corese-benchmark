@@ -506,6 +506,7 @@ export class LoadingView {
 		dataset: "bsbm",
 		scale: "small",
 		formats: new Set(ALL_FORMATS),
+		telemetryFormat: null,
 	};
 
 	constructor(container, reportData, activeEngines) {
@@ -669,6 +670,49 @@ export class LoadingView {
 				return;
 			}
 
+			if (chartKey === "telemetry") {
+				// Line chart: datasets represent engines
+				const format = this.#state.telemetryFormat;
+				chart.data.datasets.forEach((ds) => {
+					const eKey = ds._engineKey;
+					const baseColor = ds._baseColor || "#888";
+
+					if (!focus) {
+						ds.borderColor = baseColor;
+						ds.borderWidth = 2;
+						return;
+					}
+
+					let isMatch = false;
+					if (focus.target.kind === "engine") {
+						isMatch = eKey === focus.target.key;
+					} else if (focus.target.kind === "measure") {
+						const [targetEng, targetFmt] = focus.target.key.split("|");
+						isMatch = eKey === targetEng && (!format || format === targetFmt);
+					}
+
+					if (isMatch) {
+						ds.borderColor = baseColor;
+						ds.borderWidth = 3;
+					} else {
+						// Parse hex to RGBA muted
+						let r = 0, g = 0, b = 0;
+						if (typeof baseColor === "string" && baseColor.startsWith("#")) {
+							const hex = baseColor.replace("#", "");
+							if (hex.length === 6) {
+								r = Number.parseInt(hex.substring(0, 2), 16);
+								g = Number.parseInt(hex.substring(2, 4), 16);
+								b = Number.parseInt(hex.substring(4, 6), 16);
+							}
+						}
+						ds.borderColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
+						ds.borderWidth = 1.5;
+					}
+				});
+				chart.update();
+				return;
+			}
+
 			// Grouped bar chart (Summary Throughput)
 			const activeFormats = chart._activeFormats || ALL_FORMATS.filter((f) => this.#state.formats.has(f));
 
@@ -712,6 +756,7 @@ export class LoadingView {
 
 	render() {
 		if (!this.#root) return;
+		this.#legendHover.clear();
 		if (this.#renderAbortController) {
 			this.#renderAbortController.abort();
 		}
@@ -763,6 +808,9 @@ export class LoadingView {
 		// 3.1 Retained Heap After Ingestion Chart
 		section.appendChild(this.#renderMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
 
+		// 3.2 Dynamic Ingestion Telemetry Profile (Heap Allocation vs Elapsed Time)
+		section.appendChild(this.#renderTelemetryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
+
 		// 4. Detailed Data Table (grouped by format with throughput podium)
 		section.appendChild(this.#renderTable(strictlyFilteredRows, orderedEngineConfigs, catalog));
 
@@ -771,6 +819,7 @@ export class LoadingView {
 		// Render Chart.js instances after DOM mounting
 		this.#initSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
 		this.#initMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		this.#initTelemetryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
 
 		// Synchronize current focus visuals on fresh render
 		this.#syncFocusVisuals();
@@ -1116,7 +1165,7 @@ export class LoadingView {
 		section.className = "dashboard-section";
 
 		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
-		const dsMeta = `Median of ${reps} runs per engine/format`;
+		const dsMeta = `Selected engines and formats · Median of ${reps} runs per engine/format · Grouped by format`;
 
 		const header = document.createElement("div");
 		header.className = "section-header";
@@ -1340,8 +1389,7 @@ export class LoadingView {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
 
-		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
-		const dsMeta = `Median of ${reps} runs · In-memory JVM heap retained post-GC`;
+		const dsMeta = "Selected in-memory engines · Median across selected formats · Sorted by retained heap ascending";
 
 		const header = document.createElement("div");
 		header.className = "section-header";
@@ -1597,6 +1645,324 @@ export class LoadingView {
 		}
 	}
 
+	#renderTelemetryChart(rows, orderedEngines, catalog) {
+		const section = document.createElement("div");
+		section.className = "dashboard-section";
+
+		// Discover active formats that actually have timeSeries data
+		const availableFormats = ALL_FORMATS.filter((f) => {
+			if (!this.#state.formats.has(f)) return false;
+			return rows.some((r) => {
+				const rFmt = r.format || r.file?.split(".").pop();
+				return rFmt === f && Array.isArray(r.timeSeries) && r.timeSeries.length >= 2;
+			});
+		});
+
+		// Auto-select first available format if not set or invalid
+		if (!this.#state.telemetryFormat || !availableFormats.includes(this.#state.telemetryFormat)) {
+			this.#state.telemetryFormat = availableFormats[0] || null;
+		}
+
+		const currentFormat = this.#state.telemetryFormat;
+		const dsMeta = "Final recorded run · Sampled ≈100 ms";
+
+		const header = document.createElement("div");
+		header.className = "section-header";
+
+		const titleGroup = document.createElement("div");
+		titleGroup.style.display = "flex";
+		titleGroup.style.alignItems = "center";
+		titleGroup.style.flexWrap = "wrap";
+		titleGroup.style.gap = "10px";
+
+		const h3 = document.createElement("h3");
+		h3.style.margin = "0";
+		h3.style.fontSize = "15px";
+		h3.style.fontWeight = "600";
+		h3.style.display = "flex";
+		h3.style.alignItems = "center";
+		h3.style.gap = "8px";
+		h3.innerHTML = `
+			<span>Heap Telemetry Profile</span>
+			<span class="tag-format">MiB</span>
+		`;
+		titleGroup.appendChild(h3);
+
+		// Format switch: styled segmented radio-like selector matching Design System
+		if (availableFormats.length > 0) {
+			const selectorWrap = document.createElement("div");
+			selectorWrap.className = "telemetry-format-selector";
+			selectorWrap.setAttribute("role", "radiogroup");
+			selectorWrap.setAttribute("aria-label", "Telemetry profile format");
+
+			const selectorLabel = document.createElement("span");
+			selectorLabel.className = "telemetry-format-label";
+			selectorLabel.textContent = "Format:";
+			selectorWrap.appendChild(selectorLabel);
+
+			const pillGroup = document.createElement("div");
+			pillGroup.style.display = "inline-flex";
+			pillGroup.style.alignItems = "center";
+			pillGroup.style.gap = "4px";
+
+			availableFormats.forEach((fmt) => {
+				const isChecked = fmt === currentFormat;
+				const btn = document.createElement("button");
+				btn.type = "button";
+				btn.className = `telemetry-pill-btn ${isChecked ? "is-active" : ""}`;
+				btn.setAttribute("role", "radio");
+				btn.setAttribute("aria-checked", String(isChecked));
+				btn.textContent = `.${fmt}`;
+				btn.title = `Show heap telemetry curve for .${fmt}`;
+				btn.addEventListener("click", () => {
+					this.#state.telemetryFormat = fmt;
+					this.render();
+				});
+				pillGroup.appendChild(btn);
+			});
+			selectorWrap.appendChild(pillGroup);
+			titleGroup.appendChild(selectorWrap);
+		}
+
+		header.appendChild(titleGroup);
+
+		const metaSpan = document.createElement("span");
+		metaSpan.className = "section-meta";
+		metaSpan.innerHTML = `
+			<span class="meta-label">${escapeHtml(dsMeta)}</span>
+			<span class="badge-pinned" style="display:none;" aria-live="polite">Pinned · <kbd>Esc</kbd> to reset</span>
+		`;
+		header.appendChild(metaSpan);
+		section.appendChild(header);
+
+		const body = document.createElement("div");
+		body.className = "section-body";
+		body.style.position = "relative";
+		body.style.height = "320px";
+
+		if (!currentFormat) {
+			body.innerHTML = `
+				<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:13px;">
+					No time series telemetry available for the current selection.
+				</div>
+			`;
+		} else {
+			const canvas = document.createElement("canvas");
+			canvas.id = "loading-telemetry-chart";
+			body.appendChild(canvas);
+		}
+
+		section.appendChild(body);
+		return section;
+	}
+
+	#initTelemetryChart(rows, orderedEngines, catalog) {
+		if (window.Chart === undefined) return;
+
+		const canvas = document.getElementById("loading-telemetry-chart");
+		if (!canvas) return;
+
+		const signal = this.#renderAbortController?.signal || this.#abortController?.signal;
+		const currentFormat = this.#state.telemetryFormat;
+		if (!currentFormat) return;
+
+		// Filter runs matching the selected telemetry format and active engines
+		const formatRows = rows.filter((r) => {
+			const rFmt = r.format || r.file?.split(".").pop();
+			return rFmt === currentFormat && Array.isArray(r.timeSeries) && r.timeSeries.length >= 2;
+		});
+
+		// Build datasets per ordered engine
+		const datasets = [];
+		const engineKeys = [];
+
+		orderedEngines.forEach((engConfig) => {
+			const matchingRun = formatRows.find((r) => {
+				const rowKey = formatEngineId(parseEngineId(r.engine));
+				return rowKey === engConfig.key || r.engine === engConfig.key;
+			});
+
+			if (!matchingRun?.timeSeries) return;
+
+			// Validate and clean telemetry points: strictly finite positive numbers, monotonic elapsedMs
+			let lastElapsed = -1;
+			const validPoints = [];
+			for (let i = 0; i < matchingRun.timeSeries.length; i++) {
+				const p = matchingRun.timeSeries[i];
+				if (!p || typeof p.elapsedMs !== "number" || typeof p.heapUsedMb !== "number") continue;
+				if (!Number.isFinite(p.elapsedMs) || !Number.isFinite(p.heapUsedMb)) continue;
+				if (p.elapsedMs < 0 || p.heapUsedMb < 0) continue;
+				if (p.elapsedMs < lastElapsed) continue; // enforce chronological order
+
+				const isLastInRaw = i === matchingRun.timeSeries.length - 1;
+				validPoints.push({
+					x: p.elapsedMs / 1000,
+					y: p.heapUsedMb,
+					isPostGcFinal: isLastInRaw,
+				});
+				lastElapsed = p.elapsedMs;
+			}
+
+			if (validPoints.length < 2) return;
+
+			const maxHeap = Math.max(...validPoints.map((p) => p.y));
+			const finalHeap = validPoints.at(-1).y;
+			const totalTriples = matchingRun.triples || 0;
+			const loadingDurSec = matchingRun.loadingTimeMs ? matchingRun.loadingTimeMs / 1000 : null;
+
+			engineKeys.push(engConfig.key);
+
+			datasets.push({
+				label: engConfig.label,
+				_engineKey: engConfig.key,
+				_baseColor: engConfig.style.color,
+				_maxHeap: maxHeap,
+				_finalHeap: finalHeap,
+				_totalTriples: totalTriples,
+				_loadingDurSec: loadingDurSec,
+				data: validPoints,
+				borderColor: engConfig.style.color,
+				backgroundColor: "transparent",
+				borderWidth: 2,
+				pointRadius: (ctx) => (ctx.raw?.isPostGcFinal ? 4 : 0),
+				pointBackgroundColor: (ctx) => (ctx.raw?.isPostGcFinal ? engConfig.style.color : "transparent"),
+				pointBorderColor: "#ffffff",
+				pointBorderWidth: 1.5,
+				pointHoverRadius: 5,
+				pointHoverBackgroundColor: engConfig.style.color,
+				tension: 0, // Straight segments, no artificial Bezier smoothing
+			});
+		});
+
+		if (datasets.length === 0) return;
+
+		const isDark = document.documentElement.dataset.theme === "dark";
+		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+		const textColor = isDark ? "#8b949e" : "#656d76";
+
+		try {
+			const chart = new window.Chart(canvas, {
+				type: "line",
+				data: { datasets },
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					animation: false,
+					interaction: {
+						mode: "nearest",
+						intersect: false,
+						axis: "x",
+					},
+					plugins: {
+						legend: {
+							position: "top",
+							onHover: (e, legendItem, legend) => {
+								const c = legend.chart;
+								const ds = c.data.datasets[legendItem.datasetIndex];
+								if (ds?._engineKey) {
+									this.#legendHover.set({ kind: "engine", key: ds._engineKey });
+								}
+							},
+							onLeave: () => {
+								this.#legendHover.clear();
+							},
+							onClick: (e, legendItem, legend) => {
+								const c = legend.chart;
+								const ds = c.data.datasets[legendItem.datasetIndex];
+								if (ds?._engineKey) {
+									focusStore.togglePin({ kind: "engine", key: ds._engineKey });
+								}
+							},
+							labels: {
+								font: { family: "Inter, sans-serif", size: 12, weight: 500 },
+								usePointStyle: true,
+								boxWidth: 8,
+								padding: 16,
+							},
+						},
+						tooltip: {
+							callbacks: {
+								title: (items) => {
+									if (!items || items.length === 0) return "";
+									return `Elapsed Time: ${items[0].parsed.x.toFixed(2)} s`;
+								},
+								label: (ctx) => {
+									const ds = ctx.dataset;
+									const isLastPoint = ctx.raw?.isPostGcFinal;
+									const tag = isLastPoint ? " [final post-GC]" : "";
+									return ` ${ds.label}: ${ctx.parsed.y.toFixed(1)} MiB${tag}`;
+								},
+								afterBody: (items) => {
+									if (!items || items.length === 0) return [];
+									const ds = items[0].dataset;
+									const lines = [
+										"",
+										`Peak observed: ${ds._maxHeap.toFixed(1)} MiB`,
+										`Dataset size: ${ds._totalTriples.toLocaleString()} triples (progression: final-only)`,
+									];
+									if (ds._loadingDurSec !== null) {
+										lines.push(`Ingestion completed at: ~${ds._loadingDurSec.toFixed(2)} s`);
+									}
+									return lines;
+								},
+							},
+						},
+					},
+					layout: {
+						padding: {
+							top: 8,
+							bottom: 8,
+						},
+					},
+					scales: {
+						x: {
+							type: "linear",
+							grid: { color: gridColor },
+							ticks: {
+								color: textColor,
+								font: { weight: 600 },
+								callback: (val) => `${val} s`,
+							},
+							title: {
+								display: true,
+								text: "Elapsed Time (seconds)",
+								color: textColor,
+								font: { size: 11, weight: 600 },
+							},
+						},
+						y: {
+							beginAtZero: true,
+							grace: "10%",
+							grid: { color: gridColor },
+							ticks: {
+								color: textColor,
+								callback: (val) => `${val} MiB`,
+							},
+							title: {
+								display: true,
+								text: "JVM Heap Used (MiB)",
+								color: textColor,
+								font: { size: 11, weight: 600 },
+							},
+						},
+					},
+				},
+			});
+
+			// Reset legend hover on canvas pointerleave / pointercancel
+			const clearLegendOnExit = () => {
+				this.#legendHover.clear();
+			};
+			canvas.addEventListener("pointerleave", clearLegendOnExit, { signal });
+			canvas.addEventListener("pointercancel", clearLegendOnExit, { signal });
+
+			chart._engineKeys = engineKeys;
+			this.#charts.set("telemetry", chart);
+		} catch (err) {
+			console.error("Failed to render Chart.js telemetry:", err);
+		}
+	}
+
 	#renderTable(rows, orderedEngines, catalog) {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
@@ -1616,10 +1982,13 @@ export class LoadingView {
 		const header = document.createElement("div");
 		header.className = "section-header";
 		const count = sortedRows.length;
+		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
+		const dsMeta = `${count} configuration${count > 1 ? "s" : ""} · Median of ${reps} runs per engine/format · Grouped by format, sorted by throughput`;
+
 		header.innerHTML = `
 			<h3 style="margin:0;font-size:15px;font-weight:600;">Ingestion Benchmark Details</h3>
 			<span class="section-meta">
-				<span class="meta-label">${count} configuration${count > 1 ? "s" : ""} · Grouped by format, sorted by throughput</span>
+				<span class="meta-label">${escapeHtml(dsMeta)}</span>
 				<span class="badge-pinned" style="display:none;" aria-live="polite">Pinned · <kbd>Esc</kbd> to reset</span>
 			</span>
 		`;

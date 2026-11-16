@@ -3277,3 +3277,67 @@ dialog.modal-window::backdrop {
 		gap: 0.125rem;
 	}
 }
+
+/* --- Telemetry Details Section & Format Selector --- */
+.telemetry-format-selector {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.telemetry-format-label {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-muted);
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.telemetry-pill-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--bg);
+	color: var(--text-muted);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: border-color 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+	user-select: none;
+	line-height: 1.4;
+}
+
+.telemetry-pill-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text);
+	border-color: var(--border-hover, var(--text-muted));
+}
+
+.telemetry-pill-btn:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 1px;
+}
+
+.telemetry-pill-btn.is-active,
+.telemetry-pill-btn[aria-checked="true"] {
+	border-color: var(--focus);
+	background: color-mix(in srgb, var(--focus) 12%, var(--bg));
+	color: var(--focus, var(--text));
+	font-weight: 700;
+}
+
+.telemetry-badge-terminal {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	color: var(--text-muted);
+	background: var(--bg-hover);
+	padding: 2px 6px;
+	border-radius: 3px;
+	border: 1px solid var(--border);
+}
