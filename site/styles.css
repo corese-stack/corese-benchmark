@@ -1140,13 +1140,15 @@ html[data-theme="dark"] .miller__item.is-selected {
 }
 
 .section-header {
-	padding: 16px 20px;
+	min-height: 54px;
+	padding: 12px 20px;
 	border-bottom: 1px solid var(--border);
 	display: flex;
 	justify-content: space-between;
-	align-items: baseline;
+	align-items: center;
 	flex-wrap: wrap;
 	gap: 8px;
+	box-sizing: border-box;
 }
 
 .section-meta {

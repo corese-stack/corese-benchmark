@@ -11,6 +11,7 @@ import {
 	renderEngineIndicatorSvg,
 } from "../engines.js";
 import { focusStore, hoverSource } from "../focus-store.js";
+import { parseUrlLoading, updateUrlLoading } from "../router.js";
 
 const ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
 
@@ -29,16 +30,57 @@ export class LoadingView {
 		scale: "small",
 		formats: new Set(ALL_FORMATS),
 		telemetryFormat: null,
+		section: null,
+		pin: null,
 	};
 
 	constructor(container, reportData, activeEngines) {
 		this.#root = container;
 		this.#data = reportData;
 		this.#activeEngines = activeEngines || [];
+
+		if (typeof window !== "undefined") {
+			const urlState = parseUrlLoading(window.location.search);
+			this.#state.dataset = urlState.dataset;
+			this.#state.scale = urlState.scale;
+			this.#state.formats = urlState.formats;
+			this.#state.telemetryFormat = urlState.telemetryFormat;
+			this.#state.section = urlState.section;
+			this.#state.pin = urlState.pin;
+			if (urlState.pin) {
+				focusStore.pin(urlState.pin);
+			}
+		}
 	}
 
 	updateActiveEngines(engines) {
 		this.#activeEngines = engines || [];
+		this.render();
+	}
+
+	restoreState(newState, engines) {
+		if (engines) {
+			this.#activeEngines = engines;
+		}
+		if (newState) {
+			this.#state.dataset = newState.dataset || "bsbm";
+			this.#state.scale = newState.scale || "small";
+			this.#state.formats = newState.formats || new Set(ALL_FORMATS);
+			this.#state.telemetryFormat = newState.telemetryFormat || null;
+			this.#state.section = newState.section || null;
+			this.#state.pin = newState.pin || null;
+			if (newState.pin) {
+				focusStore.pin(newState.pin);
+			} else if (focusStore.state.pinned) {
+				focusStore.unpin();
+			}
+		}
+		this.render();
+	}
+
+	#updateState(patch, { history = "replace" } = {}) {
+		Object.assign(this.#state, patch);
+		updateUrlLoading(this.#state, { history });
 		this.render();
 	}
 
@@ -74,6 +116,11 @@ export class LoadingView {
 		this.#abortController = new AbortController();
 		const { signal } = this.#abortController;
 
+		// Re-apply URL pin if present
+		if (this.#state.pin) {
+			focusStore.pin(this.#state.pin);
+		}
+
 		// Listen for theme changes to update Chart.js colors
 		window.addEventListener(
 			"theme-changed",
@@ -98,6 +145,9 @@ export class LoadingView {
 		focusStore.addEventListener(
 			"focus-changed",
 			() => {
+				const currentPinned = focusStore.state.pinned;
+				this.#state.pin = currentPinned ? { kind: currentPinned.kind, key: currentPinned.key } : null;
+				updateUrlLoading(this.#state, { history: "replace" });
 				this.#syncFocusVisuals();
 			},
 			{ signal }
@@ -263,20 +313,30 @@ export class LoadingView {
 
 		// Scientific Dataset Presentation Card
 		const datasetCardHost = document.createElement("div");
+		datasetCardHost.id = "section-loading-dataset";
 		datasetCardHost.className = "dataset-card-host";
 		renderDatasetCard(this.#state, datasetCardHost, this.#data);
 		section.appendChild(datasetCardHost);
 
 		// Reproducibility Protocol Tile
-		section.appendChild(this.#renderProtocolTile());
+		const protocolEl = this.#renderProtocolTile();
+		protocolEl.id = "section-loading-protocol";
+		section.appendChild(protocolEl);
 
 		// Filter runs by dataset, scale AND format uniformly
 		const allLoadingRuns = this.#data?.loadingRuns || [];
+		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
 		const datasetFilteredRows = allLoadingRuns.filter((r) => {
 			const matchDs = r.dataset?.toLowerCase() === this.#state.dataset.toLowerCase();
 			const matchScale = this.#matchScale(r.file, this.#state.scale);
 			const fmt = r.format || r.file?.split(".").pop();
 			const matchFormat = this.#state.formats.has(fmt);
+
+			// For DBpedia, use the canonical cross-format slice (persondata_en) across all views
+			if (isDbpedia && !r.file?.startsWith("persondata_en.")) {
+				return false;
+			}
+
 			return matchDs && matchScale && matchFormat;
 		});
 
@@ -295,16 +355,24 @@ export class LoadingView {
 		});
 
 		// Multi-Format Throughput Summary Chart
-		section.appendChild(this.#renderSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
+		const throughputEl = this.#renderSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		throughputEl.id = "section-loading-throughput";
+		section.appendChild(throughputEl);
 
 		// Retained Heap After Ingestion Chart
-		section.appendChild(this.#renderMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
+		const memoryEl = this.#renderMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		memoryEl.id = "section-loading-retained-heap";
+		section.appendChild(memoryEl);
 
 		// Dynamic Ingestion Telemetry Profile
-		section.appendChild(this.#renderTelemetryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
+		const telemetryEl = this.#renderTelemetryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		telemetryEl.id = "section-loading-telemetry";
+		section.appendChild(telemetryEl);
 
 		// Detailed Data Table
-		section.appendChild(this.#renderTable(strictlyFilteredRows, orderedEngineConfigs, catalog));
+		const tableEl = this.#renderTable(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		tableEl.id = "section-loading-table";
+		section.appendChild(tableEl);
 
 		this.#root.appendChild(section);
 
@@ -315,6 +383,17 @@ export class LoadingView {
 
 		// Synchronize current focus visuals on fresh render
 		this.#syncFocusVisuals();
+
+		// Scroll to targeted section if present in URL
+		if (this.#state.section) {
+			const targetId = `section-loading-${this.#state.section}`;
+			requestAnimationFrame(() => {
+				const target = this.#root?.querySelector(`#${targetId}`);
+				if (target) {
+					target.scrollIntoView({ behavior: "smooth", block: "start" });
+				}
+			});
+		}
 	}
 
 	#resolveOrderedEngines(rows, catalog) {
@@ -434,8 +513,7 @@ export class LoadingView {
 			btn.className = `segmented-control__btn ${this.#state.dataset.toLowerCase() === ds ? "is-active" : ""}`;
 			btn.textContent = ds.toUpperCase();
 			btn.addEventListener("click", () => {
-				this.#state.dataset = ds;
-				this.render();
+				this.#updateState({ dataset: ds }, { history: "push" });
 			});
 			dsGroup.appendChild(btn);
 		});
@@ -480,8 +558,7 @@ export class LoadingView {
 				btn.className = `segmented-control__btn ${this.#state.scale === sc ? "is-active" : ""}`;
 				btn.textContent = sc.charAt(0).toUpperCase() + sc.slice(1);
 				btn.addEventListener("click", () => {
-					this.#state.scale = sc;
-					this.render();
+					this.#updateState({ scale: sc }, { history: "push" });
 				});
 				scaleGroup.appendChild(btn);
 			});
@@ -527,19 +604,20 @@ export class LoadingView {
 			pill.textContent = `.${fmt}`;
 
 			pill.addEventListener("click", () => {
-				if (this.#state.formats.has(fmt)) {
-					if (this.#state.formats.size === 1) {
+				const nextFormats = new Set(this.#state.formats);
+				if (nextFormats.has(fmt)) {
+					if (nextFormats.size === 1) {
 						// Guard: keep at least 1 format active
 						pill.classList.remove("is-denied");
 						pill.getBoundingClientRect();
 						pill.classList.add("is-denied");
 						return;
 					}
-					this.#state.formats.delete(fmt);
+					nextFormats.delete(fmt);
 				} else {
-					this.#state.formats.add(fmt);
+					nextFormats.add(fmt);
 				}
-				this.render();
+				this.#updateState({ formats: nextFormats }, { history: "replace" });
 			});
 
 			pillsContainer.appendChild(pill);
@@ -657,7 +735,9 @@ export class LoadingView {
 		section.className = "dashboard-section";
 
 		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
-		const dsMeta = `Selected engines and formats · Median of ${reps} runs per engine/format · Grouped by format`;
+		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
+		const sliceNote = isDbpedia ? " · Slice: persondata_en" : "";
+		const dsMeta = `Selected engines and formats · Median of ${reps} runs per engine/format${sliceNote} · Grouped by format`;
 
 		const header = document.createElement("div");
 		header.className = "section-header";
@@ -703,13 +783,18 @@ export class LoadingView {
 		const datasets = orderedEngines.map((engConfig) => {
 			const color = engConfig.style.color;
 			const dataPoints = activeFormats.map((fmt) => {
-				const r = rows.find(
-					(row) => {
-						const rowKey = formatEngineId(parseEngineId(row.engine));
-						return (rowKey === engConfig.key || row.engine === engConfig.key) &&
-							(row.format === fmt || row.file?.endsWith(`.${fmt}`));
-					}
-				);
+				const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
+				const matchingRows = rows.filter((row) => {
+					const rowKey = formatEngineId(parseEngineId(row.engine));
+					const matchEng = rowKey === engConfig.key || row.engine === engConfig.key;
+					const matchFmt = row.format === fmt || row.file?.endsWith(`.${fmt}`);
+					return matchEng && matchFmt;
+				});
+
+				const r = isDbpedia
+					? matchingRows.find((row) => row.file?.startsWith("persondata_en.")) || matchingRows[0]
+					: matchingRows[0];
+
 				return r && r.throughputTriplesPerSec > 0 ? Math.round(r.throughputTriplesPerSec / 1000) : null;
 			});
 
@@ -750,9 +835,6 @@ export class LoadingView {
 							const format = activeFormats[dataIndex];
 							const measureKey = `${dataset._engineKey}|${format}`;
 							focusStore.togglePin({ kind: "measure", key: measureKey });
-
-							const targetRow = this.#root?.querySelector(`tr[data-measure-key="${CSS.escape(measureKey)}"]`);
-							targetRow?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 						}
 					},
 					plugins: {
@@ -1015,8 +1097,6 @@ export class LoadingView {
 							const summary = engineSummaries[index];
 							if (summary) {
 								focusStore.togglePin({ kind: "engine", key: summary.engineKey });
-								const targetRow = this.#root?.querySelector(`tr[data-engine-key="${CSS.escape(summary.engineKey)}"]`);
-								targetRow?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 							}
 						}
 					},
@@ -1207,8 +1287,7 @@ export class LoadingView {
 				btn.textContent = `.${fmt}`;
 				btn.title = `Show heap telemetry curve for .${fmt}`;
 				btn.addEventListener("click", () => {
-					this.#state.telemetryFormat = fmt;
-					this.render();
+					this.#updateState({ telemetryFormat: fmt }, { history: "replace" });
 				});
 				pillGroup.appendChild(btn);
 			});

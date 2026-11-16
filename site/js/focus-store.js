@@ -91,10 +91,28 @@ export class FocusStore extends EventTarget {
 	 * Toggle pin state immediately.
 	 */
 	togglePin(target) {
-		if (!target || !target.key) return;
+		if (!target?.key) return;
 		const isSame = sameTarget(this.#state.pinned, target);
 		const pinned = isSame ? null : target;
 		this.#state = { ...this.#state, pinned };
+		this.#notify();
+	}
+
+	/**
+	 * Pin target directly.
+	 */
+	pin(target) {
+		if (!target?.key) return;
+		this.#state = { ...this.#state, pinned: target };
+		this.#notify();
+	}
+
+	/**
+	 * Unpin target.
+	 */
+	unpin() {
+		if (!this.#state.pinned) return;
+		this.#state = { ...this.#state, pinned: null };
 		this.#notify();
 	}
 

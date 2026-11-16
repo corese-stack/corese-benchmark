@@ -9,6 +9,7 @@ import {
 	getCurrentView,
 	navigateToView,
 	parseUrlEngines,
+	parseUrlLoading,
 	updateUrlEngines,
 } from "./router.js";
 
@@ -282,7 +283,8 @@ class DashboardApp {
 				);
 				this.activeViewInstance.mount();
 			} else {
-				this.activeViewInstance.updateActiveEngines(selectedEngines);
+				const freshLoadingState = parseUrlLoading(window.location.search);
+				this.activeViewInstance.restoreState(freshLoadingState, selectedEngines);
 			}
 			return;
 		}
