@@ -424,11 +424,80 @@ export function renderDatasetCard(state, container, reportData = null) {
 }
 
 
+function findBarElement(chart, x, y) {
+	for (let d = 0; d < chart.data.datasets.length; d++) {
+		const meta = chart.getDatasetMeta(d);
+		if (meta.hidden) continue;
+		for (let i = 0; i < meta.data.length; i++) {
+			const el = meta.data[i];
+			if (el?.inRange(x, y)) {
+				return { datasetIndex: d, index: i, element: el };
+			}
+		}
+	}
+	return null;
+}
+
+function attachChartPointerInteraction(chart, canvas, activeFormats, hoverTarget, signal) {
+	const clearState = () => {
+		hoverTarget.clear();
+		if (chart) {
+			chart.setActiveElements([]);
+			if (chart.tooltip) {
+				chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+			}
+			chart.update("none");
+		}
+	};
+
+	canvas.addEventListener("pointerleave", clearState, { signal });
+	canvas.addEventListener("pointercancel", clearState, { signal });
+	canvas.addEventListener("mouseout", clearState, { signal });
+
+	canvas.addEventListener(
+		"pointermove",
+		(e) => {
+			const rect = canvas.getBoundingClientRect();
+			const x = e.clientX - rect.left;
+			const y = e.clientY - rect.top;
+
+			if (!chart.isPointInArea({ x, y })) {
+				clearState();
+				return;
+			}
+
+			const hit = findBarElement(chart, x, y);
+			if (hit) {
+				const dataset = chart.data.datasets[hit.datasetIndex];
+				const format = activeFormats[hit.index];
+				if (dataset && format) {
+					const measureKey = `${dataset._engineKey}|${format}`;
+					hoverTarget.set({ kind: "measure", key: measureKey });
+					const activeElements = [{ datasetIndex: hit.datasetIndex, index: hit.index }];
+					chart.setActiveElements(activeElements);
+					if (chart.tooltip) {
+						chart.tooltip.setActiveElements(activeElements, { x, y });
+					}
+					chart.update("none");
+				} else {
+					clearState();
+				}
+			} else {
+				clearState();
+			}
+		},
+		{ signal, passive: true },
+	);
+
+	window.addEventListener("scroll", clearState, { signal, passive: true });
+}
+
 export class LoadingView {
 	#root = null;
 	#data = null;
 	#activeEngines = [];
 	#abortController = null;
+	#renderAbortController = null;
 	#charts = new Map();
 	#canvasHover = hoverSource();
 	#legendHover = hoverSource();
@@ -454,6 +523,10 @@ export class LoadingView {
 		this.#canvasHover.clear();
 		this.#legendHover.clear();
 		this.#tableHover.clear();
+		if (this.#renderAbortController) {
+			this.#renderAbortController.abort();
+			this.#renderAbortController = null;
+		}
 		if (this.#abortController) {
 			this.#abortController.abort();
 			this.#abortController = null;
@@ -555,53 +628,94 @@ export class LoadingView {
 	}
 
 	#syncChartDimming() {
-		const chart = this.#charts.get("summary") || (window.Chart !== undefined ? window.Chart.getChart("loading-summary-chart") : null);
-		if (!chart) return;
-
 		const focus = focusStore.effectiveFocus;
-		const activeFormats = chart._activeFormats || ALL_FORMATS.filter((f) => this.#state.formats.has(f));
 
-		chart.data.datasets.forEach((ds) => {
-			const eKey = ds._engineKey;
-			const baseColor = ds._baseColor || ds.backgroundColor;
+		this.#charts.forEach((chart, chartKey) => {
+			if (!chart?.data?.datasets) return;
 
-			// If no focus, restore solid base color
-			if (!focus) {
-				ds.backgroundColor = baseColor;
+			if (chartKey === "memory") {
+				// Horizontal bar chart: 1 dataset, each bar = 1 engine
+				const ds = chart.data.datasets[0];
+				if (!ds || !chart._engineKeys) return;
+				const baseColors = ds._baseColors || ds.backgroundColor;
+
+				const colors = chart._engineKeys.map((eKey, idx) => {
+					const baseColor = Array.isArray(baseColors) ? baseColors[idx] : baseColors;
+					if (!focus) return baseColor;
+
+					let r = 0, g = 0, b = 0;
+					if (typeof baseColor === "string" && baseColor.startsWith("#")) {
+						const hex = baseColor.replace("#", "");
+						if (hex.length === 6) {
+							r = Number.parseInt(hex.substring(0, 2), 16);
+							g = Number.parseInt(hex.substring(2, 4), 16);
+							b = Number.parseInt(hex.substring(4, 6), 16);
+						}
+					}
+					const toRgba = (alpha) => `rgba(${r}, ${g}, ${b}, ${alpha})`;
+
+					if (focus.target.kind === "engine") {
+						return eKey === focus.target.key ? baseColor : toRgba(0.22);
+					}
+					if (focus.target.kind === "measure") {
+						const [targetEng] = focus.target.key.split("|");
+						return eKey === targetEng ? baseColor : toRgba(0.22);
+					}
+					return baseColor;
+				});
+
+				ds.backgroundColor = colors;
+				chart.update();
 				return;
 			}
 
-			// Parse base color to RGB components for alpha blending
-			let r = 0, g = 0, b = 0;
-			if (typeof baseColor === "string" && baseColor.startsWith("#")) {
-				const hex = baseColor.replace("#", "");
-				if (hex.length === 6) {
-					r = Number.parseInt(hex.substring(0, 2), 16);
-					g = Number.parseInt(hex.substring(2, 4), 16);
-					b = Number.parseInt(hex.substring(4, 6), 16);
+			// Grouped bar chart (Summary Throughput)
+			const activeFormats = chart._activeFormats || ALL_FORMATS.filter((f) => this.#state.formats.has(f));
+
+			chart.data.datasets.forEach((ds) => {
+				const eKey = ds._engineKey;
+				const baseColor = ds._baseColor || ds.backgroundColor;
+
+				if (!focus) {
+					ds.backgroundColor = baseColor;
+					return;
 				}
-			}
 
-			const toRgba = (alpha) => `rgba(${r}, ${g}, ${b}, ${alpha})`;
+				let r = 0, g = 0, b = 0;
+				if (typeof baseColor === "string" && baseColor.startsWith("#")) {
+					const hex = baseColor.replace("#", "");
+					if (hex.length === 6) {
+						r = Number.parseInt(hex.substring(0, 2), 16);
+						g = Number.parseInt(hex.substring(2, 4), 16);
+						b = Number.parseInt(hex.substring(4, 6), 16);
+					}
+				}
 
-			if (focus.target.kind === "engine") {
-				const isEngineMatch = eKey === focus.target.key;
-				ds.backgroundColor = isEngineMatch ? baseColor : toRgba(0.22);
-			} else if (focus.target.kind === "measure") {
-				const [targetEng, targetFmt] = focus.target.key.split("|");
-				const colors = activeFormats.map((fmt) => {
-					const isExactBar = eKey === targetEng && fmt === targetFmt;
-					return isExactBar ? baseColor : toRgba(0.22);
-				});
-				ds.backgroundColor = colors;
-			}
+				const toRgba = (alpha) => `rgba(${r}, ${g}, ${b}, ${alpha})`;
+
+				if (focus.target.kind === "engine") {
+					const isEngineMatch = eKey === focus.target.key;
+					ds.backgroundColor = isEngineMatch ? baseColor : toRgba(0.22);
+				} else if (focus.target.kind === "measure") {
+					const [targetEng, targetFmt] = focus.target.key.split("|");
+					const colors = activeFormats.map((fmt) => {
+						const isExactBar = eKey === targetEng && fmt === targetFmt;
+						return isExactBar ? baseColor : toRgba(0.22);
+					});
+					ds.backgroundColor = colors;
+				}
+			});
+
+			chart.update();
 		});
-
-		chart.update();
 	}
 
 	render() {
 		if (!this.#root) return;
+		if (this.#renderAbortController) {
+			this.#renderAbortController.abort();
+		}
+		this.#renderAbortController = new AbortController();
 		this.#destroyCharts();
 		this.#root.replaceChildren();
 
@@ -646,13 +760,17 @@ export class LoadingView {
 		// 3. Multi-Format Summary Chart (Grouped Barchart across active formats & selected engines)
 		section.appendChild(this.#renderSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
 
+		// 3.1 Retained Heap After Ingestion Chart
+		section.appendChild(this.#renderMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog));
+
 		// 4. Detailed Data Table (grouped by format with throughput podium)
 		section.appendChild(this.#renderTable(strictlyFilteredRows, orderedEngineConfigs, catalog));
 
 		this.#root.appendChild(section);
 
-		// Render Chart.js instance after DOM mounting
+		// Render Chart.js instances after DOM mounting
 		this.#initSummaryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
+		this.#initMemoryChart(strictlyFilteredRows, orderedEngineConfigs, catalog);
 
 		// Synchronize current focus visuals on fresh render
 		this.#syncFocusVisuals();
@@ -1033,7 +1151,7 @@ export class LoadingView {
 		const canvas = document.getElementById("loading-summary-chart");
 		if (!canvas) return;
 
-		const signal = this.#abortController?.signal;
+		const signal = this.#renderAbortController?.signal || this.#abortController?.signal;
 
 		// Formats for X-axis (only formats actually present in filtered rows AND selected)
 		const rowsFormats = new Set(rows.map((r) => r.format || r.file?.split(".").pop()).filter(Boolean));
@@ -1209,7 +1327,219 @@ export class LoadingView {
 				},
 			});
 
-			// Canvas boundary exit safety: clear hover and reset Chart.js internal active elements
+			attachChartPointerInteraction(chart, canvas, activeFormats, this.#canvasHover, signal);
+
+			chart._activeFormats = activeFormats;
+			this.#charts.set("summary", chart);
+		} catch (err) {
+			console.error("Failed to render Chart.js summary:", err);
+		}
+	}
+
+	#renderMemoryChart(rows, orderedEngines, catalog) {
+		const section = document.createElement("div");
+		section.className = "dashboard-section";
+
+		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
+		const dsMeta = `Median of ${reps} runs · In-memory JVM heap retained post-GC`;
+
+		const header = document.createElement("div");
+		header.className = "section-header";
+		header.innerHTML = `
+			<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
+				<h3 style="margin:0;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;">
+					<span>Retained Heap After Ingestion</span>
+					<span class="tag-format">B / triple</span>
+				</h3>
+			</div>
+			<span class="section-meta">
+				<span class="meta-label">${escapeHtml(dsMeta)}</span>
+				<span class="badge-pinned" style="display:none;" aria-live="polite">Pinned · <kbd>Esc</kbd> to reset</span>
+			</span>
+		`;
+
+		section.appendChild(header);
+
+		const body = document.createElement("div");
+		body.className = "section-body";
+		body.style.position = "relative";
+		body.style.height = "280px";
+
+		const canvas = document.createElement("canvas");
+		canvas.id = "loading-memory-chart";
+		body.appendChild(canvas);
+
+		section.appendChild(body);
+		return section;
+	}
+
+	#initMemoryChart(rows, orderedEngines, catalog) {
+		if (window.Chart === undefined) return;
+
+		const canvas = document.getElementById("loading-memory-chart");
+		if (!canvas) return;
+
+		const signal = this.#renderAbortController?.signal || this.#abortController?.signal;
+
+		// Strictly in-memory engines: on-disk engines (TDB2, Native, LMDB) manage storage outside JVM heap
+		const filteredEngines = orderedEngines.filter((eng) => {
+			const isDisk = eng.storageId === "tdb2" || eng.storageId === "native" || eng.storageId === "lmdb";
+			return !isDisk;
+		});
+
+		// Compute per-engine summary across active formats
+		const engineSummaries = filteredEngines.map((engConfig) => {
+			const engineRows = rows.filter((r) => {
+				const rowKey = formatEngineId(parseEngineId(r.engine));
+				const fmt = r.format || r.file?.split(".").pop();
+				return (rowKey === engConfig.key || r.engine === engConfig.key) &&
+					this.#state.formats.has(fmt) &&
+					typeof r.memoryDeltaMb === "number" &&
+					Number.isFinite(r.memoryDeltaMb) &&
+					r.memoryDeltaMb > 0 &&
+					r.triples > 0;
+			});
+
+			const bValues = engineRows.map((r) => {
+				const bPerTriple = Math.round((r.memoryDeltaMb * 1024 * 1024) / r.triples);
+				const fmt = r.format || r.file?.split(".").pop();
+				return { format: fmt, bPerTriple, mib: r.memoryDeltaMb };
+			}).sort((a, b) => a.bPerTriple - b.bPerTriple);
+
+			let medianB = null;
+			let minB = null;
+			let maxB = null;
+			let medianMib = null;
+
+			if (bValues.length > 0) {
+				const mid = Math.floor(bValues.length / 2);
+				if (bValues.length % 2 === 1) {
+					medianB = bValues[mid].bPerTriple;
+					medianMib = bValues[mid].mib;
+				} else {
+					medianB = Math.round((bValues[mid - 1].bPerTriple + bValues[mid].bPerTriple) / 2);
+					medianMib = (bValues[mid - 1].mib + bValues[mid].mib) / 2;
+				}
+				minB = bValues[0].bPerTriple;
+				maxB = bValues[bValues.length - 1].bPerTriple;
+			}
+
+			return {
+				engineKey: engConfig.key,
+				label: engConfig.label,
+				color: engConfig.style.color,
+				medianB,
+				minB,
+				maxB,
+				medianMib,
+				details: bValues,
+			};
+		}).filter((item) => item.medianB !== null);
+
+		// Natural benchmark order: sort engines by median B / triple ascending ("Lower is better")
+		engineSummaries.sort((a, b) => (a.medianB ?? 999999) - (b.medianB ?? 999999));
+
+		const labels = engineSummaries.map((s) => s.label);
+		const dataValues = engineSummaries.map((s) => s.medianB);
+		const colors = engineSummaries.map((s) => s.color);
+		const engineKeys = engineSummaries.map((s) => s.engineKey);
+
+		const isDark = document.documentElement.dataset.theme === "dark";
+		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+		const textColor = isDark ? "#8b949e" : "#656d76";
+
+		try {
+			const chart = new window.Chart(canvas, {
+				type: "bar",
+				data: {
+					labels: labels,
+					datasets: [
+						{
+							label: "Median Retained Heap",
+							data: dataValues,
+							backgroundColor: colors,
+							borderRadius: 4,
+							barThickness: 24,
+							_baseColors: colors,
+						},
+					],
+				},
+				options: {
+					indexAxis: "y",
+					responsive: true,
+					maintainAspectRatio: false,
+					animation: false,
+					onClick: (e, elements) => {
+						if (elements && elements.length > 0) {
+							const index = elements[0].index;
+							const summary = engineSummaries[index];
+							if (summary) {
+								focusStore.togglePin({ kind: "engine", key: summary.engineKey });
+								const targetRow = this.#root?.querySelector(`tr[data-engine-key="${CSS.escape(summary.engineKey)}"]`);
+								targetRow?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+							}
+						}
+					},
+					plugins: {
+						legend: {
+							display: false,
+						},
+						tooltip: {
+							callbacks: {
+								label: (ctx) => {
+									const summary = engineSummaries[ctx.dataIndex];
+									if (!summary) return "";
+									const mibStr = summary.medianMib ? ` (${summary.medianMib.toFixed(1)} MiB)` : "";
+									const rangeStr = summary.minB !== summary.maxB ? ` [range: ${summary.minB} – ${summary.maxB} B/t]` : "";
+									return ` Median: ${summary.medianB} B / triple${mibStr}${rangeStr}`;
+								},
+								afterBody: (items) => {
+									if (!items || items.length === 0) return [];
+									const summary = engineSummaries[items[0].dataIndex];
+									if (!summary?.details || summary.details.length <= 1) return [];
+									return [
+										"",
+										"Across formats:",
+										...summary.details.map((d) => `  .${d.format}: ${d.bPerTriple} B/t (${d.mib.toFixed(1)} MiB)`),
+									];
+								},
+							},
+						},
+					},
+					layout: {
+						padding: {
+							top: 8,
+							bottom: 8,
+						},
+					},
+					scales: {
+						x: {
+							beginAtZero: true,
+							grid: { color: gridColor },
+							ticks: {
+								color: textColor,
+								font: { weight: 600 },
+								callback: (val) => `${val} B`,
+							},
+							title: {
+								display: true,
+								text: "Retained Heap (Bytes / Triple) — Lower is better",
+								color: textColor,
+								font: { size: 11, weight: 600 },
+							},
+						},
+						y: {
+							grid: { display: false },
+							ticks: {
+								color: textColor,
+								font: { weight: 600, size: 12 },
+							},
+						},
+					},
+				},
+			});
+
+			// Direct DOM pointer interactions on horizontal bars
 			const clearCanvasState = () => {
 				this.#canvasHover.clear();
 				if (chart) {
@@ -1221,29 +1551,10 @@ export class LoadingView {
 				}
 			};
 
-			// Direct DOM pointer exit: clear when leaving canvas or on pointer cancel
 			canvas.addEventListener("pointerleave", clearCanvasState, { signal });
 			canvas.addEventListener("pointercancel", clearCanvasState, { signal });
 			canvas.addEventListener("mouseout", clearCanvasState, { signal });
 
-			// Helper to find bar element intersecting (x, y) coordinates relative to canvas
-			const getBarElementAt = (x, y) => {
-				for (let d = 0; d < chart.data.datasets.length; d++) {
-					const meta = chart.getDatasetMeta(d);
-					if (meta.hidden) continue;
-					for (let i = 0; i < meta.data.length; i++) {
-						const el = meta.data[i];
-						if (el?.inRange(x, y)) {
-							return { datasetIndex: d, index: i, element: el };
-						}
-					}
-				}
-				return null;
-			};
-
-			// Direct DOM pointer movement & hit-testing on the canvas:
-			// Using native DOM pointermove guarantees immediate detection whether the pointer is over
-			// a bar, in empty chart area, or exiting downward across the X-axis scale ticks.
 			canvas.addEventListener(
 				"pointermove",
 				(e) => {
@@ -1256,14 +1567,12 @@ export class LoadingView {
 						return;
 					}
 
-					const hit = getBarElementAt(x, y);
+					const hit = findBarElement(chart, x, y);
 					if (hit) {
-						const dataset = chart.data.datasets[hit.datasetIndex];
-						const format = activeFormats[hit.index];
-						if (dataset && format) {
-							const measureKey = `${dataset._engineKey}|${format}`;
-							this.#canvasHover.set({ kind: "measure", key: measureKey });
-							const activeElements = [{ datasetIndex: hit.datasetIndex, index: hit.index }];
+						const summary = engineSummaries[hit.index];
+						if (summary) {
+							this.#canvasHover.set({ kind: "engine", key: summary.engineKey });
+							const activeElements = [{ datasetIndex: 0, index: hit.index }];
 							chart.setActiveElements(activeElements);
 							if (chart.tooltip) {
 								chart.tooltip.setActiveElements(activeElements, { x, y });
@@ -1279,13 +1588,12 @@ export class LoadingView {
 				{ signal, passive: true },
 			);
 
-			// When scrolling, clear canvas hover so bars don't remain stuck under static pointer
 			window.addEventListener("scroll", clearCanvasState, { signal, passive: true });
 
-			chart._activeFormats = activeFormats;
-			this.#charts.set("summary", chart);
+			chart._engineKeys = engineKeys;
+			this.#charts.set("memory", chart);
 		} catch (err) {
-			console.error("Failed to render Chart.js summary:", err);
+			console.error("Failed to render Chart.js memory:", err);
 		}
 	}
 
@@ -1377,7 +1685,7 @@ export class LoadingView {
 					</td>
 					<td class="text-right font-mono font-medium">${r.loadingTimeMs ? `${r.loadingTimeMs} ms` : "—"}</td>
 					<td class="text-right font-mono font-medium" style="color:var(--focus);">${throughputK} k/s</td>
-					<td class="text-right font-mono text-muted">${r.memoryDeltaMb ? `${r.memoryDeltaMb.toFixed(1)} MB` : "—"}</td>
+					<td class="text-right font-mono text-muted">${r.memoryDeltaMb ? `${r.memoryDeltaMb.toFixed(1)} MiB` : "—"}</td>
 					<td class="text-right font-mono text-xs text-muted">[${escapeHtml(repsStr)}]</td>
 				`;
 
