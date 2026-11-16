@@ -318,6 +318,7 @@ export class LoadingView {
 		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
 		const isLubm = this.#state.dataset.toLowerCase() === "lubm";
 		const isBowlogna = this.#state.dataset.toLowerCase() === "bowlogna";
+		const isBsbm = this.#state.dataset.toLowerCase() === "bsbm";
 
 		const datasetFilteredRows = allLoadingRuns.filter((r) => {
 			const matchDs = r.dataset?.toLowerCase() === this.#state.dataset.toLowerCase();
@@ -334,6 +335,10 @@ export class LoadingView {
 			}
 			// Bowlogna: canonical representative department (Department0)
 			if (isBowlogna && !r.file?.startsWith("Department0.")) {
+				return false;
+			}
+			// BSBM: canonical representative slice (small, ~375k triples)
+			if (isBsbm && !r.file?.startsWith("bsbm_small.")) {
 				return false;
 			}
 
@@ -533,11 +538,13 @@ export class LoadingView {
 		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
 		const isLubm = this.#state.dataset.toLowerCase() === "lubm";
 		const isBowlogna = this.#state.dataset.toLowerCase() === "bowlogna";
+		const isBsbm = this.#state.dataset.toLowerCase() === "bsbm";
 
 		const currentViewRuns = datasetRuns.filter((r) => {
 			if (isDbpedia && !r.file?.startsWith("persondata_en.")) return false;
 			if (isLubm && !r.file?.includes("medium")) return false;
 			if (isBowlogna && !r.file?.startsWith("Department0.")) return false;
+			if (isBsbm && !r.file?.startsWith("bsbm_small.")) return false;
 			return true;
 		});
 		const discoveredFormats = new Set(
