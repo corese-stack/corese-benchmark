@@ -47,7 +47,10 @@ public record FileResult(
     @JsonProperty("repetitionsMs") long[] repetitionsMs,
 
     // Real-time telemetry samples during loading
-    @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries
+    @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries,
+
+    // Optional on-disk storage footprint for persistent stores (Jena TDB2, RDF4J Native/LMDB)
+    @JsonProperty("diskFootprintBytes") Long diskFootprintBytes
 ) {
     @JsonCreator
     public FileResult(
@@ -62,7 +65,8 @@ public record FileResult(
         @JsonProperty("memoryDeltaMb") double memoryDeltaMb,
         @JsonProperty("cpuPercent") double cpuPercent,
         @JsonProperty("repetitionsMs") long[] repetitionsMs,
-        @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries
+        @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries,
+        @JsonProperty("diskFootprintBytes") Long diskFootprintBytes
     ) {
         this.engine = engine;
         this.dataset = dataset;
@@ -76,6 +80,25 @@ public record FileResult(
         this.cpuPercent = cpuPercent;
         this.repetitionsMs = repetitionsMs != null ? repetitionsMs.clone() : new long[0];
         this.timeSeries = timeSeries != null ? List.copyOf(timeSeries) : List.of();
+        this.diskFootprintBytes = diskFootprintBytes;
+    }
+
+    public FileResult(
+        String engine,
+        String dataset,
+        String file,
+        long triples,
+        long loadingTimeMs,
+        double throughputTriplesPerSec,
+        double memoryBeforeMb,
+        double memoryAfterMb,
+        double memoryDeltaMb,
+        double cpuPercent,
+        long[] repetitionsMs,
+        List<TelemetryPoint> timeSeries
+    ) {
+        this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, timeSeries, null);
     }
 
     public FileResult(
@@ -92,7 +115,7 @@ public record FileResult(
         long[] repetitionsMs
     ) {
         this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
-                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, List.of());
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, List.of(), null);
     }
 
     @Override
@@ -109,6 +132,7 @@ public record FileResult(
                 Objects.equals(engine, other.engine) &&
                 Objects.equals(dataset, other.dataset) &&
                 Objects.equals(file, other.file) &&
+                Objects.equals(diskFootprintBytes, other.diskFootprintBytes) &&
                 Arrays.equals(repetitionsMs, other.repetitionsMs) &&
                 Objects.equals(timeSeries, other.timeSeries);
     }
@@ -116,7 +140,7 @@ public record FileResult(
     @Override
     public int hashCode() {
         int result = Objects.hash(engine, dataset, file, triples, loadingTimeMs,
-                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries);
+                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries, diskFootprintBytes);
         result = 31 * result + Arrays.hashCode(repetitionsMs);
         return result;
     }
@@ -133,6 +157,7 @@ public record FileResult(
                 "memoryBeforeMb=" + memoryBeforeMb + ", " +
                 "memoryAfterMb=" + memoryAfterMb + ", " +
                 "memoryDeltaMb=" + memoryDeltaMb + ", " +
+                "diskFootprintBytes=" + diskFootprintBytes + ", " +
                 "cpuPercent=" + cpuPercent + ", " +
                 "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
                 "timeSeries=" + (timeSeries != null ? timeSeries.size() + " points" : "none") + ']';

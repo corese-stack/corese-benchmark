@@ -602,6 +602,7 @@ public class BenchmarkHarness {
         double[] memBefore  = new double[reps];
         double[] memAfter   = new double[reps];
         double[] cpuSamples = new double[reps];
+        List<Long> diskBytesSamples = new ArrayList<>(reps);
         long triples = 0;
         List<TelemetryPoint> timeSeries = List.of();
 
@@ -624,6 +625,11 @@ public class BenchmarkHarness {
                 cpuSamples[i] = metrics.getCpuPercent();
                 memAfter[i]   = metrics.getUsedMemoryMb();
                 triples       = driver.getGraphSize();
+
+                var footprint = driver.getDiskFootprintBytes();
+                if (footprint.isPresent()) {
+                    diskBytesSamples.add(footprint.getAsLong());
+                }
             } finally {
                 if (sampler != null) {
                     timeSeries = sampler.stop(triples);
@@ -637,6 +643,10 @@ public class BenchmarkHarness {
         double[] deltas = new double[reps];
         for (int i = 0; i < reps; i++) deltas[i] = memAfter[i] - memBefore[i];
 
+        Long medianDiskBytes = diskBytesSamples.isEmpty()
+                ? null
+                : MetricsCollector.median(diskBytesSamples.stream().mapToLong(Long::longValue).toArray());
+
         return new FileResult(
             driver.getName(),
             datasetName,
@@ -649,7 +659,8 @@ public class BenchmarkHarness {
             MetricsCollector.medianDouble(deltas),
             MetricsCollector.medianDouble(cpuSamples),
             timesMs,
-            timeSeries
+            timeSeries,
+            medianDiskBytes
         );
     }
 }

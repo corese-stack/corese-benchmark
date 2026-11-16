@@ -361,4 +361,11 @@ public class JenaDriver implements TripleStoreDriver {
     public String getName() {
         return name;
     }
+
+    @Override
+    public java.util.OptionalLong getDiskFootprintBytes() {
+        return tdb2 && tempDir != null
+                ? TempStorage.computeDirectorySizeBytes(tempDir)
+                : java.util.OptionalLong.empty();
+    }
 }

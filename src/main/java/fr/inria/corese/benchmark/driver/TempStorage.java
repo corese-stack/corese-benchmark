@@ -93,6 +93,30 @@ final class TempStorage {
     }
 
     /**
+     * Computes the total logical size in bytes of all regular files in a directory tree.
+     * Does not follow symbolic links to prevent cycles. Returns {@code OptionalLong.empty()}
+     * if directory is null, does not exist, or an I/O error occurs.
+     *
+     * @param root directory path
+     * @return logical byte count of files on disk, or empty if unavailable
+     */
+    public static java.util.OptionalLong computeDirectorySizeBytes(Path root) {
+        if (root == null || !Files.exists(root)) {
+            return java.util.OptionalLong.empty();
+        }
+        try (Stream<Path> stream = Files.walk(root)) {
+            long total = 0L;
+            for (Path p : stream.filter(path -> Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)).toList()) {
+                total += Files.size(p);
+            }
+            return java.util.OptionalLong.of(total);
+        } catch (IOException | UncheckedIOException e) {
+            log.warn("Failed to compute disk footprint for directory {}: {}", root, e.getMessage());
+            return java.util.OptionalLong.empty();
+        }
+    }
+
+    /**
      * Deletes a directory tree recursively in reverse order.
      * Tolerates individual file deletion failures and does not abort the stream.
      *

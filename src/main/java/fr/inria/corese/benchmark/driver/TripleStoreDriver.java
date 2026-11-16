@@ -117,4 +117,12 @@ public interface TripleStoreDriver {
 
     /** Return a human-readable name for this driver (e.g. "corese.4.6.5"). */
     String getName();
+
+    /**
+     * Return disk footprint in bytes for persistent stores (e.g. Jena TDB2, RDF4J Native/LMDB).
+     * Defaults to {@code OptionalLong.empty()} for in-memory stores.
+     */
+    default java.util.OptionalLong getDiskFootprintBytes() {
+        return java.util.OptionalLong.empty();
+    }
 }

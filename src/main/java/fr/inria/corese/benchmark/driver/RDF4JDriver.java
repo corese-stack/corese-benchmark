@@ -438,4 +438,11 @@ public class RDF4JDriver implements TripleStoreDriver {
     public String getName() {
         return name;
     }
+
+    @Override
+    public java.util.OptionalLong getDiskFootprintBytes() {
+        return (storageType == StorageType.NATIVE || storageType == StorageType.LMDB) && tempDir != null
+                ? TempStorage.computeDirectorySizeBytes(tempDir)
+                : java.util.OptionalLong.empty();
+    }
 }
