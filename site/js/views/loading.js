@@ -337,8 +337,8 @@ export class LoadingView {
 			if (isBowlogna && !r.file?.startsWith("Department0.")) {
 				return false;
 			}
-			// BSBM: canonical representative slice (small, ~375k triples)
-			if (isBsbm && !r.file?.startsWith("bsbm_small.")) {
+			// BSBM: canonical representative slice (medium)
+			if (isBsbm && !r.file?.startsWith("bsbm_medium.")) {
 				return false;
 			}
 
@@ -544,7 +544,7 @@ export class LoadingView {
 			if (isDbpedia && !r.file?.startsWith("persondata_en.")) return false;
 			if (isLubm && !r.file?.includes("medium")) return false;
 			if (isBowlogna && !r.file?.startsWith("Department0.")) return false;
-			if (isBsbm && !r.file?.startsWith("bsbm_small.")) return false;
+			if (isBsbm && !r.file?.startsWith("bsbm_medium.")) return false;
 			return true;
 		});
 		const discoveredFormats = new Set(
