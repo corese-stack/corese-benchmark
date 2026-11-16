@@ -15,15 +15,15 @@ on:
       datasets:
         description: 'Datasets (comma-separated: dbpedia,bowlogna,bsbm,lubm)'
         required: false
-        default: 'dbpedia,bowlogna,lubm'
+        default: 'dbpedia,bowlogna,lubm,bsbm'
       engines:
         description: 'Comma-separated engines (e.g. corese.next,corese.4.6.5,jena.6.2.0)'
         required: false
-        default: 'corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2'
+        default: 'corese.next,corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb'
       scales:
         description: 'Dataset scales (comma-separated)'
         required: false
-        default: 'small,medium,large'
+        default: 'small,medium'
       corese_commit:
         description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = ignore.'
         required: false
@@ -67,7 +67,7 @@ concurrency:
 
 env:
   DEFAULT_CORESE_NEXT_COMMIT: 489efac76510c91673c24f240408b71ba30a5874
-  BASE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
+  BASE_ENGINES: corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb
   ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm
 
 jobs:
@@ -166,7 +166,8 @@ jobs:
             push)
               ;;
             schedule)
-              SCALES="small,medium,large"
+              SCALES="small,medium"
+              FORCE=true
               ;;
             repository_dispatch)
               TRIGGER="repository_dispatch:$DISPATCH_ACTION"
