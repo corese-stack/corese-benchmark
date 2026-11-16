@@ -29,43 +29,58 @@ public class ConvertDatasets {
 
     public static void main(String[] args) throws IOException {
         if (args.length == 0) {
-            // Default target files if no directories are supplied
-            List<Path> targetFiles = List.of(
-                    Path.of("input/bsbm/unzip/bsbm_small.nt"),
-                    Path.of("input/bsbm/unzip/bsbm_medium.nt"),
-                    Path.of("input/lubm/unzip/lubm_small.nt"),
-                    Path.of("input/lubm/unzip/lubm_medium.nt"),
-                    Path.of("input/dbpedia/unzip/persondata_en.nt")
-            );
-
-            for (Path ntFile : targetFiles) {
-                if (!Files.exists(ntFile)) {
-                    log.warn("Skipping file (not found): {}", ntFile);
-                    continue;
-                }
-                safeConvertFile(ntFile);
-            }
+            convertDefaultTargetFiles();
         } else {
-            for (String arg : args) {
-                Path directory = Path.of(arg);
-                if (!Files.exists(directory)) {
-                    log.warn("Directory does not exist: {}", directory);
-                    continue;
-                }
-                try (var stream = Files.list(directory)) {
-                    List<Path> ntFiles = stream
-                            .filter(p -> p.getFileName().toString().endsWith(".nt"))
-                            .sorted()
-                            .toList();
+            convertTargetPaths(args);
+        }
+        log.info("Conversion completed successfully.");
+    }
 
-                    for (Path ntFile : ntFiles) {
-                        safeConvertFile(ntFile);
-                    }
-                }
+    private static void convertDefaultTargetFiles() {
+        List<Path> targetFiles = List.of(
+                Path.of("input/bsbm/unzip/bsbm_small.nt"),
+                Path.of("input/bsbm/unzip/bsbm_medium.nt"),
+                Path.of("input/lubm/unzip/lubm_small.nt"),
+                Path.of("input/lubm/unzip/lubm_medium.nt"),
+                Path.of("input/dbpedia/unzip/persondata_en.nt"),
+                Path.of("input/bowlogna/unzip/Department0.nt")
+        );
+
+        for (Path ntFile : targetFiles) {
+            if (!Files.exists(ntFile)) {
+                log.warn("Skipping file (not found): {}", ntFile);
+                continue;
+            }
+            safeConvertFile(ntFile);
+        }
+    }
+
+    private static void convertTargetPaths(String[] args) throws IOException {
+        for (String arg : args) {
+            Path targetPath = Path.of(arg);
+            if (!Files.exists(targetPath)) {
+                log.warn("Path does not exist: {}", targetPath);
+                continue;
+            }
+            if (Files.isRegularFile(targetPath) && targetPath.getFileName().toString().endsWith(".nt")) {
+                safeConvertFile(targetPath);
+            } else if (Files.isDirectory(targetPath)) {
+                convertDirectory(targetPath);
             }
         }
+    }
 
-        log.info("Conversion completed successfully.");
+    private static void convertDirectory(Path directory) throws IOException {
+        try (var stream = Files.list(directory)) {
+            List<Path> ntFiles = stream
+                    .filter(p -> p.getFileName().toString().endsWith(".nt"))
+                    .sorted()
+                    .toList();
+
+            for (Path ntFile : ntFiles) {
+                safeConvertFile(ntFile);
+            }
+        }
     }
 
     private static void safeConvertFile(Path ntFile) {
@@ -80,7 +95,6 @@ public class ConvertDatasets {
             convertFile(ntFile);
         } catch (OutOfMemoryError oom) {
             log.error("Out of memory converting file: {} — skipping to protect pipeline", ntFile.getFileName());
-            System.gc();
         } catch (Exception e) {
             log.error("Failed to convert file {}: {} — skipping", ntFile.getFileName(), e.getMessage());
         }
@@ -132,7 +146,7 @@ public class ConvertDatasets {
 
     @FunctionalInterface
     private interface OutputWriter {
-        void write(OutputStream out) throws Exception;
+        void write(OutputStream out) throws IOException;
     }
 
     private static void safeGenerateFile(Path targetFile, OutputWriter writer, String formatName, Path sourceNt) {
@@ -143,10 +157,12 @@ public class ConvertDatasets {
             }
             Files.move(tempFile, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             log.info("  Generated {}: {} ({} bytes)", formatName, targetFile.getFileName(), Files.size(targetFile));
-        } catch (Throwable t) {
+        } catch (Exception t) {
             try {
                 Files.deleteIfExists(tempFile);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.debug("Failed to delete temp file {}: {}", tempFile, e.getMessage());
+            }
             log.warn("  Could not generate {} for {}: {}", formatName, sourceNt.getFileName(), t.getMessage());
         }
     }
