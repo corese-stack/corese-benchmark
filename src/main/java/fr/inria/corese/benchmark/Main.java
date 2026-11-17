@@ -33,7 +33,49 @@ import java.util.concurrent.TimeUnit;
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
-    private static final long CHILD_TIMEOUT_MINUTES = 30;
+    private static final long DEFAULT_CHILD_TIMEOUT_MINUTES = 45;
+    private static final long BOWLOGNA_CHILD_TIMEOUT_MINUTES = 120;
+
+    private static long resolveChildTimeoutMinutes(String datasetName) {
+        if ("bowlogna".equalsIgnoreCase(datasetName)) {
+            return BOWLOGNA_CHILD_TIMEOUT_MINUTES;
+        }
+        return DEFAULT_CHILD_TIMEOUT_MINUTES;
+    }
+
+    private static void terminateProcessTree(Process p) {
+        if (p == null) return;
+        List<ProcessHandle> descendants = Collections.emptyList();
+        try {
+            descendants = p.descendants().toList();
+        } catch (Exception e) {
+            log.debug("Could not snapshot process descendants: {}", e.getMessage());
+        }
+        for (ProcessHandle ph : descendants) {
+            try {
+                ph.destroyForcibly();
+            } catch (Exception ignored) {
+                // Best effort per-descendant signal
+            }
+        }
+        try {
+            p.destroyForcibly();
+        } catch (Exception ignored) {
+            // Best effort root process signal
+        }
+        for (ProcessHandle ph : descendants) {
+            try {
+                ph.onExit().get(2, TimeUnit.SECONDS);
+            } catch (Exception ignored) {
+                // Timeout waiting on child exit
+            }
+        }
+        try {
+            p.waitFor(3, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+            // Timeout waiting on root exit
+        }
+    }
 
     private record BenchmarkOptions(
         String datasetDir,
@@ -319,10 +361,11 @@ public class Main {
             tmp = Files.createTempFile("corese-bench-" + engineName.replaceAll("[^a-zA-Z0-9.-]", "_") + "-", ".json");
             List<String> cmd = buildChildCommand(opts, engineName, tmp);
             p = new ProcessBuilder(cmd).inheritIO().start();
-            boolean completed = p.waitFor(CHILD_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            long timeoutMinutes = resolveChildTimeoutMinutes(opts.datasetName());
+            boolean completed = p.waitFor(timeoutMinutes, TimeUnit.MINUTES);
             if (!completed) {
-                p.destroyForcibly();
-                log.error("Engine {} timed out in isolated subprocess after {} minutes", engineName, CHILD_TIMEOUT_MINUTES);
+                terminateProcessTree(p);
+                log.error("Engine {} timed out in isolated subprocess after {} minutes", engineName, timeoutMinutes);
             } else if (p.exitValue() != 0) {
                 log.error("Engine {} failed in isolated subprocess with exit code {}", engineName, p.exitValue());
             }
@@ -330,13 +373,13 @@ public class Main {
             readChildReport(tmp, allFileResults, allQueryResults);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            terminateProcessTree(p);
             log.warn("Isolated execution interrupted for engine: {}", engineName);
         } catch (Exception e) {
+            terminateProcessTree(p);
             log.error("Failed to run isolated subprocess for engine {}: {}", engineName, e.getMessage(), e);
         } finally {
-            if (p != null && p.isAlive()) {
-                p.destroyForcibly();
-            }
+            terminateProcessTree(p);
             if (tmp != null) {
                 try {
                     Files.deleteIfExists(tmp);
