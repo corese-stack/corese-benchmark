@@ -192,6 +192,7 @@ export function getCurrentView() {
 		.replace(/^#\/?/, "")
 		.trim()
 		.toLowerCase();
+	if (rawHash === "sparql-features") return "sparql";
 	return VALID_VIEWS.includes(rawHash) ? rawHash : "overview";
 }
 
@@ -202,4 +203,39 @@ export function navigateToView(viewId) {
 	if (typeof window === "undefined") return;
 	const targetView = VALID_VIEWS.includes(viewId) ? viewId : "overview";
 	window.location.hash = targetView;
+}
+
+// SPARQL state is namespaced so loading parameters and engine links are preserved.
+export function parseUrlSparql(searchStr) {
+ const params = new URLSearchParams(searchStr || "");
+ const sort = params.get("sf-sort") || "id";
+ const rawPin = (params.get("pin") || "").trim();
+ let pin = null;
+ if (rawPin.startsWith("engine:")) {
+  pin = { kind: "engine", key: rawPin.slice(7) };
+ } else if (rawPin.startsWith("measure:")) {
+  pin = { kind: "measure", key: rawPin.slice(8) };
+ }
+ return {
+  reference: params.get("sf-ref") || "",
+  dataset: params.get("sf-dataset") || "",
+  feature: params.get("sf-feature") || "",
+  q: params.get("sf-q") || "",
+  chart: params.get("sf-chart") === "radar" ? "radar" : "bar",
+  sort: /^(id|name|dataset|primaryFeature|(?:medianMs|medianTtfrMs|status):[^:]+)$/.test(sort) ? sort : "id",
+  direction: params.get("sf-dir") === "desc" ? "desc" : "asc",
+  pin,
+ };
+}
+
+export function updateUrlSparql(state) {
+ if (typeof window === "undefined") return;
+ const params = new URLSearchParams(window.location.search);
+ for (const [key, name, fallback] of [
+  ["reference", "ref", ""], ["dataset", "dataset", ""], ["feature", "feature", ""],
+  ["chart", "chart", "bar"], ["q", "q", ""], ["sort", "sort", "id"], ["direction", "dir", "asc"],
+ ]) applyParam(params, `sf-${name}`, state[key], fallback);
+ const pinStr = state.pin?.kind && state.pin?.key ? `${state.pin.kind}:${state.pin.key}` : null;
+ applyParam(params, "pin", pinStr);
+ commitUrlParams(params);
 }

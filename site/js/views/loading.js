@@ -3,14 +3,14 @@
  * Evaluates ingestion throughput, retained heap, and JVM heap telemetry across engines.
  */
 
-import { attachChartPointerInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement } from "../chart-utils.js";
+import { attachChartPointerInteraction, clearChartInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement, getChartThemeTokens } from "../chart-utils.js";
 import { renderDatasetCard } from "../datasets.js";
 import { escapeHtml, formatEngineId, isBranchVersion, parseEngineId } from "../engine-id.js";
 import {
 	getEngineStyle,
 	renderEngineIndicatorSvg,
 } from "../engines.js";
-import { focusStore, hoverSource } from "../focus-store.js";
+import { focusStore, hoverSource, engineKeyOf } from "../focus-store.js";
 import { parseUrlLoading, updateUrlLoading } from "../router.js";
 
 const ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
@@ -120,11 +120,13 @@ export class LoadingView {
 			{ signal }
 		);
 
-		// Global Escape key to unpin sticky selection
+		// Global Escape key to unpin sticky selection (without breaking modal dialogs)
 		window.addEventListener(
 			"keydown",
 			(e) => {
 				if (e.key === "Escape") {
+					const hasOpenModal = document.querySelector("dialog[open]");
+					if (hasOpenModal) return;
 					focusStore.clear();
 				}
 			},
@@ -206,14 +208,8 @@ export class LoadingView {
 					const baseColor = Array.isArray(baseColors) ? baseColors[idx] : baseColors;
 					if (!focus) return baseColor;
 
-					if (focus.target.kind === "engine") {
-						return eKey === focus.target.key ? baseColor : colorWithAlpha(baseColor, 0.22);
-					}
-					if (focus.target.kind === "measure") {
-						const [targetEng] = focus.target.key.split("|");
-						return eKey === targetEng ? baseColor : colorWithAlpha(baseColor, 0.22);
-					}
-					return baseColor;
+					const targetEng = engineKeyOf(focus.target);
+					return eKey === targetEng ? baseColor : colorWithAlpha(baseColor, 0.22);
 				});
 
 				ds.backgroundColor = colors;
@@ -708,9 +704,7 @@ export class LoadingView {
 		section.className = "dashboard-section";
 
 		const reps = this.#data?.metadata?.protocol?.repetitions ?? 3;
-		const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
-		const sliceNote = isDbpedia ? " · Slice: persondata_en" : "";
-		const dsMeta = `Selected engines and formats · Median of ${reps} runs per engine/format${sliceNote} · Grouped by format`;
+		const dsMeta = `Selected engines and formats · Median of ${reps} runs per engine/format · Grouped by format`;
 
 		const header = document.createElement("div");
 		header.className = "section-header";
@@ -782,9 +776,7 @@ export class LoadingView {
 			};
 		});
 
-		const isDark = document.documentElement.dataset.theme === "dark";
-		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
-		const textColor = isDark ? "#8b949e" : "#656d76";
+		const { grid: gridColor, text: textColor } = getChartThemeTokens();
 
 		try {
 			const chart = new window.Chart(canvas, {
@@ -969,9 +961,7 @@ export class LoadingView {
 		const colors = engineSummaries.map((s) => s.color);
 		const engineKeys = engineSummaries.map((s) => s.engineKey);
 
-		const isDark = document.documentElement.dataset.theme === "dark";
-		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
-		const textColor = isDark ? "#8b949e" : "#656d76";
+		const { grid: gridColor, text: textColor } = getChartThemeTokens();
 
 		try {
 			const chart = new window.Chart(canvas, {
@@ -1063,16 +1053,7 @@ export class LoadingView {
 			});
 
 			// Direct DOM pointer interactions on horizontal bars
-			const clearCanvasState = () => {
-				this.#canvasHover.clear();
-				if (chart) {
-					chart.setActiveElements([]);
-					if (chart.tooltip) {
-						chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-					}
-					chart.update("none");
-				}
-			};
+			const clearCanvasState = () => clearChartInteraction(chart, this.#canvasHover);
 
 			canvas.addEventListener("pointerleave", clearCanvasState, { signal });
 			canvas.addEventListener("pointercancel", clearCanvasState, { signal });
@@ -1238,9 +1219,7 @@ export class LoadingView {
 		const colors = engineSummaries.map((s) => s.color);
 		const engineKeys = engineSummaries.map((s) => s.engineKey);
 
-		const isDark = document.documentElement.dataset.theme === "dark";
-		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
-		const textColor = isDark ? "#8b949e" : "#656d76";
+		const { grid: gridColor, text: textColor } = getChartThemeTokens();
 
 		try {
 			const chart = new window.Chart(canvas, {
@@ -1263,6 +1242,15 @@ export class LoadingView {
 					responsive: true,
 					maintainAspectRatio: false,
 					animation: false,
+					onClick: (e, elements) => {
+						if (elements && elements.length > 0) {
+							const index = elements[0].index;
+							const summary = engineSummaries[index];
+							if (summary) {
+								focusStore.togglePin({ kind: "engine", key: summary.engineKey });
+							}
+						}
+					},
 					plugins: {
 						legend: { display: false },
 						tooltip: {
@@ -1313,14 +1301,7 @@ export class LoadingView {
 				},
 			});
 
-			const clearCanvasState = () => {
-				this.#canvasHover.clear();
-				if (chart) {
-					chart.setActiveElements([]);
-					if (chart.tooltip) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-					chart.update("none");
-				}
-			};
+			const clearCanvasState = () => clearChartInteraction(chart, this.#canvasHover);
 
 			canvas.addEventListener("pointerleave", clearCanvasState, { signal });
 			canvas.addEventListener("pointercancel", clearCanvasState, { signal });
@@ -1392,11 +1373,13 @@ export class LoadingView {
 		const header = document.createElement("div");
 		header.className = "section-header";
 
-		const titleGroup = document.createElement("div");
-		titleGroup.style.display = "flex";
-		titleGroup.style.alignItems = "center";
-		titleGroup.style.flexWrap = "wrap";
-		titleGroup.style.gap = "10px";
+		const topRow = document.createElement("div");
+		topRow.style.display = "flex";
+		topRow.style.justifyContent = "space-between";
+		topRow.style.alignItems = "center";
+		topRow.style.flexWrap = "wrap";
+		topRow.style.gap = "12px";
+		topRow.style.width = "100%";
 
 		const h3 = document.createElement("h3");
 		h3.style.margin = "0";
@@ -1409,19 +1392,30 @@ export class LoadingView {
 			<span>JVM Heap Used Over Time</span>
 			<span class="tag-format">MiB</span>
 		`;
-		titleGroup.appendChild(h3);
+		topRow.appendChild(h3);
 
-		// Format switch: styled segmented control matching Design System
+		const metaSpan = document.createElement("span");
+		metaSpan.className = "section-meta";
+		metaSpan.innerHTML = `
+			<span class="meta-label">${escapeHtml(dsMeta)}</span>
+			<span class="badge-pinned" style="display:none;" aria-live="polite">Pinned · <kbd>Esc</kbd> to reset</span>
+		`;
+		topRow.appendChild(metaSpan);
+		header.appendChild(topRow);
+
+		// Format switch: styled segmented control matching Design System placed cleanly on the 2nd line of header
 		if (availableFormats.length > 0) {
-			const selectorWrap = document.createElement("div");
-			selectorWrap.style.display = "flex";
-			selectorWrap.style.alignItems = "center";
-			selectorWrap.style.gap = "8px";
+			const subRow = document.createElement("div");
+			subRow.style.display = "flex";
+			subRow.style.alignItems = "center";
+			subRow.style.gap = "8px";
+			subRow.style.width = "100%";
+			subRow.style.paddingTop = "4px";
 
 			const selectorLabel = document.createElement("span");
 			selectorLabel.className = "text-xs text-muted font-medium";
 			selectorLabel.textContent = "FORMAT:";
-			selectorWrap.appendChild(selectorLabel);
+			subRow.appendChild(selectorLabel);
 
 			const segGroup = document.createElement("div");
 			segGroup.className = "segmented-control";
@@ -1442,19 +1436,10 @@ export class LoadingView {
 				});
 				segGroup.appendChild(btn);
 			});
-			selectorWrap.appendChild(segGroup);
-			titleGroup.appendChild(selectorWrap);
+			subRow.appendChild(segGroup);
+			header.appendChild(subRow);
 		}
 
-		header.appendChild(titleGroup);
-
-		const metaSpan = document.createElement("span");
-		metaSpan.className = "section-meta";
-		metaSpan.innerHTML = `
-			<span class="meta-label">${escapeHtml(dsMeta)}</span>
-			<span class="badge-pinned" style="display:none;" aria-live="polite">Pinned · <kbd>Esc</kbd> to reset</span>
-		`;
-		header.appendChild(metaSpan);
 		section.appendChild(header);
 
 		const body = document.createElement("div");
@@ -1559,9 +1544,7 @@ export class LoadingView {
 
 		if (datasets.length === 0) return;
 
-		const isDark = document.documentElement.dataset.theme === "dark";
-		const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
-		const textColor = isDark ? "#8b949e" : "#656d76";
+		const { grid: gridColor, text: textColor } = getChartThemeTokens();
 
 		try {
 			const chart = new window.Chart(canvas, {

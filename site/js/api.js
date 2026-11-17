@@ -45,7 +45,10 @@ export async function loadBenchmarkReport(
 			? metadata.engines
 			: {};
 
-	runs.forEach((run) => {
+	// Include engines present only in SPARQL reports (e.g. query-only runs).
+    const catalogueRuns = [...runs, ...(Array.isArray(rawData.queryRuns)
+        ? rawData.queryRuns.filter((q) => q && typeof q === "object").map(normalizeQueryRun) : [])];
+    catalogueRuns.forEach((run) => {
 		const { engineId, versionId, storageId } = run.parsedEngine;
 		if (!catalogMap.has(engineId)) {
 			// Safe property lookup guarding against Object prototype properties and null values
@@ -162,7 +165,7 @@ function normalizeQueryRun(qrun) {
 			? qrun.repetitionsTtfrMs.map(sanitize)
 			: [],
 		parsedEngine: parseEngineId(qrun.engine),
-		status: qrun.status || (qrun.medianMs != null ? "PASS" : "UNKNOWN"),
+		status: qrun.status || "UNKNOWN",
 	};
 }
 

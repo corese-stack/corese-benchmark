@@ -1,0 +1,387 @@
+{
+  "version": "1.0",
+  "suite": "Corese SPARQL Feature Benchmark",
+  "standard": "https://www.w3.org/TR/sparql11-query/",
+  "pathBase": "catalogue directory",
+  "datasetPathBase": "repository root",
+  "entailment": "none",
+  "defaults": {
+    "queryForm": "SELECT",
+    "timeoutSecs": 30,
+    "validationMode": "unordered_exact",
+    "preserveDuplicateRows": true
+  },
+  "validationModes": {
+    "unordered_exact": "Multiset equality of RDF terms, preserving duplicates, datatypes, language tags and unbound variables. Blank nodes require isomorphism or INCONCLUSIVE; no blank nodes are expected in these projections.",
+    "ordered_exact": "Same RDF-term equality as unordered_exact, additionally requiring row sequence equality."
+  },
+  "datasets": {
+    "lubm": {
+      "defaultGraphFiles": [
+        "input/lubm/unzip_small/lubm_small.nt"
+      ],
+      "namedGraphs": false
+    },
+    "bsbm": {
+      "defaultGraphFiles": [
+        "input/bsbm/unzip_small/bsbm_small.nt"
+      ],
+      "namedGraphs": false
+    },
+    "bowlogna": {
+      "defaultGraphFiles": [
+        "input/bowlogna/unzip/Department0.nt"
+      ],
+      "namedGraphs": false
+    },
+    "dbpedia": {
+      "defaultGraphFiles": [
+        "input/dbpedia/unzip/persondata_en.nt"
+      ],
+      "namedGraphs": false
+    },
+    "named-graphs": {
+      "source": "input/lubm/unzip_small/lubm_small.nt",
+      "prepare": "python3 input/queries/v1/named-graphs/prepare_dataset.py input/lubm/unzip_small/lubm_small.nt /tmp/corese-feature-lubm.nq",
+      "quadFile": "/tmp/corese-feature-lubm.nq",
+      "namedGraphs": true,
+      "graphIris": [
+        "urn:corese:benchmark:v1:people",
+        "urn:corese:benchmark:v1:courses"
+      ],
+      "defaultGraph": "empty"
+    }
+  },
+  "features": [
+    "BGP_JOIN",
+    "PROPERTY_PATH",
+    "OPTIONAL_LEFT_JOIN",
+    "NEGATION",
+    "AGGREGATION_ANALYTICS",
+    "SUBQUERY",
+    "FILTER_FUNCTIONS",
+    "NAMED_GRAPH",
+    "SOLUTION_MODIFIERS"
+  ],
+  "queries": [
+    {
+      "id": "Q01",
+      "name": "LUBM selective student star",
+      "file": "lubm/Q01-point-lookup.rq",
+      "dataset": "lubm",
+      "primaryFeature": "BGP_JOIN",
+      "features": [
+        "star",
+        "high_selectivity",
+        "index_lookup"
+      ],
+      "description": "Cours et coordonnées du GraduateStudent0 du département 0.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "course",
+        "email",
+        "telephone"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "Q02",
+      "name": "BSBM selective product feature star",
+      "file": "bsbm/Q02-star-rare.rq",
+      "dataset": "bsbm",
+      "primaryFeature": "BGP_JOIN",
+      "features": [
+        "star",
+        "selective_feature",
+        "review_join"
+      ],
+      "description": "Produits portant ProductFeature2719 avec libellé, fabricant et avis réels.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "product",
+        "label",
+        "producer",
+        "review"
+      ],
+      "notes": "Feature2719 est observée sur Product1 dans le petit jeu local ; sa fréquence dépend de la génération."
+    },
+    {
+      "id": "Q03",
+      "name": "BSBM products without cheap fast offers (MINUS)",
+      "file": "bsbm/Q03-minus.rq",
+      "dataset": "bsbm",
+      "primaryFeature": "NEGATION",
+      "features": [
+        "minus",
+        "anti_join",
+        "numeric_cast"
+      ],
+      "description": "Produits sans offre à moins de 100 USD livrée sous trois jours.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "product"
+      ],
+      "notes": "bsbm:price est typé bsbm:USD : conversion explicite de sa forme lexicale. Q03 et Q09 doivent produire le même multiensemble ; ?product est la seule variable partagée."
+    },
+    {
+      "id": "Q04",
+      "name": "LUBM student-to-university chain",
+      "file": "lubm/Q04-chain-join.rq",
+      "dataset": "lubm",
+      "primaryFeature": "BGP_JOIN",
+      "features": [
+        "chain",
+        "multi_hop"
+      ],
+      "description": "Étudiant → cours ← enseignant → département → université, sans inférence.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "student",
+        "course",
+        "teacher",
+        "department",
+        "university"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "Q05",
+      "name": "LUBM student-advisor-course triangle",
+      "file": "lubm/Q05-cyclic-join.rq",
+      "dataset": "lubm",
+      "primaryFeature": "BGP_JOIN",
+      "features": [
+        "cycle",
+        "triangle"
+      ],
+      "description": "Étudiants suivant un cours enseigné par leur propre directeur.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "student",
+        "advisor",
+        "course"
+      ],
+      "notes": "La jointure est cyclique ; le graphe RDF sous-jacent ne doit pas nécessairement contenir de cycle orienté."
+    },
+    {
+      "id": "Q06",
+      "name": "BSBM product type transitive closure",
+      "file": "topology/Q06-path-transitive.rq",
+      "dataset": "bsbm",
+      "primaryFeature": "PROPERTY_PATH",
+      "features": [
+        "transitive_plus",
+        "hierarchy"
+      ],
+      "description": "Ancêtres stricts des types de produit de la taxonomie BSBM.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "type",
+        "ancestor"
+      ],
+      "notes": "Les arcs rdfs:subClassOf sont présents dans le dump, sans ajout d’ontologie ni inférence."
+    },
+    {
+      "id": "Q07",
+      "name": "BSBM bidirectional taxonomy reachability",
+      "file": "topology/Q07-path-bidir.rq",
+      "dataset": "bsbm",
+      "primaryFeature": "PROPERTY_PATH",
+      "features": [
+        "inverse",
+        "alternative",
+        "transitive_plus",
+        "cycle_handling"
+      ],
+      "description": "Types accessibles depuis ProductType1 en parcourant la hiérarchie dans les deux sens.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "reachable"
+      ],
+      "notes": "Une arête parcourue dans les deux sens rend le point de départ accessible par un chemin de longueur positive ; la terminaison exige de gérer les revisites."
+    },
+    {
+      "id": "Q08",
+      "name": "DBpedia incomplete person records",
+      "file": "dbpedia/Q08-nested-optional.rq",
+      "dataset": "dbpedia",
+      "primaryFeature": "OPTIONAL_LEFT_JOIN",
+      "features": [
+        "nested_optional",
+        "independent_optional"
+      ],
+      "description": "Personnes et noms obligatoires, dates de naissance et décès optionnelles avec OPTIONAL imbriqué.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "person",
+        "name",
+        "birth",
+        "death",
+        "birthPlace"
+      ],
+      "notes": "Utilise persondata_en.nt de DBpedia 3.5.1. ?death reste non liée si ?birth est absente, même si le décès existe."
+    },
+    {
+      "id": "Q09",
+      "name": "BSBM products without cheap fast offers (FILTER NOT EXISTS)",
+      "file": "bsbm/Q09-not-exists.rq",
+      "dataset": "bsbm",
+      "primaryFeature": "NEGATION",
+      "features": [
+        "filter_not_exists",
+        "anti_join",
+        "numeric_cast"
+      ],
+      "description": "Produits sans offre à moins de 100 USD livrée sous trois jours.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "product"
+      ],
+      "notes": "bsbm:price est typé bsbm:USD : conversion explicite de sa forme lexicale. Q03 et Q09 doivent produire le même multiensemble ; ?product est la seule variable partagée."
+    },
+    {
+      "id": "Q10",
+      "name": "Bowlogna teaching unit evaluation statistics",
+      "file": "bowlogna/Q10-analytics.rq",
+      "dataset": "bowlogna",
+      "primaryFeature": "AGGREGATION_ANALYTICS",
+      "features": [
+        "group_by",
+        "having",
+        "count_distinct",
+        "sum",
+        "min",
+        "max"
+      ],
+      "description": "Statistiques entières des évaluations par unité, avec au moins deux étudiants distincts.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "unit",
+        "evaluationCount",
+        "studentCount",
+        "totalMarks",
+        "minMark",
+        "maxMark"
+      ],
+      "notes": "Les notes sont des xsd:int. Les agrégats entiers évitent les écarts d’arrondi inter-moteurs."
+    },
+    {
+      "id": "Q11",
+      "name": "Bowlogna aggregate subquery joined to unit names",
+      "file": "bowlogna/Q11-subquery-join.rq",
+      "dataset": "bowlogna",
+      "primaryFeature": "SUBQUERY",
+      "features": [
+        "aggregate_subquery",
+        "projection_scope",
+        "outer_bgp_join"
+      ],
+      "description": "Sous-requête comptant les évaluations par unité, jointe aux noms dans le bloc externe.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "unit",
+        "name",
+        "evaluationCount"
+      ],
+      "notes": "La sous-requête est évaluée indépendamment ; seules ?unit et ?evaluationCount sont projetées vers le bloc externe. Ce n’est pas une sous-requête corrélée."
+    },
+    {
+      "id": "Q12",
+      "name": "Bowlogna typed temporal and string filters",
+      "file": "bowlogna/Q12-temporal-filter.rq",
+      "dataset": "bowlogna",
+      "primaryFeature": "FILTER_FUNCTIONS",
+      "features": [
+        "datetime_cast",
+        "year",
+        "month",
+        "contains",
+        "lcase"
+      ],
+      "description": "Inscriptions de bachelor en octobre entre 2003 inclus et 2006 exclu, avec filtre sur le prénom.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "student",
+        "firstName",
+        "enrolledAt"
+      ],
+      "notes": "Les dates du dump sont des xsd:string au format YYYY-MM-DD. Ajout explicite de minuit UTC avant conversion SPARQL standard, sans fonction spécifique au moteur."
+    },
+    {
+      "id": "Q13",
+      "name": "BSBM offer price ordered page",
+      "file": "bsbm/Q13-topk-order.rq",
+      "dataset": "bsbm",
+      "primaryFeature": "SOLUTION_MODIFIERS",
+      "features": [
+        "distinct",
+        "order_by",
+        "limit",
+        "offset",
+        "numeric_cast"
+      ],
+      "description": "Deuxième page de vingt offres les moins chères, avec départage déterministe.",
+      "timeoutSecs": 30,
+      "validationMode": "ordered_exact",
+      "resultVariables": [
+        "offer",
+        "product",
+        "price"
+      ],
+      "notes": "bsbm:USD est converti en xsd:decimal. Les IRI d’offre et produit départagent les prix égaux ; toutes les variables projetées sont dans ORDER BY."
+    },
+    {
+      "id": "Q14",
+      "name": "LUBM join across distinct named graphs",
+      "file": "named-graphs/Q14-quad-join.rq",
+      "dataset": "named-graphs",
+      "primaryFeature": "NAMED_GRAPH",
+      "features": [
+        "cross_graph_join",
+        "fixed_graphs"
+      ],
+      "description": "Jointure étudiant/cours entre deux contextes distincts issus du même fichier LUBM.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "student",
+        "department",
+        "course"
+      ],
+      "notes": "Utiliser prepare_dataset.py : people reçoit les triplets hors takesCourse/teacherOf ; courses reçoit takesCourse/teacherOf. Charger le fichier N-Quads obtenu en conservant les contextes."
+    },
+    {
+      "id": "Q15",
+      "name": "Named graph cardinalities",
+      "file": "named-graphs/Q15-graph-aggregate.rq",
+      "dataset": "named-graphs",
+      "primaryFeature": "NAMED_GRAPH",
+      "features": [
+        "variable_graph",
+        "group_by",
+        "count"
+      ],
+      "description": "Nombre de triplets et de sujets distincts dans chacun des graphes nommés.",
+      "timeoutSecs": 30,
+      "validationMode": "unordered_exact",
+      "resultVariables": [
+        "graph",
+        "tripleCount",
+        "subjectCount"
+      ],
+      "notes": "Même fichier N-Quads que Q14 ; aucun graphe par défaut, aucun mode union implicite."
+    }
+  ]
+}

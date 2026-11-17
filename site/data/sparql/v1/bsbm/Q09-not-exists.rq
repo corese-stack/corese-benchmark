@@ -1,0 +1,16 @@
+# Q09: BSBM products without cheap fast offers (FILTER NOT EXISTS)
+# Primary feature: NEGATION
+PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?product
+WHERE {
+    ?product rdf:type bsbm:Product .
+    FILTER NOT EXISTS {
+        ?offer bsbm:product ?product ;
+            bsbm:price ?rawPrice ;
+            bsbm:deliveryDays ?deliveryDays .
+        FILTER (xsd:decimal(STR(?rawPrice)) < 100 && ?deliveryDays <= 3)
+    }
+}

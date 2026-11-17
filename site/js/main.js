@@ -4,12 +4,14 @@
 
 import { loadBenchmarkReport } from "./api.js";
 import { engineManager } from "./engines.js?v=68";
+import { SparqlFeaturesView } from "./views/sparql-features.js";
 import { LoadingView } from "./views/loading.js?v=68";
 import {
 	getCurrentView,
 	navigateToView,
 	parseUrlEngines,
 	parseUrlLoading,
+	parseUrlSparql,
 	updateUrlEngines,
 } from "./router.js";
 
@@ -271,6 +273,18 @@ class DashboardApp {
 
 	renderActivePage() {
 		if (!this.panelContainer) return;
+
+		if (this.currentView === "sparql") {
+            const selectedEngines = engineManager.getSelectedEngines();
+            if (!(this.activeViewInstance instanceof SparqlFeaturesView)) {
+                this.activeViewInstance?.destroy?.();
+                this.activeViewInstance = new SparqlFeaturesView(this.panelContainer, this.data, selectedEngines);
+                this.activeViewInstance.mount();
+            } else {
+                this.activeViewInstance.restoreState(parseUrlSparql(window.location.search), selectedEngines);
+            }
+            return;
+        }
 
 		if (this.currentView === "loading") {
 			const selectedEngines = engineManager.getSelectedEngines();

@@ -13,6 +13,25 @@ export function sameTarget(a, b) {
 	return a.kind === b.kind && a.key === b.key;
 }
 
+/**
+ * Extracts canonical engine key from a focus target (engine or measure).
+ * Returns null if target is null or not resolvable to an engine.
+ */
+export function engineKeyOf(target) {
+	if (!target?.key) return null;
+	if (target.kind === "engine") return target.key;
+	if (target.kind === "measure") return target.key.split("|")[0];
+	return null;
+}
+
+/**
+ * Checks whether a target matches a given engine key.
+ */
+export function matchesEngine(target, engineKey) {
+	if (!engineKey) return false;
+	return engineKeyOf(target) === engineKey;
+}
+
 export function hoverSource() {
 	let target = null;
 	let token = null;

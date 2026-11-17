@@ -1,0 +1,15 @@
+# Q14: LUBM join across distinct named graphs
+# Primary feature: NAMED_GRAPH
+PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?student ?department ?course
+WHERE {
+    GRAPH <urn:corese:benchmark:v1:people> {
+        ?student rdf:type ub:GraduateStudent ;
+            ub:memberOf ?department .
+    }
+    GRAPH <urn:corese:benchmark:v1:courses> {
+        ?student ub:takesCourse ?course .
+    }
+}

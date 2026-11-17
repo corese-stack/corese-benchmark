@@ -4,10 +4,43 @@
  * and Chart.js DOM lifecycle coordination.
  */
 
+import { engineKeyOf, matchesEngine } from "./focus-store.js";
+
 const HEX6_REGEX = /^#[0-9a-fA-F]{6}$/;
 const HEX3_REGEX = /^#[0-9a-fA-F]{3}$/;
 const RGB_REGEX = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i;
 const RGBA_REGEX = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,[^)]+\)$/i;
+
+/**
+ * Reads standard CSS theme colors (text-muted, border, bg) for Chart.js rendering.
+ */
+export function getChartThemeTokens() {
+	if (typeof document === "undefined") {
+		return { text: "#64748b", grid: "rgba(0, 0, 0, 0.06)", bg: "#ffffff" };
+	}
+	const css = getComputedStyle(document.documentElement);
+	const text = (css.getPropertyValue("--text-muted") || "#64748b").trim();
+	const border = (css.getPropertyValue("--border") || "#d8dce2").trim();
+	const bg = (css.getPropertyValue("--bg") || "#ffffff").trim();
+	const grid = colorWithAlpha(border, 0.5);
+	return { text, border, bg, grid };
+}
+
+/**
+ * Resets Chart.js active hover elements, tooltips, and associated hoverSource.
+ */
+export function clearChartInteraction(chart, hoverSource = null) {
+	if (hoverSource) {
+		hoverSource.clear();
+	}
+	if (chart) {
+		chart.setActiveElements([]);
+		if (chart.tooltip) {
+			chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+		}
+		chart.update("none");
+	}
+}
 
 /**
  * Returns a CSS rgba string for a given hex (#rgb, #rrggbb) or rgb/rgba color with applied alpha.
@@ -63,16 +96,7 @@ export function findBarElement(chart, x, y) {
  * and binds hover focus target updates cleanly with AbortSignal lifecycle.
  */
 export function attachChartPointerInteraction(chart, canvas, activeFormats, hoverTarget, signal) {
-	const clearState = () => {
-		hoverTarget.clear();
-		if (chart) {
-			chart.setActiveElements([]);
-			if (chart.tooltip) {
-				chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-			}
-			chart.update("none");
-		}
-	};
+	const clearState = () => clearChartInteraction(chart, hoverTarget);
 
 	canvas.addEventListener("pointerleave", clearState, { signal });
 	canvas.addEventListener("pointercancel", clearState, { signal });
@@ -159,12 +183,7 @@ export function createEngineLegendConfig({ onEngineHover, onEngineLeave, onEngin
 
 					let isMatch = true;
 					if (focus) {
-						if (focus.target.kind === "engine") {
-							isMatch = ds._engineKey === focus.target.key;
-						} else if (focus.target.kind === "measure") {
-							const [targetEng] = focus.target.key.split("|");
-							isMatch = ds._engineKey === targetEng;
-						}
+						isMatch = matchesEngine(focus.target, ds._engineKey);
 					}
 
 					const fill = isMatch ? baseColor : colorWithAlpha(baseColor, 0.22);
@@ -180,14 +199,7 @@ export function createEngineLegendConfig({ onEngineHover, onEngineLeave, onEngin
 				const ds = ctx.chart.data.datasets[dsIndex];
 				if (!ds || !focus) return textColor;
 
-				if (focus.target.kind === "measure") {
-					const [targetEng] = focus.target.key.split("|");
-					return ds._engineKey === targetEng ? textColor : "rgba(128, 128, 128, 0.4)";
-				}
-				if (focus.target.kind === "engine") {
-					return ds._engineKey === focus.target.key ? textColor : "rgba(128, 128, 128, 0.4)";
-				}
-				return textColor;
+				return matchesEngine(focus.target, ds._engineKey) ? textColor : "rgba(128, 128, 128, 0.4)";
 			},
 		},
 	};

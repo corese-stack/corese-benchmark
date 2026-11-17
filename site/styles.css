@@ -3343,3 +3343,70 @@ dialog.modal-window::backdrop {
 	border-radius: 3px;
 	border: 1px solid var(--border);
 }
+
+/* SPARQL features: inherits the scientific section and table system. */
+.sf-view { min-width: 0; }
+.sf-view h3 { margin: 0; font-size: 16px; }
+.sf-view .section-meta { line-height: 1.6; }
+.sf-chart { position: relative; height: 640px; min-width: 0; }
+.sf-scroll { overflow-x: auto; }
+.sf-view button { cursor: pointer; }
+.sf-view .data-table button {
+ font: inherit; color: inherit; border: 0; background: transparent; padding: 4px; text-align: left;
+}
+.sf-view .data-table th[aria-sort] button { text-decoration: underline; text-underline-offset: 4px; }
+.sf-view .data-table th[aria-sort="ascending"] button::after { content: " ↑"; }
+.sf-view .data-table th[aria-sort="descending"] button::after { content: " ↓"; }
+.sf-view .data-table th[scope="row"] { text-transform: none; }
+.sf-view tr[data-sf-query] { cursor: pointer; }
+.sf-view :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.sf-badge { border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+.sf-badge--pass { color: var(--tag-active-text); background: var(--tag-active-bg); }
+.sf-badge--fail { color: var(--text); background: var(--bg-hover); font-weight: 700; border-style: dashed; }
+.sf-badge--other { color: var(--text-muted); }
+.sf-dialog {
+ width: min(880px, calc(100vw - 40px)); max-height: 85vh; overflow: auto; box-sizing: border-box;
+ border: 1px solid var(--border); border-radius: 8px; padding: 24px;
+ background: var(--bg); color: var(--text); box-shadow: var(--shadow);
+}
+.sf-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+.sf-dialog form { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.sf-dialog pre { overflow: auto; padding: 16px; background: var(--bg-page); border: 1px solid var(--border); font: 12px/1.7 var(--font-mono); tab-size: 2; }
+.sf-token-comment { color: var(--text-muted); font-style: italic; }
+.sf-token-keyword { color: var(--accent); font-weight: 700; }
+.sf-token-variable { color: var(--text); font-weight: 600; }
+.sf-token-string { color: var(--tag-active-text); }
+.sf-token-iri { color: var(--accent); }
+@media (max-width: 600px) {
+ .sf-controls label { flex: 1 1 160px; min-width: 0; }
+ .sf-controls input { width: 100%; min-width: 0; box-sizing: border-box; }
+ .sf-dialog { padding: 16px; }
+}
+
+/* Direct scope controls reuse RDF Loading's segmented controls and cards. */
+.sf-view p { margin-block: 0 12px; line-height: 1.6; }
+.sf-view p:last-child { margin-bottom: 0; }
+.sf-view .sf-controls {
+ padding: 14px 18px; background: var(--bg); border: 1px solid var(--border);
+ border-radius: 8px; align-items: end; margin-bottom: 16px;
+}
+.sf-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.sf-filter-label { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.sf-segments { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.sf-segments .segmented-control__btn { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.sf-controls > .sf-filter { flex: 1 1 100%; }
+.sf-view .dataset-card-host { min-width: 0; margin-bottom: 16px; }
+.sf-view .sf-protocol { background: var(--bg); border-color: var(--border); color: var(--text); }
+.sf-protocol .protocol-title { color: var(--text); }
+.sf-protocol .protocol-body { background: var(--bg); border-color: var(--border); }
+.sf-view .section-header { flex-wrap: wrap; gap: 8px 20px; }
+.sf-view .section-header > * { min-width: 0; }
+.sf-view .section-meta { overflow-wrap: anywhere; }
+.sf-view .data-table .engine-glyph { margin-right: 6px; }
+.sf-view [data-sf-notice]:not([hidden]) { padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); margin-bottom: 24px; }
+@media (max-width: 600px) {
+ .sf-view .section-body { padding: 16px; }
+ .sf-view .sf-controls { padding: 12px; }
+ .sf-chart { height: 720px; }
+ .sf-segments .segmented-control__btn { white-space: normal; text-align: left; }
+}

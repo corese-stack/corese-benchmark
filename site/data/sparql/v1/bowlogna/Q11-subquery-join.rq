@@ -1,0 +1,17 @@
+# Q11: Bowlogna aggregate subquery joined to unit names
+# Primary feature: SUBQUERY
+PREFIX bow: <http://www.owl-ontologies.com/Ontology1324312315.owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?unit ?name ?evaluationCount
+WHERE {
+    {
+        SELECT ?unit (COUNT(?evaluation) AS ?evaluationCount)
+        WHERE {
+            ?evaluation rdf:type bow:Evaluation ;
+                bow:evaluatesTeachingUnit ?unit .
+        }
+        GROUP BY ?unit
+    }
+    ?unit bow:hasName ?name .
+}

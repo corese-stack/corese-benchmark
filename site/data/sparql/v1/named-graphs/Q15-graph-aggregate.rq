@@ -1,0 +1,11 @@
+# Q15: Named graph cardinalities
+# Primary feature: NAMED_GRAPH
+
+SELECT ?graph (COUNT(*) AS ?tripleCount)
+    (COUNT(DISTINCT ?subject) AS ?subjectCount)
+WHERE {
+    GRAPH ?graph {
+        ?subject ?predicate ?object .
+    }
+}
+GROUP BY ?graph
