@@ -41,7 +41,8 @@ target/
 ## #################################################################
 ## Benchmark inputs, downloads & outputs
 ## #################################################################
-input/
+input/*
+!input/queries/
 public/
 commit/
 libs/*

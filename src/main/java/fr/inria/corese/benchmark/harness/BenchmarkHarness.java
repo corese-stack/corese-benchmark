@@ -9,6 +9,7 @@ import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.benchmark.metrics.QueryResult;
 import fr.inria.corese.benchmark.metrics.SparqlAnalyser;
 import fr.inria.corese.benchmark.report.BenchmarkProtocol;
+import fr.inria.corese.benchmark.query.SparqlCatalogueLoader.LoadedQuery;
 import fr.inria.corese.benchmark.telemetry.IngestionTelemetrySampler;
 import fr.inria.corese.benchmark.telemetry.TelemetryPoint;
 import org.slf4j.Logger;
@@ -154,6 +155,36 @@ public class BenchmarkHarness {
      * Returns one QueryResult per (engine, query).
      */
     public List<QueryResult> runQueryBenchmark(String datasetDir, List<String> queries) throws Exception {
+        List<QuerySpec> workload = new ArrayList<>();
+        for (int i = 0; i < queries.size(); i++) {
+            String sparql = queries.get(i).trim();
+            if (!sparql.isEmpty()) {
+                workload.add(new QuerySpec(sparql, "query_" + (i + 1),
+                        SparqlAnalyser.classify(sparql).name(), defaultQueryTimeoutS()));
+            }
+        }
+        return runQueryWorkload(datasetDir, workload);
+    }
+
+    /**
+     * Runs resolved catalogue entries in order, preserving IDs, features and timeouts.
+     * The caller selects the entries appropriate for the loaded dataset.
+     * Catalogue timeouts take precedence over the protocol's legacy default.
+     */
+    public List<QueryResult> runCatalogueBenchmark(String datasetDir, List<LoadedQuery> queries) throws Exception {
+        List<QuerySpec> workload = queries.stream().map(query -> new QuerySpec(
+                query.sparql(), query.definition().id(), query.definition().primaryFeature().name(),
+                query.definition().timeoutSecs())).toList();
+        return runQueryWorkload(datasetDir, workload);
+    }
+
+    private record QuerySpec(String sparql, String queryId, String category, long timeoutS) { }
+
+    private long defaultQueryTimeoutS() {
+        return Math.max(1, protocol.queryTimeoutMs() / 1000L);
+    }
+
+    private List<QueryResult> runQueryWorkload(String datasetDir, List<QuerySpec> queries) throws Exception {
         File[] files = discoverFiles(datasetDir);
 
         List<QueryResult> results = new ArrayList<>();
@@ -179,17 +210,17 @@ public class BenchmarkHarness {
             boolean jvmContaminated = false;
             String leakSource = null;
 
-            for (int qi = 0; qi < queries.size(); qi++) {
-                String sparql = queries.get(qi).trim();
+            for (QuerySpec query : queries) {
+                String sparql = query.sparql();
                 if (!sparql.isEmpty()) {
-                    String queryId = "query_" + (qi + 1);
-                    String category = SparqlAnalyser.classify(sparql).name();
+                    String queryId = query.queryId();
+                    String category = query.category();
 
                     if (jvmContaminated) {
                         log.warn("  Skipping {} due to unrecovered thread leak in {}", queryId, leakSource);
                         timedRuns.add(buildContaminatedSkippedRun(sparql, queryId, category, leakSource));
                     } else {
-                        QueryTimedRun run = measureSingleQuery(sparql, queryId, category);
+                        QueryTimedRun run = measureSingleQuery(sparql, queryId, category, query.timeoutS());
                         timedRuns.add(run);
 
                         if (hasActiveThreadLeak(run)) {
@@ -213,24 +244,20 @@ public class BenchmarkHarness {
         return results;
     }
 
-    private void warmupQueries(List<String> queries) {
+    private void warmupQueries(List<QuerySpec> queries) {
         log.info("  Warming up {} queries (1 run discarded)...", queries.size());
-        for (int qi = 0; qi < queries.size(); qi++) {
-            String warmupSparql = queries.get(qi).trim();
-            if (warmupSparql.isEmpty()) continue;
-            String warmupId = "query_" + (qi + 1);
-            runSingleWarmup(warmupSparql, warmupId);
+        for (QuerySpec query : queries) {
+            runSingleWarmup(query.sparql(), query.queryId(), query.timeoutS());
         }
     }
 
-    private void runSingleWarmup(String warmupSparql, String warmupId) {
+    private void runSingleWarmup(String warmupSparql, String warmupId, long qTimeoutS) {
         ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "warmup-" + warmupId);
             t.setDaemon(true);
             return t;
         });
         Future<long[]> wf = warmupExec.submit(() -> driver.queryWithCount(warmupSparql));
-        long qTimeoutS = Math.max(1, protocol.queryTimeoutMs() / 1000L);
         try {
             long[] res = wf.get(qTimeoutS, TimeUnit.SECONDS);
             long count = res[1];
@@ -264,14 +291,15 @@ public class BenchmarkHarness {
         String sparql,
         String queryId,
         String category,
+        long timeoutS,
         RepetitionBuffers buffers
     ) {}
 
     QueryResult benchmarkSingleQuery(String sparql, String queryId, String category) {
-        return validateAndBuildResult(measureSingleQuery(sparql, queryId, category));
+        return validateAndBuildResult(measureSingleQuery(sparql, queryId, category, defaultQueryTimeoutS()));
     }
 
-    private QueryTimedRun measureSingleQuery(String sparql, String queryId, String category) {
+    private QueryTimedRun measureSingleQuery(String sparql, String queryId, String category, long timeoutS) {
         int qReps = protocol.queryRepetitions();
         double[] times       = new double[qReps];
         double[] ttfrTimes   = new double[qReps];
@@ -282,7 +310,7 @@ public class BenchmarkHarness {
 
         RepetitionBuffers buffers = new RepetitionBuffers(times, ttfrTimes, heapDeltas, rowCounts, statuses, errorCauses);
         for (int i = 0; i < qReps; i++) {
-            executeSingleRepetition(sparql, queryId, i, buffers);
+            executeSingleRepetition(sparql, queryId, i, buffers, timeoutS);
             if (STATUS_TIMEOUT.equals(buffers.statuses()[i]) && buffers.errorCauses()[i] != null
                     && buffers.errorCauses()[i].contains("thread leak")) {
                 // Fail-fast remaining repetitions of this query to avoid running on a contaminated engine
@@ -296,7 +324,7 @@ public class BenchmarkHarness {
                 break;
             }
         }
-        return new QueryTimedRun(sparql, queryId, category, buffers);
+        return new QueryTimedRun(sparql, queryId, category, timeoutS, buffers);
     }
 
     private static boolean hasActiveThreadLeak(QueryTimedRun run) {
@@ -331,11 +359,11 @@ public class BenchmarkHarness {
             errorCauses[i] = cause;
         }
         RepetitionBuffers buffers = new RepetitionBuffers(times, ttfrTimes, heapDeltas, rowCounts, statuses, errorCauses);
-        return new QueryTimedRun(sparql, queryId, category, buffers);
+        return new QueryTimedRun(sparql, queryId, category, defaultQueryTimeoutS(), buffers);
     }
 
     private QueryResult validateAndBuildResult(QueryTimedRun run) {
-        EvaluationOutcome outcome = evaluateRepetitions(run.sparql(), run.queryId(), run.buffers());
+        EvaluationOutcome outcome = evaluateRepetitions(run.sparql(), run.queryId(), run.buffers(), run.timeoutS());
         double heapDeltaMb = medianLong(run.buffers().heapDeltas()) / (1024.0 * 1024.0);
 
         log.info("  {} [{}] | {} | ttfr {} | rows {} | status {}", run.queryId(), run.category(),
@@ -355,7 +383,7 @@ public class BenchmarkHarness {
         );
     }
 
-    private EvaluationOutcome evaluateRepetitions(String sparql, String queryId, RepetitionBuffers buffers) {
+    private EvaluationOutcome evaluateRepetitions(String sparql, String queryId, RepetitionBuffers buffers, long timeoutS) {
         int qReps = buffers.statuses().length;
         int passCount = 0;
         int timeoutCount = 0;
@@ -367,7 +395,7 @@ public class BenchmarkHarness {
         }
 
         if (passCount == qReps) {
-            return evaluateFullPass(sparql, queryId, buffers);
+            return evaluateFullPass(sparql, queryId, buffers, timeoutS);
         }
         if (timeoutCount == qReps) {
             return new EvaluationOutcome(STATUS_TIMEOUT, -1L, "", false, -1.0, -1.0);
@@ -378,7 +406,7 @@ public class BenchmarkHarness {
         return evaluatePartialOutcome(buffers);
     }
 
-    private EvaluationOutcome evaluateFullPass(String sparql, String queryId, RepetitionBuffers buffers) {
+    private EvaluationOutcome evaluateFullPass(String sparql, String queryId, RepetitionBuffers buffers, long timeoutS) {
         if (!areRowCountsConsistent(buffers.rowCounts())) {
             double medianMs = MetricsCollector.medianDouble(buffers.times());
             double medianTtfrMs = MetricsCollector.medianDouble(buffers.ttfrTimes());
@@ -386,7 +414,7 @@ public class BenchmarkHarness {
         }
 
         try {
-            TripleStoreDriver.ValidationResult vr = validateWithTimeout(sparql, queryId);
+            TripleStoreDriver.ValidationResult vr = validateWithTimeout(sparql, queryId, timeoutS);
             double medianMs = MetricsCollector.medianDouble(buffers.times());
             double medianTtfrMs = MetricsCollector.medianDouble(buffers.ttfrTimes());
             return new EvaluationOutcome(STATUS_PASS, buffers.rowCounts()[0], vr.hash(), vr.hasBlankNodes(), medianMs, medianTtfrMs);
@@ -396,8 +424,7 @@ public class BenchmarkHarness {
         }
     }
 
-    private TripleStoreDriver.ValidationResult validateWithTimeout(String sparql, String queryId) throws Exception {
-        long qTimeoutS = Math.max(1, protocol.queryTimeoutMs() / 1000L);
+    private TripleStoreDriver.ValidationResult validateWithTimeout(String sparql, String queryId, long qTimeoutS) throws Exception {
         ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "validation-" + queryId);
             t.setDaemon(true);
@@ -491,9 +518,8 @@ public class BenchmarkHarness {
     }
 
     private void executeSingleRepetition(
-        String sparql, String queryId, int rep, RepetitionBuffers buffers
+        String sparql, String queryId, int rep, RepetitionBuffers buffers, long qTimeoutS
     ) {
-        long qTimeoutS = Math.max(1, protocol.queryTimeoutMs() / 1000L);
         ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "query-runner-" + queryId + "-rep" + rep);
             t.setDaemon(true);

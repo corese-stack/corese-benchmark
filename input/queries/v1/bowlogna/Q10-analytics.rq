@@ -1,0 +1,17 @@
+# Q10: Bowlogna teaching unit evaluation statistics
+# Primary feature: AGGREGATION_ANALYTICS
+PREFIX bow: <http://www.owl-ontologies.com/Ontology1324312315.owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?unit (COUNT(?evaluation) AS ?evaluationCount)
+    (COUNT(DISTINCT ?student) AS ?studentCount)
+    (SUM(?mark) AS ?totalMarks) (MIN(?mark) AS ?minMark)
+    (MAX(?mark) AS ?maxMark)
+WHERE {
+    ?evaluation rdf:type bow:Evaluation ;
+        bow:evaluatesTeachingUnit ?unit ;
+        bow:performedByStudent ?student ;
+        bow:hasMark ?mark .
+}
+GROUP BY ?unit
+HAVING (COUNT(DISTINCT ?student) >= 2)

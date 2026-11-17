@@ -1,0 +1,17 @@
+# Q02: BSBM selective product feature star
+# Primary feature: BGP_JOIN
+PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rev: <http://purl.org/stuff/rev#>
+
+SELECT ?product ?label ?producer ?review
+WHERE {
+    ?product rdf:type bsbm:Product ;
+        rdfs:label ?label ;
+        bsbm:producer ?producer ;
+        bsbm:productFeature
+            <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/ProductFeature2719> .
+    ?review rdf:type rev:Review ;
+        bsbm:reviewFor ?product .
+}

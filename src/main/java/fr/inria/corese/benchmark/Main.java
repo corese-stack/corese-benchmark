@@ -7,11 +7,16 @@ import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.harness.BenchmarkHarness;
 import fr.inria.corese.benchmark.metrics.FileResult;
 import fr.inria.corese.benchmark.metrics.QueryResult;
+import fr.inria.corese.benchmark.metrics.SparqlAnalyser;
+import fr.inria.corese.benchmark.query.SparqlCatalogueLoader;
+import fr.inria.corese.benchmark.query.SparqlCatalogueLoader.LoadedQuery;
+import fr.inria.corese.benchmark.query.SparqlQueryDefinition;
 import fr.inria.corese.benchmark.report.BenchmarkProtocol;
 import fr.inria.corese.benchmark.report.BenchmarkReport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,7 +59,7 @@ public class Main {
      *   <li>{@code outputFile}   — path for the generated JSON report</li>
      *   <li>{@code engines}      — comma-separated engine names (e.g. {@code corese.4.6.5,jena.6.2.0})</li>
      *   <li>{@code datasetName}  — (optional) logical dataset label; defaults to {@code "dataset"}</li>
-     *   <li>{@code queriesFile}  — (optional) path to a file with one SPARQL query per line</li>
+     *   <li>{@code queriesFile}  — (optional) path to a catalogue JSON, multiline .rq, or legacy one-query-per-line file</li>
      *   <li>{@code --inference}  — (optional flag) enables RDFS inference for Corese drivers</li>
      *   <li>{@code --quick}      — (optional flag) quick mode (1 repetition)</li>
      *   <li>{@code --no-isolate} — (optional flag) disable subprocess JVM isolation</li>
@@ -69,7 +74,15 @@ public class Main {
         }
 
         BenchmarkOptions opts = parseOptions(args);
-        List<String> queries = loadQueries(opts.queriesFile());
+        QueryInput queryInput;
+        try {
+            queryInput = loadQueries(opts.queriesFile(), opts.datasetName());
+        } catch (IOException e) {
+            log.error("Failed to read queries file {}: {}", opts.queriesFile(), e.getMessage());
+            System.exit(1);
+            return;
+        }
+        List<String> queries = queryInput.queries();
 
         List<FileResult> allFileResults = new ArrayList<>();
         List<QueryResult> allQueryResults = new ArrayList<>();
@@ -81,7 +94,7 @@ public class Main {
             if (shouldIsolate) {
                 runChild(cleanName, opts, allFileResults, allQueryResults);
             } else {
-                runEngine(cleanName, opts, queries, allFileResults, allQueryResults, proto);
+                runEngine(cleanName, opts, queryInput, allFileResults, allQueryResults, proto);
             }
         }
 
@@ -225,26 +238,48 @@ public class Main {
         }
     }
 
-    private static List<String> loadQueries(String queriesFile) {
+    record QueryInput(List<String> queries, List<LoadedQuery> catalogue) { }
+
+    /**
+     * Dataset labels select catalogue entries (case-insensitive); the default
+     * label "dataset" selects the complete catalogue. Legacy text is unchanged.
+     * Standalone .rq files use their basename as ID and a 30-second timeout.
+     */
+    static QueryInput loadQueries(String queriesFile, String datasetName) throws IOException {
         if (queriesFile == null) {
-            return Collections.emptyList();
+            return new QueryInput(Collections.emptyList(), null);
         }
-        try {
-            List<String> lines = new ArrayList<>(Files.readAllLines(Path.of(queriesFile)));
-            lines.removeIf(String::isBlank);
-            log.info("Loaded {} queries from: {}", lines.size(), queriesFile);
-            return lines;
-        } catch (Exception e) {
-            log.error("Failed to read queries file {}: {}", queriesFile, e.getMessage());
-            System.exit(1);
-            return Collections.emptyList();
+        Path path = Path.of(queriesFile);
+        if (!queriesFile.endsWith(".rq")
+                && (queriesFile.endsWith(".json") || queriesFile.contains("catalogue"))) {
+            List<LoadedQuery> loaded = new SparqlCatalogueLoader().load(path).stream()
+                    .filter(query -> "dataset".equals(datasetName)
+                            || query.definition().dataset().equalsIgnoreCase(datasetName))
+                    .toList();
+            log.info("Loaded {} catalogue queries for {} from: {}", loaded.size(), datasetName, path);
+            return new QueryInput(loaded.stream().map(LoadedQuery::sparql).toList(), loaded);
         }
+        if (queriesFile.endsWith(".rq")) {
+            String sparql = Files.readString(path);
+            if (sparql.isBlank()) {
+                throw new IOException("Empty query file: " + path);
+            }
+            String file = path.getFileName().toString();
+            String id = file.substring(0, file.length() - 3);
+            var definition = new SparqlQueryDefinition(id, id, file, datasetName,
+                    SparqlAnalyser.classifyFeature(sparql, null), List.of(), 30, "unordered_exact");
+            return new QueryInput(List.of(sparql), List.of(new LoadedQuery(definition, sparql)));
+        }
+        List<String> lines = new ArrayList<>(Files.readAllLines(path));
+        lines.removeIf(String::isBlank);
+        log.info("Loaded {} queries from: {}", lines.size(), queriesFile);
+        return new QueryInput(lines, null);
     }
 
     private static void runEngine(
         String engineName,
         BenchmarkOptions opts,
-        List<String> queries,
+        QueryInput queryInput,
         List<FileResult> allFileResults,
         List<QueryResult> allQueryResults,
         BenchmarkProtocol protocol
@@ -257,8 +292,10 @@ public class Main {
             List<FileResult> fileResults = harness.run(opts.datasetDir());
             allFileResults.addAll(fileResults);
 
-            if (!queries.isEmpty()) {
-                List<QueryResult> queryResults = harness.runQueryBenchmark(opts.datasetDir(), queries);
+            if (!queryInput.queries().isEmpty()) {
+                List<QueryResult> queryResults = queryInput.catalogue() == null
+                        ? harness.runQueryBenchmark(opts.datasetDir(), queryInput.queries())
+                        : harness.runCatalogueBenchmark(opts.datasetDir(), queryInput.catalogue());
                 allQueryResults.addAll(queryResults);
             }
         } catch (OutOfMemoryError e) {

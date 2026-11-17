@@ -138,7 +138,7 @@ parser.add_argument(
     type=int,
     default=None,
     metavar="SECONDS",
-    help="Per-query SPARQL timeout in seconds (default: 30). Overrides the Java harness default.",
+    help="Per-query timeout for legacy text workloads (default: 30). Catalogue entries use timeoutSecs.",
 )
 args = parser.parse_args()
 
@@ -280,7 +280,11 @@ def gradle_build(extra_args=None):
 
 
 # Query workloads will be provided via the new versioned catalogue (Corese Benchmark Suite v1.0)
-QUERIES_FILES = {}
+# Main selects entries whose metadata.dataset matches the dataset_label passed below.
+QUERIES_FILES = {
+    dataset: os.path.join(project_dir, "input", "queries", "v1", "catalogue.json")
+    for dataset in SUPPORTED_DATASETS
+}
 
 
 def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_props=None):
