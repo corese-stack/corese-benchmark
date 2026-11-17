@@ -1,8 +1,10 @@
 package fr.inria.corese.benchmark.harness;
 
+import fr.inria.corese.benchmark.driver.BenchmarkFormat;
 import fr.inria.corese.benchmark.driver.QueryMetrics;
 import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.metrics.FileResult;
+import fr.inria.corese.benchmark.metrics.FileStatus;
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.benchmark.metrics.QueryResult;
 import fr.inria.corese.benchmark.metrics.SparqlAnalyser;
@@ -61,7 +63,7 @@ public class BenchmarkHarness {
     }
 
     /**
-     * Runs the load benchmark over all supported RDF files (.nt, .nq, .ttl, .trig)
+     * Runs the load benchmark over all canonical RDF files (.nt, .nq, .ttl, .trig, .rdf, .jsonld)
      * found in {@code datasetDir}. Files are sorted alphabetically.
      * For each file the harness performs one warmup load followed by REPETITIONS
      * measured repetitions, keeping the median.
@@ -70,7 +72,7 @@ public class BenchmarkHarness {
      * @param datasetDir path to the directory containing RDF files
      * @return one {@link FileResult} per file, in sorted file order
      * @throws IllegalArgumentException if no supported files are found
-     * @throws Exception                if the driver or file I/O raises an error
+     * @throws Exception                if driver initialization or closure fails, or the run is interrupted
      */
     @SuppressWarnings("java:S1215")
     public List<FileResult> run(String datasetDir) throws Exception {
@@ -93,12 +95,24 @@ public class BenchmarkHarness {
                                     file.getName(), result.loadingTimeMs(), repStr,
                                     result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
                 } catch (java.util.concurrent.TimeoutException e) {
+                    results.add(failedFile(file, FileStatus.TIMEOUT, e));
                     log.error("  [{}/{}] {} — LOAD TIMEOUT ({}ms, engine={}, dataset={}), skipping file",
                         fi + 1, files.length, file.getName(),
                         protocol.loadTimeoutMs(), driver.getName(), datasetName);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw e;
                 } catch (OutOfMemoryError e) {
+                    results.add(failedFile(file, FileStatus.OOM, e));
                     System.gc();
                     log.error("  [{}/{}] {} — OUT OF MEMORY (engine={}, dataset={}, file={}), skipping file",
+                        fi + 1, files.length, file.getName(),
+                        driver.getName(), datasetName, file.getAbsolutePath(), e);
+                } catch (Exception e) {
+                    // Future.get() wraps worker failures, including OutOfMemoryError.
+                    FileStatus status = classifyLoadFailure(e);
+                    results.add(failedFile(file, status, e));
+                    log.error("  [{}/{}] {} — LOAD FAILED (engine={}, dataset={}, file={}), skipping file",
                         fi + 1, files.length, file.getName(),
                         driver.getName(), datasetName, file.getAbsolutePath(), e);
                 }
@@ -107,6 +121,32 @@ public class BenchmarkHarness {
             driver.close();
         }
         return results;
+    }
+
+    private FileResult failedFile(File file, FileStatus status, Throwable error) {
+        return FileResult.failure(driver.getName(), datasetName, file.getName(),
+                status, summarizeFailure(error));
+    }
+
+    private static FileStatus classifyLoadFailure(Throwable error) {
+        boolean timeout = false;
+        // Bound traversal defensively; OOM takes precedence over wrapped timeout.
+        for (int depth = 0; error != null && depth < 64; depth++) {
+            if (error instanceof OutOfMemoryError) return FileStatus.OOM;
+            if (error instanceof TimeoutException) timeout = true;
+            error = error.getCause();
+        }
+        return timeout ? FileStatus.TIMEOUT : FileStatus.ERROR;
+    }
+
+    private static String summarizeFailure(Throwable error) {
+        Throwable cause = error;
+        for (int depth = 0; cause.getCause() != null && depth < 64; depth++) {
+            cause = cause.getCause();
+        }
+        String message = cause.getClass().getName() +
+                (cause.getMessage() == null ? "" : ": " + cause.getMessage());
+        return message.length() <= 2000 ? message : message.substring(0, 2000);
     }
 
     /**
@@ -521,7 +561,7 @@ public class BenchmarkHarness {
     }
 
     /**
-     * Discovers all regular RDF files in {@code datasetDir} supported by the current driver,
+     * Discovers canonical regular RDF files in {@code datasetDir} supported by the current driver,
      * sorted alphabetically for reproducibility.
      */
     private File[] discoverFiles(String datasetDir) {
@@ -529,7 +569,7 @@ public class BenchmarkHarness {
         if (!dir.exists() || !dir.isDirectory()) {
             throw new IllegalArgumentException("Dataset directory does not exist or is not a directory: " + datasetDir);
         }
-        File[] files = dir.listFiles(f -> f.isFile() && driver.supports(f));
+        File[] files = dir.listFiles(f -> f.isFile() && BenchmarkFormat.isCanonicalFile(f) && driver.supports(f));
         if (files == null || files.length == 0) {
             throw new IllegalArgumentException(String.format(
                 "No supported RDF files (%s) found in: %s for driver %s",

@@ -35,6 +35,24 @@ public enum BenchmarkFormat {
     }
 
     /**
+     * Whether a file uses one of the six canonical dataset extensions.
+     * RDFa documents and aliases such as .xml remain recognizable by drivers,
+     * but are excluded from automatic benchmark discovery.
+     *
+     * @param file candidate dataset file
+     * @return true for .nt, .nq, .ttl, .trig, .rdf or .jsonld (case-insensitive)
+     */
+    public static boolean isCanonicalFile(File file) {
+        if (file == null) {
+            return false;
+        }
+        String lower = file.getName().toLowerCase(Locale.ROOT);
+        return Arrays.stream(values())
+                .filter(format -> format != RDFA)
+                .anyMatch(format -> lower.endsWith("." + format.extension));
+    }
+
+    /**
      * Resolves the format from a file name extension (case-insensitive).
      *
      * @param fileName file name or path string

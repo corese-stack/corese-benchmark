@@ -50,7 +50,9 @@ public record FileResult(
     @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries,
 
     // Optional on-disk storage footprint for persistent stores (Jena TDB2, RDF4J Native/LMDB)
-    @JsonProperty("diskFootprintBytes") Long diskFootprintBytes
+    @JsonProperty("diskFootprintBytes") Long diskFootprintBytes,
+    @JsonProperty("status") FileStatus status,
+    @JsonProperty("errorMessage") String errorMessage
 ) {
     @JsonCreator
     public FileResult(
@@ -66,7 +68,9 @@ public record FileResult(
         @JsonProperty("cpuPercent") double cpuPercent,
         @JsonProperty("repetitionsMs") long[] repetitionsMs,
         @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries,
-        @JsonProperty("diskFootprintBytes") Long diskFootprintBytes
+        @JsonProperty("diskFootprintBytes") Long diskFootprintBytes,
+        @JsonProperty("status") FileStatus status,
+        @JsonProperty("errorMessage") String errorMessage
     ) {
         this.engine = engine;
         this.dataset = dataset;
@@ -81,6 +85,35 @@ public record FileResult(
         this.repetitionsMs = repetitionsMs != null ? repetitionsMs.clone() : new long[0];
         this.timeSeries = timeSeries != null ? List.copyOf(timeSeries) : List.of();
         this.diskFootprintBytes = diskFootprintBytes;
+        // Old JSON reports have no status; their recorded entries were successes.
+        this.status = status != null ? status : FileStatus.SUCCESS;
+        this.errorMessage = this.status == FileStatus.SUCCESS ? null : errorMessage;
+    }
+
+    /** Keeps the previous canonical constructor source-compatible. */
+    public FileResult(
+        String engine, String dataset, String file, long triples,
+        long loadingTimeMs, double throughputTriplesPerSec,
+        double memoryBeforeMb, double memoryAfterMb, double memoryDeltaMb,
+        double cpuPercent, long[] repetitionsMs,
+        List<TelemetryPoint> timeSeries, Long diskFootprintBytes
+    ) {
+        this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent,
+                repetitionsMs, timeSeries, diskFootprintBytes, FileStatus.SUCCESS, null);
+    }
+
+    /** Unavailable measurements are -1, never fabricated zero measurements. */
+    public static FileResult failure(
+        String engine, String dataset, String file,
+        FileStatus status, String errorMessage
+    ) {
+        if (status == null || status == FileStatus.SUCCESS) {
+            throw new IllegalArgumentException("Expected a failure status");
+        }
+        return new FileResult(engine, dataset, file,
+                -1L, -1L, -1.0, -1.0, -1.0, -1.0, -1.0,
+                new long[0], List.of(), null, status, errorMessage);
     }
 
     public FileResult(
@@ -133,6 +166,8 @@ public record FileResult(
                 Objects.equals(dataset, other.dataset) &&
                 Objects.equals(file, other.file) &&
                 Objects.equals(diskFootprintBytes, other.diskFootprintBytes) &&
+                status == other.status &&
+                Objects.equals(errorMessage, other.errorMessage) &&
                 Arrays.equals(repetitionsMs, other.repetitionsMs) &&
                 Objects.equals(timeSeries, other.timeSeries);
     }
@@ -140,7 +175,7 @@ public record FileResult(
     @Override
     public int hashCode() {
         int result = Objects.hash(engine, dataset, file, triples, loadingTimeMs,
-                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries, diskFootprintBytes);
+                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries, diskFootprintBytes, status, errorMessage);
         result = 31 * result + Arrays.hashCode(repetitionsMs);
         return result;
     }
@@ -151,6 +186,8 @@ public record FileResult(
                 "engine=" + engine + ", " +
                 "dataset=" + dataset + ", " +
                 "file=" + file + ", " +
+                "status=" + status + ", " +
+                "errorMessage=" + errorMessage + ", " +
                 "triples=" + triples + ", " +
                 "loadingTimeMs=" + loadingTimeMs + ", " +
                 "throughputTriplesPerSec=" + throughputTriplesPerSec + ", " +

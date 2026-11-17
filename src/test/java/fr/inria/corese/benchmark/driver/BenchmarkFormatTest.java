@@ -33,6 +33,23 @@ class BenchmarkFormatTest {
         assertEquals(supportsNamedGraphs, opt.get().supportsNamedGraphs());
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "data.nt, true", "data.NQ, true", "data.ttl, true",
+        "data.TRIG, true", "data.rdf, true", "data.JSONLD, true",
+        "data.html, false", "data.HTML, false", "data.xhtml, false",
+        "data.htm, false", "data.xml, false", "data.json, false",
+        "data.ttl.html, false", "data.ttl.bak, false"
+    })
+    void testCanonicalDatasetFiles(String fileName, boolean expected) {
+        assertEquals(expected, BenchmarkFormat.isCanonicalFile(new File(fileName)));
+    }
+
+    @Test
+    void testNullCanonicalFile() {
+        assertFalse(BenchmarkFormat.isCanonicalFile(null));
+    }
+
     @Test
     void testFromPathAndFile() {
         Path path = Path.of("sample", "test.ttl");
