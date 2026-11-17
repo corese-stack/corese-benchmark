@@ -1,15 +1,21 @@
 package fr.inria.corese.benchmark.query;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import fr.inria.corese.benchmark.metrics.SparqlAnalyser.SparqlFeature;
 import java.util.List;
 
 /** Immutable catalogue metadata; features are free-form tags, not capability identifiers. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SparqlQueryDefinition(
-        String id, String name, String file, String dataset,
-        SparqlFeature primaryFeature, List<String> features,
-        int timeoutSecs, String validationMode) {
+        @JsonProperty("id") String id,
+        @JsonProperty("name") String name,
+        @JsonProperty("file") String file,
+        @JsonProperty("dataset") String dataset,
+        @JsonProperty("primaryFeature") SparqlFeature primaryFeature,
+        @JsonProperty("features") List<String> features,
+        @JsonProperty("timeoutSecs") int timeoutSecs,
+        @JsonProperty("validationMode") String validationMode) {
 
     public SparqlQueryDefinition {
         requireText(id, "id");
