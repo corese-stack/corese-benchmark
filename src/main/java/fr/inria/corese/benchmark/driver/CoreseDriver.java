@@ -1,6 +1,7 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.BindingTerm;
 import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import fr.inria.corese.core.Graph;
 import fr.inria.corese.core.kgram.api.core.Node;
@@ -10,9 +11,12 @@ import fr.inria.corese.core.load.Load;
 import fr.inria.corese.core.api.Loader;
 import fr.inria.corese.core.query.QueryProcess;
 import fr.inria.corese.core.rule.RuleEngine;
+import fr.inria.corese.core.sparql.api.IDatatype;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * {@link TripleStoreDriver} implementation for Corese 4.x using the classic
@@ -112,33 +116,57 @@ public class CoreseDriver implements TripleStoreDriver {
         QueryProcess exec = QueryProcess.create(graph);
         Object queryResult = exec.query(sparql);
         if (queryResult instanceof Mappings maps) {
-            SparqlResultHasher hasher = new SparqlResultHasher();
             List<String> sortedVarNames = maps.getSelect().stream()
                     .map(Node::getLabel)
+                    .map(CoreseDriver::stripVariablePrefix)
                     .sorted()
                     .toList();
+            SparqlResultHasher hasher = new SparqlResultHasher(sortedVarNames, SparqlResultHasher.ResultOrder.MULTISET);
             for (Mapping m : maps) {
-                hasher.addRow(extractMappingRow(m, sortedVarNames));
+                Map<String, BindingTerm> row = new HashMap<>();
+                for (Node varNode : maps.getSelect()) {
+                    String rawName = varNode.getLabel();
+                    String cleanName = stripVariablePrefix(rawName);
+                    Node val = m.getNode(rawName);
+                    row.put(cleanName, extractCoreseBinding(val));
+                }
+                hasher.addTypedRow(row);
             }
             return new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
         }
         return ValidationResult.EMPTY;
     }
 
-    private static List<String> extractMappingRow(Mapping m, List<String> sortedVarNames) {
-        List<String> row = new ArrayList<>(sortedVarNames.size());
-        for (String varName : sortedVarNames) {
-            Node val = m.getNode(varName);
-            if (val == null) {
-                row.add(null);
-            } else if (val.isBlank()) {
-                String lbl = val.getLabel();
-                row.add(lbl != null && lbl.startsWith("_:") ? lbl : "_:" + lbl);
-            } else {
-                row.add(val.getLabel());
+    private static String stripVariablePrefix(String name) {
+        if (name == null) return null;
+        if (name.startsWith("?") || name.startsWith("$")) {
+            return name.substring(1);
+        }
+        return name;
+    }
+
+    private static BindingTerm extractCoreseBinding(Node val) {
+        if (val == null) {
+            return BindingTerm.Unbound.INSTANCE;
+        }
+        if (val.isBlank()) {
+            return BindingTerm.fromBlank(val.getLabel());
+        }
+        IDatatype dtVal = val.getDatatypeValue();
+        if (dtVal != null) {
+            if (dtVal.isURI()) {
+                return BindingTerm.fromIri(dtVal.getLabel());
+            }
+            if (dtVal.isBlank()) {
+                return BindingTerm.fromBlank(dtVal.getLabel());
+            }
+            if (dtVal.isLiteral()) {
+                String lang = dtVal.getLang();
+                String dt = dtVal.getDatatypeURI();
+                return BindingTerm.fromLiteral(dtVal.getLabel(), lang, dt);
             }
         }
-        return row;
+        return BindingTerm.fromLiteral(val.getLabel(), null, null);
     }
 
     @Override

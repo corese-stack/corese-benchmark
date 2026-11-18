@@ -13,13 +13,13 @@ class SparqlResultHasherTest {
     @Test
     @DisplayName("Unordered mode produces identical hash regardless of row insertion order")
     void unorderedModeIsOrderIndependent() {
-        SparqlResultHasher h1 = new SparqlResultHasher();
-        h1.addRow(Map.of("x", "http://example.org/1", "y", "42"));
-        h1.addRow(Map.of("x", "http://example.org/2", "y", "99"));
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x", "y"), SparqlResultHasher.ResultOrder.MULTISET);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromIri("http://example.org/1"), "y", BindingTerm.fromLiteral("42", null, null)));
+        h1.addTypedRow(Map.of("x", BindingTerm.fromIri("http://example.org/2"), "y", BindingTerm.fromLiteral("99", null, null)));
 
-        SparqlResultHasher h2 = new SparqlResultHasher();
-        h2.addRow(Map.of("x", "http://example.org/2", "y", "99"));
-        h2.addRow(Map.of("x", "http://example.org/1", "y", "42"));
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x", "y"), SparqlResultHasher.ResultOrder.MULTISET);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromIri("http://example.org/2"), "y", BindingTerm.fromLiteral("99", null, null)));
+        h2.addTypedRow(Map.of("x", BindingTerm.fromIri("http://example.org/1"), "y", BindingTerm.fromLiteral("42", null, null)));
 
         assertEquals(2, h1.getRowCount());
         assertEquals(2, h2.getRowCount());
@@ -29,13 +29,13 @@ class SparqlResultHasherTest {
     @Test
     @DisplayName("Ordered mode distinguishes different row orderings")
     void orderedModeIsOrderSensitive() {
-        SparqlResultHasher h1 = new SparqlResultHasher(true);
-        h1.addRow(List.of("A", "B"));
-        h1.addRow(List.of("C", "D"));
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.SEQUENCE);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromLiteral("A", null, null)));
+        h1.addTypedRow(Map.of("x", BindingTerm.fromLiteral("B", null, null)));
 
-        SparqlResultHasher h2 = new SparqlResultHasher(true);
-        h2.addRow(List.of("C", "D"));
-        h2.addRow(List.of("A", "B"));
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.SEQUENCE);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("B", null, null)));
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("A", null, null)));
 
         assertEquals(2, h1.getRowCount());
         assertEquals(2, h2.getRowCount());
@@ -43,13 +43,61 @@ class SparqlResultHasherTest {
     }
 
     @Test
+    @DisplayName("IRI and string with same lexical value do not collide")
+    void iriAndStringDoNotCollide() {
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromIri("http://example.org/x")));
+
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("http://example.org/x", null, null)));
+
+        assertNotEquals(h1.computeHash(), h2.computeHash());
+    }
+
+    @Test
+    @DisplayName("Numeric strings '01' and '1' are strictly preserved and do not collide")
+    void numericStringsDoNotCollide() {
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromLiteral("01", null, null)));
+
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("1", null, null)));
+
+        assertNotEquals(h1.computeHash(), h2.computeHash());
+    }
+
+    @Test
+    @DisplayName("Language tags are case-insensitively equal (@FR == @fr)")
+    void languageTagsAreNormalized() {
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromLiteral("bonjour", "FR", null)));
+
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("bonjour", "fr", null)));
+
+        assertEquals(h1.computeHash(), h2.computeHash());
+    }
+
+    @Test
+    @DisplayName("String containing @ does not collide with lang tag")
+    void stringContainingAtDoesNotCollide() {
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromLiteral("chat@fr", null, null)));
+
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x"), SparqlResultHasher.ResultOrder.MULTISET);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("chat", "fr", null)));
+
+        assertNotEquals(h1.computeHash(), h2.computeHash());
+    }
+
+    @Test
     @DisplayName("Unbound values do not collide with adjacent non-null strings")
     void unboundDoesNotCollide() {
-        SparqlResultHasher h1 = new SparqlResultHasher();
-        h1.addRow(ArraysListHelper.of("ab", null));
+        SparqlResultHasher h1 = new SparqlResultHasher(List.of("x", "y"), SparqlResultHasher.ResultOrder.MULTISET);
+        h1.addTypedRow(Map.of("x", BindingTerm.fromLiteral("ab", null, null), "y", BindingTerm.Unbound.INSTANCE));
 
-        SparqlResultHasher h2 = new SparqlResultHasher();
-        h2.addRow(ArraysListHelper.of("a", "b"));
+        SparqlResultHasher h2 = new SparqlResultHasher(List.of("x", "y"), SparqlResultHasher.ResultOrder.MULTISET);
+        h2.addTypedRow(Map.of("x", BindingTerm.fromLiteral("a", null, null), "y", BindingTerm.fromLiteral("b", null, null)));
 
         assertNotEquals(h1.computeHash(), h2.computeHash());
     }
@@ -62,12 +110,5 @@ class SparqlResultHasherTest {
         String hash = h.computeHash();
         assertNotNull(hash);
         assertEquals(64, hash.length());
-    }
-
-    private static class ArraysListHelper {
-        @SafeVarargs
-        static <T> List<T> of(T... elements) {
-            return java.util.Arrays.asList(elements);
-        }
     }
 }

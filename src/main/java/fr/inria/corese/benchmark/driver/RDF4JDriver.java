@@ -1,6 +1,7 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.BindingTerm;
 import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.query.BindingSet;
@@ -26,8 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -333,10 +336,15 @@ public class RDF4JDriver implements TripleStoreDriver {
             try (TupleQueryResult result = q.evaluate()) {
                 List<String> bindingNames = new ArrayList<>(result.getBindingNames());
                 java.util.Collections.sort(bindingNames);
-                SparqlResultHasher hasher = new SparqlResultHasher();
+                SparqlResultHasher hasher = new SparqlResultHasher(bindingNames, SparqlResultHasher.ResultOrder.MULTISET);
                 while (result.hasNext()) {
                     BindingSet bs = result.next();
-                    addRdf4jRow(hasher, bs, bindingNames);
+                    Map<String, BindingTerm> row = new HashMap<>();
+                    for (String bindingName : bindingNames) {
+                        Value val = bs.getValue(bindingName);
+                        row.put(bindingName, extractRdf4jBinding(val));
+                    }
+                    hasher.addTypedRow(row);
                 }
                 return new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
             }
@@ -351,19 +359,22 @@ public class RDF4JDriver implements TripleStoreDriver {
         return validateResult(sparql).hash();
     }
 
-    private static void addRdf4jRow(SparqlResultHasher hasher, BindingSet bs, List<String> bindingNames) {
-        List<String> values = new ArrayList<>(bindingNames.size());
-        for (String name : bindingNames) {
-            Value val = bs.getValue(name);
-            if (val == null) {
-                values.add(null);
-            } else if (val instanceof org.eclipse.rdf4j.model.BNode) {
-                values.add("_:" + val.stringValue());
-            } else {
-                values.add(val.stringValue());
-            }
+    private static BindingTerm extractRdf4jBinding(Value val) {
+        if (val == null) {
+            return BindingTerm.Unbound.INSTANCE;
         }
-        hasher.addRow(values);
+        if (val instanceof org.eclipse.rdf4j.model.IRI iri) {
+            return BindingTerm.fromIri(iri.stringValue());
+        }
+        if (val instanceof org.eclipse.rdf4j.model.BNode bnode) {
+            return BindingTerm.fromBlank(bnode.getID());
+        }
+        if (val instanceof org.eclipse.rdf4j.model.Literal lit) {
+            String lang = lit.getLanguage().orElse(null);
+            String dt = lit.getDatatype() != null ? lit.getDatatype().stringValue() : null;
+            return BindingTerm.fromLiteral(lit.getLabel(), lang, dt);
+        }
+        return BindingTerm.fromLiteral(val.stringValue(), null, null);
     }
 
     /** Executes a SPARQL SELECT query and returns {@code [timeMs, resultCount]}. */

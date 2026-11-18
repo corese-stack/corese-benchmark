@@ -1,6 +1,7 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.BindingTerm;
 import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import fr.inria.corese.core.next.data.api.io.format.RDFFormat;
 import fr.inria.corese.core.next.data.api.term.Value;
@@ -17,7 +18,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Benchmark driver for the Corese 5 API (corese-next).
@@ -181,9 +184,15 @@ public class CoreseNextDriver implements TripleStoreDriver {
         try (TupleQueryResult result = connection.prepareTupleQuery(sparql).evaluate()) {
             List<String> bindingNames = new ArrayList<>(result.getBindingNames());
             Collections.sort(bindingNames);
-            SparqlResultHasher hasher = new SparqlResultHasher();
+            SparqlResultHasher hasher = new SparqlResultHasher(bindingNames, SparqlResultHasher.ResultOrder.MULTISET);
             while (result.hasNext()) {
-                hasher.addRow(extractBindingRow(result.next(), bindingNames));
+                BindingSet bs = result.next();
+                Map<String, BindingTerm> row = new HashMap<>();
+                for (String varName : bindingNames) {
+                    Value val = bs.getValue(varName);
+                    row.put(varName, extractCoreseNextBinding(val));
+                }
+                hasher.addTypedRow(row);
             }
             return new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
         } catch (Exception e) {
@@ -192,19 +201,22 @@ public class CoreseNextDriver implements TripleStoreDriver {
         }
     }
 
-    private static List<String> extractBindingRow(BindingSet bs, List<String> bindingNames) {
-        List<String> row = new ArrayList<>(bindingNames.size());
-        for (String varName : bindingNames) {
-            Value val = bs.getValue(varName);
-            if (val == null) {
-                row.add(null);
-            } else if (val.isBNode()) {
-                row.add("_:" + val.stringValue());
-            } else {
-                row.add(val.stringValue());
-            }
+    private static BindingTerm extractCoreseNextBinding(Value val) {
+        if (val == null) {
+            return BindingTerm.Unbound.INSTANCE;
         }
-        return row;
+        if (val.isIRI()) {
+            return BindingTerm.fromIri(val.stringValue());
+        }
+        if (val.isBNode()) {
+            return BindingTerm.fromBlank(val.stringValue());
+        }
+        if (val instanceof fr.inria.corese.core.next.data.api.term.Literal lit) {
+            String lang = lit.getLanguage().orElse(null);
+            String dt = lit.getDatatype() != null ? lit.getDatatype().stringValue() : null;
+            return BindingTerm.fromLiteral(lit.getLabel(), lang, dt);
+        }
+        return BindingTerm.fromLiteral(val.stringValue(), null, null);
     }
 
     @Override

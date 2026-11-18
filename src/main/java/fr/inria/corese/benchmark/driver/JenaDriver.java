@@ -1,8 +1,10 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.BindingTerm;
 import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import org.apache.jena.query.*;
+import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
@@ -16,8 +18,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -223,10 +227,15 @@ public class JenaDriver implements TripleStoreDriver {
                     ResultSet rs = qe.execSelect();
                     List<String> varNames = new ArrayList<>(rs.getResultVars());
                     Collections.sort(varNames);
-                    SparqlResultHasher hasher = new SparqlResultHasher();
+                    SparqlResultHasher hasher = new SparqlResultHasher(varNames, SparqlResultHasher.ResultOrder.MULTISET);
                     while (rs.hasNext()) {
                         QuerySolution qs = rs.next();
-                        addJenaRow(hasher, qs, varNames);
+                        Map<String, BindingTerm> row = new HashMap<>();
+                        for (String varName : varNames) {
+                            RDFNode node = qs.get(varName);
+                            row.put(varName, extractJenaBinding(node));
+                        }
+                        hasher.addTypedRow(row);
                     }
                     holder[0] = new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
                 }
@@ -240,25 +249,21 @@ public class JenaDriver implements TripleStoreDriver {
         return validateResult(sparql).hash();
     }
 
-    private static void addJenaRow(SparqlResultHasher hasher, QuerySolution qs, List<String> sortedVarNames) {
-        List<String> values = new ArrayList<>(sortedVarNames.size());
-        for (String varName : sortedVarNames) {
-            RDFNode node = qs.get(varName);
-            values.add(extractJenaTerm(node));
+    private static BindingTerm extractJenaBinding(RDFNode node) {
+        if (node == null) {
+            return BindingTerm.Unbound.INSTANCE;
         }
-        hasher.addRow(values);
-    }
-
-    private static String extractJenaTerm(RDFNode node) {
-        if (node == null) return null;
+        if (node.isURIResource()) {
+            return BindingTerm.fromIri(node.asResource().getURI());
+        }
+        if (node.isAnon()) {
+            return BindingTerm.fromBlank(node.asResource().getId().getLabelString());
+        }
         if (node.isLiteral()) {
-            return node.asLiteral().getLexicalForm();
-        } else if (node.isURIResource()) {
-            return node.asResource().getURI();
-        } else if (node.isAnon()) {
-            return "_:" + node.asResource().getId().getLabelString();
+            Literal lit = node.asLiteral();
+            return BindingTerm.fromLiteral(lit.getLexicalForm(), lit.getLanguage(), lit.getDatatypeURI());
         }
-        return node.toString();
+        return BindingTerm.Unbound.INSTANCE;
     }
 
     /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */

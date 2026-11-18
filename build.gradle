@@ -20,8 +20,7 @@ repositories {
 // CoreseNextDriver → Corese 5 API from libs/*.jar
 // The two drivers use incompatible RuleEngine classes — compile only the one that matches the build.
 def localJars = fileTree(dir: 'libs', include: ['*.jar'])
-def useLocalCorese = (project.hasProperty('coreseVersion') && project.coreseVersion == 'local')
-        || project.hasProperty('coreseJar')
+def useLocalCorese = (project.hasProperty('coreseVersion') && project.coreseVersion == 'local') || project.hasProperty('coreseJar')
 if (useLocalCorese && (!localJars.isEmpty() || project.hasProperty('coreseJar'))) {
     // corese-next build: exclude 4.x driver (incompatible RuleEngine API)
     sourceSets.main.java.exclude '**/CoreseDriver.java'
