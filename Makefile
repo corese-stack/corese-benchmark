@@ -10,7 +10,7 @@ DATASETS   ?= dbpedia,bowlogna,bsbm,lubm
 SCALES     ?= small
 
 # Predefined version sets
-ALL_VERSIONS ?= corese.next,corese.4.6.5,jena.6.2.0,jena.6.1.0,rdf4j.5.3.2,rdf4j.5.3.1
+ALL_VERSIONS ?= corese.next,corese.4.6.5,jena.6.2.0,jena.6.1.0,rdf4j.6.1.0,rdf4j.5.3.2
 
 .PHONY: help env regression compare next bowlogna lubm bsbm all versions versions-resume corese-all quick site clean-out
 
@@ -48,7 +48,7 @@ compare:
 	$(PYTHON) $(WORKFLOW) --engines $(ENGINES) --dataset $(DATASET)
 
 next:
-	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 --datasets dbpedia,bowlogna,bsbm,lubm --scales $(SCALES)
+	$(PYTHON) $(WORKFLOW) --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.6.1.0 --datasets dbpedia,bowlogna,bsbm,lubm --scales $(SCALES)
 
 versions:
 	$(PYTHON) $(WORKFLOW) --engines $(ALL_VERSIONS) --datasets $(DATASETS) --scales $(SCALES)

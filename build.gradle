@@ -5,7 +5,7 @@ plugins {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -59,7 +59,7 @@ dependencies {
     implementation "org.apache.jena:jena-tdb2:${jenaVersion}"
 
     // RDF4J
-    def rdf4jVersion = project.hasProperty('rdf4jVersion') ? project.rdf4jVersion : '5.3.2'
+    def rdf4jVersion = project.hasProperty('rdf4jVersion') ? project.rdf4jVersion : '6.1.0'
     implementation "org.eclipse.rdf4j:rdf4j-repository:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-sail-memory:${rdf4jVersion}"
     implementation "org.eclipse.rdf4j:rdf4j-sail-nativerdf:${rdf4jVersion}"
@@ -88,7 +88,7 @@ dependencies {
     testImplementation "org.apache.jena:jena-core:${jenaVersionTest}"
     testImplementation "org.apache.jena:jena-arq:${jenaVersionTest}"
     testImplementation "org.apache.jena:jena-tdb2:${jenaVersionTest}"
-    def rdf4jVersionTest = project.hasProperty('rdf4jVersion') ? project.rdf4jVersion : '5.3.2'
+    def rdf4jVersionTest = project.hasProperty('rdf4jVersion') ? project.rdf4jVersion : '6.1.0'
     testImplementation "org.eclipse.rdf4j:rdf4j-repository:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-sail-memory:${rdf4jVersionTest}"
     testImplementation "org.eclipse.rdf4j:rdf4j-sail-nativerdf:${rdf4jVersionTest}"
@@ -105,7 +105,7 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 21
+    options.release = 25
 }
 
 test {
