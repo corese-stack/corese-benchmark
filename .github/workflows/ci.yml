@@ -62,7 +62,7 @@ permissions:
 
 # Distinct namespace prevents PR branches (e.g. named 'main' in a fork) from colliding with production
 concurrency:
-  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'production' }}
+  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (github.event_name == 'workflow_dispatch' && format('run-{0}', github.run_id) || 'production') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
