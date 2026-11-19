@@ -17,11 +17,13 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Converts existing N-Triples benchmark datasets to Turtle and TriG formats
- * so they can be used for Turtle/TriG ingestion benchmarks.
+ * Converts existing N-Triples benchmark datasets to N-Quads, Turtle and TriG formats
+ * so they can be used for multi-format ingestion benchmarks.
  *
  * <p>For each .nt file, produces:
  * <ul>
+ *   <li>{@code .nq}  – N-Quads with the triples inside a named graph
+ *       ({@code <urn:graph:<filename>>})</li>
  *   <li>{@code .ttl} – Turtle with subject grouping</li>
  *   <li>{@code .trig} – TriG with the triples inside a named graph
  *       ({@code <urn:graph:<filename>>})</li>
@@ -36,7 +38,9 @@ public class ConvertDatasets {
     public static void main(String[] args) throws IOException {
         List<Path> inputDirs = List.of(
                 Path.of("input/bowlogna/unzip"),
-                Path.of("input/lubm/view_small")
+                Path.of("input/lubm/unzip"),
+                Path.of("input/bsbm/unzip"),
+                Path.of("input/dbpedia/unzip")
         );
 
         for (Path dir : inputDirs) {
@@ -65,6 +69,7 @@ public class ConvertDatasets {
 
     private static void convertFile(Path ntFile) throws IOException {
         String baseName = ntFile.getFileName().toString().replaceFirst("\\.nt$", "");
+        Path nqFile   = ntFile.resolveSibling(baseName + ".nq");
         Path ttlFile  = ntFile.resolveSibling(baseName + ".ttl");
         Path trigFile = ntFile.resolveSibling(baseName + ".trig");
 
@@ -73,16 +78,22 @@ public class ConvertDatasets {
         Model model = ModelFactory.createDefaultModel();
         RDFDataMgr.read(model, ntFile.toAbsolutePath().toString(), Lang.NTRIPLES);
 
+        // ── N-Quads (named graph per file) ────────────────────────────────────
+        String graphIRI = "urn:graph:" + baseName;
+        Dataset dataset = DatasetFactory.create();
+        dataset.addNamedModel(graphIRI, model);
+        try (OutputStream out = Files.newOutputStream(nqFile)) {
+            RDFDataMgr.write(out, dataset, RDFFormat.NQUADS);
+        }
+        log.info("Wrote    {} ({} bytes)", nqFile.getFileName(), Files.size(nqFile));
+
         // ── Turtle ────────────────────────────────────────────────────────────
         try (OutputStream out = Files.newOutputStream(ttlFile)) {
             RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY);
         }
         log.info("Wrote    {} ({} bytes)", ttlFile.getFileName(), Files.size(ttlFile));
 
-        // ── TriG (named graph per file) — use Jena Dataset API ────────────────
-        String graphIRI = "urn:graph:" + baseName;
-        Dataset dataset = DatasetFactory.create();
-        dataset.addNamedModel(graphIRI, model);
+        // ── TriG (named graph per file) ───────────────────────────────────────
         try (OutputStream out = Files.newOutputStream(trigFile)) {
             RDFDataMgr.write(out, dataset, RDFFormat.TRIG_PRETTY);
         }

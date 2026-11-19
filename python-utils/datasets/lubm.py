@@ -143,11 +143,12 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
     for f in os.listdir(view_dir):
         os.remove(os.path.join(view_dir, f))
     for scale in valid_scales:
-        src = os.path.join(store_dir, f"lubm_{scale}.nt")
-        dst = os.path.join(view_dir,  f"lubm_{scale}.nt")
-        if os.path.exists(src):
-            try:
-                os.symlink(src, dst)
-            except (OSError, NotImplementedError):
-                shutil.copy2(src, dst)
+        for ext in (".nt", ".nq", ".ttl", ".trig"):
+            src = os.path.join(store_dir, f"lubm_{scale}{ext}")
+            dst = os.path.join(view_dir,  f"lubm_{scale}{ext}")
+            if os.path.exists(src):
+                try:
+                    os.symlink(src, dst)
+                except (OSError, NotImplementedError):
+                    shutil.copy2(src, dst)
     return view_dir

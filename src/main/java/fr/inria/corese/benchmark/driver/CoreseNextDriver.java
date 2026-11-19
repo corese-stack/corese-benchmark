@@ -57,8 +57,9 @@ public class CoreseNextDriver implements TripleStoreDriver {
     /**
      * Loads an RDF file (.nt, .nq, .ttl, .trig) into the repository.
      *
-     * <p>Fallback: for N-Triples, if the fast path throws (e.g. invalid IRIs in DBpedia {@code homepages_en.nt}),
-     * the file is re-read line by line, skipping and counting invalid lines.</p>
+     * <p>Fallback: for N-Triples and N-Quads, if the fast path throws (e.g. invalid IRIs in
+     * DBpedia {@code homepages_en.nt}), the file is re-read line by line, skipping and
+     * counting invalid lines.</p>
      *
      * @param filePath absolute path to the RDF file to load
      * @throws IOException if the file cannot be read
@@ -76,12 +77,12 @@ public class CoreseNextDriver implements TripleStoreDriver {
             case TRIG     -> RDFFormat.TRIG;
         };
 
-        if (benchFormat == BenchmarkFormat.NTRIPLES) {
+        if (benchFormat == BenchmarkFormat.NTRIPLES || benchFormat == BenchmarkFormat.NQUADS) {
             try {
-                connection.load(path, RDFFormat.NTRIPLES);
+                connection.load(path, coreseFormat);
             } catch (Exception e) {
                 log.debug("corese.next: fast load failed for {} ({}), switching to line-by-line", path.getFileName(), e.getMessage());
-                loadLineByLine(path);
+                loadLineByLine(path, coreseFormat);
             }
         } else {
             connection.load(path, coreseFormat);
@@ -90,11 +91,13 @@ public class CoreseNextDriver implements TripleStoreDriver {
 
     /**
      * Fallback loader: reads the file line by line, skipping lines with invalid IRIs.
+     * Used for N-Triples and N-Quads when the fast-path direct load fails.
      *
-     * @param path path to the {@code .nt} file
+     * @param path         path to the RDF file
+     * @param coreseFormat Corese format to use for parsing each line
      * @throws IOException if the file cannot be read
      */
-    private void loadLineByLine(Path path) throws IOException {
+    private void loadLineByLine(Path path, RDFFormat coreseFormat) throws IOException {
         int skipped = 0;
         try (BufferedReader br = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             String line;
@@ -103,7 +106,7 @@ public class CoreseNextDriver implements TripleStoreDriver {
                 if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
                 try {
                     byte[] bytes = (trimmed + "\n").getBytes(StandardCharsets.UTF_8);
-                    Model model = CoreseIO.read(new ByteArrayInputStream(bytes), RDFFormat.NTRIPLES);
+                    Model model = CoreseIO.read(new ByteArrayInputStream(bytes), coreseFormat);
                     connection.add(model);
                 } catch (Exception ex) {
                     skipped++;

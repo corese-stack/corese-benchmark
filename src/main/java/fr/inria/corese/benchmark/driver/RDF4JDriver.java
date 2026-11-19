@@ -11,6 +11,11 @@ import org.eclipse.rdf4j.query.TupleQuery;
 import org.eclipse.rdf4j.query.TupleQueryResult;
 import org.eclipse.rdf4j.query.QueryLanguage;
 import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.RDFParser;
+import org.eclipse.rdf4j.rio.Rio;
+import org.eclipse.rdf4j.rio.helpers.BasicParserSettings;
+import org.eclipse.rdf4j.rio.helpers.StatementCollector;
+import org.eclipse.rdf4j.model.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +64,8 @@ public class RDF4JDriver implements TripleStoreDriver {
 
     /**
      * Loads an RDF file (.nt, .nq, .ttl, .trig) into the repository.
-     * N-Triples files are parsed in batches with line-by-line fallback to tolerate malformed lines.
+     * For N-Triples and N-Quads, tries direct streaming first (fast path); falls back to
+     * line-by-line parsing to tolerate malformed lines (e.g. invalid IRIs in DBpedia).
      * Other formats are parsed via the corresponding RIO parser.
      *
      * @param filePath absolute path to the RDF file to load
@@ -77,67 +83,97 @@ public class RDF4JDriver implements TripleStoreDriver {
             case TRIG     -> RDFFormat.TRIG;
         };
 
-        if (benchFormat == BenchmarkFormat.NTRIPLES) {
-            loadNtBatched(filePath);
-        } else {
+        if (benchFormat == BenchmarkFormat.NTRIPLES || benchFormat == BenchmarkFormat.NQUADS) {
+            boolean fastPathOk = false;
             try (RepositoryConnection conn = repository.getConnection();
                  InputStream in = new BufferedInputStream(new FileInputStream(filePath))) {
                 conn.begin();
-                conn.add(in, "", rioFormat);
-                conn.commit();
-            }
-        }
-    }
-
-    private void loadNtBatched(String filePath) throws Exception {
-        // Parse in batches; on failure fall back to line-by-line to skip malformed triples.
-        // The NPE from GenericStatement (null IRI) is a RuntimeException and IS catchable.
-        try (RepositoryConnection conn = repository.getConnection();
-             BufferedReader reader = new BufferedReader(
-                     new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
-            conn.begin();
-            StringBuilder batch = new StringBuilder();
-            String line;
-            int batchLineCount = 0;
-            while ((line = reader.readLine()) != null) {
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
-                batch.append(trimmed).append('\n');
-                batchLineCount++;
-                if (batchLineCount >= 10_000) {
-                    flushBatch(batch.toString(), conn);
-                    batch.setLength(0);
-                    batchLineCount = 0;
+                try {
+                    conn.add(in, "", rioFormat);
+                    conn.commit();
+                    fastPathOk = true;
+                } catch (Exception e) {
+                    try { conn.rollback(); } catch (Exception re) { /* ignore rollback failure */ }
+                    log.debug("rdf4j: direct load failed for {} ({}), switching to line-by-line", filePath, e.getMessage());
                 }
+            } catch (Exception outer) {
+                log.debug("rdf4j: connection failed for {} ({}), switching to line-by-line", filePath, outer.getMessage());
             }
-            if (!batch.isEmpty()) {
-                flushBatch(batch.toString(), conn);
+            if (!fastPathOk) {
+                clear();
+                loadLineByLine(filePath, rioFormat);
             }
-            conn.commit();
+        } else {
+            // For TTL/TriG: use a lenient parser that skips invalid IRIs
+            try (RepositoryConnection conn = repository.getConnection();
+                 InputStream in = new BufferedInputStream(new FileInputStream(filePath))) {
+                conn.begin();
+                try {
+                    conn.add(in, "", rioFormat);
+                    conn.commit();
+                } catch (Exception e) {
+                    try { conn.rollback(); } catch (Exception re) { /* ignore */ }
+                    log.debug("rdf4j: direct load failed for {} ({}), trying lenient parser", filePath, e.getMessage());
+                    loadLenient(filePath, rioFormat);
+                }
+            } catch (Exception outer) {
+                log.debug("rdf4j: connection failed for {} ({}), trying lenient parser", filePath, outer.getMessage());
+                loadLenient(filePath, rioFormat);
+            }
         }
     }
 
     /**
-     * Attempts to add a block of N-Triples content to the repository in one call.
-     * If that fails, falls back to adding each line individually, logging a warning
-     * for any line that cannot be parsed.
-     *
-     * @param content N-Triples text (one or more lines, newline-terminated)
-     * @param conn    active repository connection; the caller manages its transaction
+     * Lenient fallback for TTL/TriG: uses RIO parser with REPORT_PARSE_ERRORS=false
+     * and VERIFY_URI_SYNTAX=false to skip invalid IRIs instead of throwing.
      */
-    private void flushBatch(String content, RepositoryConnection conn) {
-        try {
-            conn.add(new StringReader(content), "", RDFFormat.NTRIPLES);
-        } catch (Exception batchEx) {
-            // Batch contains a malformed triple — fall back to line-by-line
-            for (String ln : content.split("\n")) {
-                if (ln.trim().isEmpty()) continue;
+    private void loadLenient(String filePath, RDFFormat rioFormat) throws Exception {
+        StatementCollector collector = new StatementCollector();
+        RDFParser parser = Rio.createParser(rioFormat);
+        parser.getParserConfig().set(BasicParserSettings.VERIFY_URI_SYNTAX, false);
+        parser.getParserConfig().set(BasicParserSettings.FAIL_ON_UNKNOWN_DATATYPES, false);
+        parser.getParserConfig().set(BasicParserSettings.FAIL_ON_UNKNOWN_LANGUAGES, false);
+        parser.setRDFHandler(collector);
+        try (InputStream in = new BufferedInputStream(new FileInputStream(filePath))) {
+            parser.parse(in, "");
+        }
+        try (RepositoryConnection conn = repository.getConnection()) {
+            conn.begin();
+            for (Statement st : collector.getStatements()) {
+                conn.add(st);
+            }
+            conn.commit();
+        }
+        log.debug("rdf4j: lenient load completed for {}, {} statements", filePath, collector.getStatements().size());
+    }
+
+    /**
+     * Fallback loader: reads the file line by line, skipping lines with invalid IRIs.
+     * Used for N-Triples and N-Quads when the fast-path direct load fails.
+     *
+     * @param filePath  path to the RDF file
+     * @param rioFormat RIO format to use for parsing each line
+     */
+    private void loadLineByLine(String filePath, RDFFormat rioFormat) throws Exception {
+        int skipped = 0;
+        try (RepositoryConnection conn = repository.getConnection();
+             BufferedReader reader = new BufferedReader(
+                     new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
+            conn.begin();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
                 try {
-                    conn.add(new StringReader(ln + "\n"), "", RDFFormat.NTRIPLES);
+                    conn.add(new StringReader(trimmed + "\n"), "", rioFormat);
                 } catch (Exception lineEx) {
-                    log.warn("Skipping malformed triple: {}", ln);
+                    skipped++;
                 }
             }
+            conn.commit();
+        }
+        if (skipped > 0) {
+            log.warn("rdf4j: skipped {} malformed line(s) in {}", skipped, filePath);
         }
     }
 
