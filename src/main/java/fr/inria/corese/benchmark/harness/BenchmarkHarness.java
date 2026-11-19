@@ -43,6 +43,14 @@ public class BenchmarkHarness {
     private static final String STATUS_TIMEOUT = "TIMEOUT";
     private static final String STATUS_ERROR = "ERROR";
 
+    private static final Map<String, List<String>> CATALOGUE_DATASET_TARGETS = Map.of(
+        "lubm", List.of("lubm_small.nt"),
+        "bsbm", List.of("bsbm_small.nt"),
+        "bowlogna", List.of("Department0.nt"),
+        "dbpedia", List.of("persondata_en.nt"),
+        "named-graphs", List.of("corese-feature-lubm.nq")
+    );
+
     private final TripleStoreDriver driver;
     private final MetricsCollector metrics;
     private final String datasetName;
@@ -175,7 +183,7 @@ public class BenchmarkHarness {
         List<QuerySpec> workload = queries.stream().map(query -> new QuerySpec(
                 query.sparql(), query.definition().id(), query.definition().primaryFeature().name(),
                 query.definition().timeoutSecs())).toList();
-        return runQueryWorkload(datasetDir, workload);
+        return runQueryWorkload(datasetDir, workload, true);
     }
 
     private record QuerySpec(String sparql, String queryId, String category, long timeoutS) { }
@@ -185,7 +193,11 @@ public class BenchmarkHarness {
     }
 
     private List<QueryResult> runQueryWorkload(String datasetDir, List<QuerySpec> queries) throws Exception {
-        File[] files = discoverFiles(datasetDir);
+        return runQueryWorkload(datasetDir, queries, false);
+    }
+
+    private List<QueryResult> runQueryWorkload(String datasetDir, List<QuerySpec> queries, boolean isCatalogue) throws Exception {
+        File[] files = isCatalogue ? resolveCatalogueFiles(datasetDir) : discoverFiles(datasetDir);
 
         List<QueryResult> results = new ArrayList<>();
         driver.init();
@@ -584,6 +596,30 @@ public class BenchmarkHarness {
         buffers.errorCauses()[rep] = terminated
             ? ("Timeout after " + qTimeoutS + "s")
             : ("Uninterruptible thread leak after " + qTimeoutS + "s timeout");
+    }
+
+    /**
+     * Resolves the canonical input file(s) for a catalogue dataset, avoiding loading unwanted
+     * multi-format conversions or higher scale files when executing SPARQL feature queries.
+     * Falls back to standard file discovery if no specific targets are declared.
+     */
+    private File[] resolveCatalogueFiles(String datasetDir) {
+        File[] discovered = discoverFiles(datasetDir);
+        List<String> targets = datasetName != null
+                ? CATALOGUE_DATASET_TARGETS.get(datasetName.toLowerCase(Locale.ROOT))
+                : null;
+        if (targets == null || targets.isEmpty()) {
+            return discovered;
+        }
+        File[] filtered = Arrays.stream(discovered)
+                .filter(file -> targets.stream().anyMatch(target -> file.getName().equalsIgnoreCase(target)))
+                .toArray(File[]::new);
+        if (filtered.length == 0) {
+            log.warn("None of declared catalogue targets {} found in {}; falling back to all discovered files",
+                    targets, datasetDir);
+            return discovered;
+        }
+        return filtered;
     }
 
     /**
