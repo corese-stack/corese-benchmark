@@ -299,13 +299,18 @@ jobs:
             $EXTRA_ARGS
 
       - name: Check site/data output
-        run: ls -la ./site/data/
+        if: always()
+        run: ls -la ./site/data/ || true
 
       - name: Upload benchmark report data
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-data
-          path: ./site/data/
+          path: |
+            ./site/data/
+            ./out/json/
+            ./out/logs/
           retention-days: 30
 
       - name: Upload Pages artifact

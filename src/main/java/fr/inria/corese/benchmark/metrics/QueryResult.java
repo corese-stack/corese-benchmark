@@ -1,5 +1,7 @@
 package fr.inria.corese.benchmark.metrics;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -28,22 +30,23 @@ import java.util.Objects;
  * @param repetitionErrors    error or timeout detail per individual repetition
  * @param hasBlankNodes       true if blank nodes were encountered in the result set
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record QueryResult(
-    String engine,
-    String dataset,
-    String queryId,
-    String queryCategory,
-    double medianMs,
-    double[] repetitionsMs,
-    double medianTtfrMs,
-    double[] repetitionsTtfrMs,
-    double heapDeltaMb,
-    long rowCount,
-    String resultHash,
-    String status,
-    String[] repetitionsStatuses,
-    List<String> repetitionErrors,
-    boolean hasBlankNodes
+    @JsonProperty("engine") String engine,
+    @JsonProperty("dataset") String dataset,
+    @JsonProperty("queryId") String queryId,
+    @JsonProperty("queryCategory") String queryCategory,
+    @JsonProperty("medianMs") double medianMs,
+    @JsonProperty("repetitionsMs") double[] repetitionsMs,
+    @JsonProperty("medianTtfrMs") double medianTtfrMs,
+    @JsonProperty("repetitionsTtfrMs") double[] repetitionsTtfrMs,
+    @JsonProperty("heapDeltaMb") double heapDeltaMb,
+    @JsonProperty("rowCount") long rowCount,
+    @JsonProperty("resultHash") String resultHash,
+    @JsonProperty("status") String status,
+    @JsonProperty("repetitionsStatuses") String[] repetitionsStatuses,
+    @JsonProperty("repetitionErrors") List<String> repetitionErrors,
+    @JsonProperty("hasBlankNodes") boolean hasBlankNodes
 ) {
     public QueryResult {
         repetitionsMs = repetitionsMs != null ? repetitionsMs : new double[0];
@@ -79,6 +82,7 @@ public record QueryResult(
     }
 
     @Override
+    @SuppressWarnings("java:S6878") // Explicit component comparison with custom array equality
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof QueryResult other)) return false;

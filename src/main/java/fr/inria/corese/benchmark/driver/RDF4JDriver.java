@@ -14,6 +14,7 @@ import org.eclipse.rdf4j.query.TupleQuery;
 import org.eclipse.rdf4j.query.TupleQueryResult;
 import org.eclipse.rdf4j.query.QueryLanguage;
 import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.helpers.BasicParserSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -215,6 +216,7 @@ public class RDF4JDriver implements TripleStoreDriver {
         } else {
             try (RepositoryConnection conn = repository.getConnection();
                  InputStream in = new BufferedInputStream(new FileInputStream(filePath))) {
+                conn.getParserConfig().set(BasicParserSettings.VERIFY_URI_SYNTAX, false);
                 conn.begin();
                 conn.add(in, "", rioFormat);
                 conn.commit();
@@ -228,6 +230,7 @@ public class RDF4JDriver implements TripleStoreDriver {
         try (RepositoryConnection conn = repository.getConnection();
              BufferedReader reader = new BufferedReader(
                      new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
+            conn.getParserConfig().set(BasicParserSettings.VERIFY_URI_SYNTAX, false);
             conn.begin();
             StringBuilder batch = new StringBuilder();
             String line;
