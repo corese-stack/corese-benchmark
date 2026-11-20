@@ -4,7 +4,7 @@
  */
 
 import { attachChartPointerInteraction, clearChartInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement, getChartThemeTokens } from "../chart-utils.js";
-import { renderDatasetCard } from "../datasets.js";
+import { createProtocolTile, populateDatasetCards } from "../components/protocol-tile.js";
 import { escapeHtml, formatEngineId, isBranchVersion, parseEngineId } from "../engine-id.js";
 import {
 	getEngineStyle,
@@ -288,6 +288,10 @@ export class LoadingView {
 			this.#renderAbortController.abort();
 		}
 		this.#renderAbortController = new AbortController();
+
+		// Preserve user disclosure state of protocol tile across dataset/format filter changes
+		const wasOpen = this.#root.querySelector(".protocol-tile")?.open ?? false;
+
 		this.#destroyCharts();
 		this.#root.replaceChildren();
 
@@ -297,17 +301,23 @@ export class LoadingView {
 		// Controls Header (Dataset, Scale, Format selectors)
 		section.appendChild(this.#renderControls());
 
-		// Scientific Dataset Presentation Card
-		const datasetCardHost = document.createElement("div");
-		datasetCardHost.id = "section-loading-dataset";
-		datasetCardHost.className = "dataset-card-host";
-		renderDatasetCard(this.#state, datasetCardHost, this.#data);
-		section.appendChild(datasetCardHost);
-
-		// Reproducibility Protocol Tile
-		const protocolEl = this.#renderProtocolTile();
-		protocolEl.id = "section-loading-protocol";
-		section.appendChild(protocolEl);
+		// Unified Datasets, Measurement Protocol & Reproducibility Tile
+		const protocolTile = createProtocolTile({
+			mode: "loading",
+			reportData: this.#data,
+			state: this.#state,
+			isOpen: wasOpen,
+		});
+		const repoRef = this.#data?.metadata?.gitCommit || "main";
+		const datasetsContainer = protocolTile.querySelector("[data-protocol-datasets]");
+		if (datasetsContainer) {
+			populateDatasetCards(datasetsContainer, {
+				datasets: ["bsbm", "lubm", "dbpedia", "bowlogna"],
+				repoRef,
+				activeDataset: this.#state.dataset,
+			});
+		}
+		section.appendChild(protocolTile);
 
 		// Filter runs by dataset and format uniformly using canonical representative files
 		const allLoadingRuns = this.#data?.loadingRuns || [];
@@ -410,6 +420,11 @@ export class LoadingView {
 			requestAnimationFrame(() => {
 				const target = this.#root?.querySelector(`#${targetId}`);
 				if (target) {
+					// Open enclosing details disclosure if target is nested inside one
+					const ancestorDetails = target.closest("details");
+					if (ancestorDetails && !ancestorDetails.open) {
+						ancestorDetails.open = true;
+					}
 					target.scrollIntoView({ behavior: "smooth", block: "start" });
 				}
 			});
@@ -601,104 +616,6 @@ export class LoadingView {
 		return bar;
 	}
 
-	#renderProtocolTile() {
-		const details = document.createElement("details");
-		details.className = "protocol-tile";
-
-		const meta = this.#data?.metadata || {};
-		const env = meta.environment || {};
-		const proto = meta.protocol || {};
-
-		const cpuName = env.cpuModel || "Linux x86_64";
-		const jvmVer = env.jvmVersion ? `OpenJDK ${env.jvmVersion}` : "OpenJDK 21";
-		const osDist = env.osDistribution || "Linux";
-		const jvmFlags = (env.jvmFlags || ["-Xms4g", "-Xmx12g", "-XX:+UseG1GC"]).join(" ");
-		const reps = proto.repetitions || 3;
-		const warmup = proto.warmup !== undefined ? proto.warmup : 1;
-		const datasetName = this.#state.dataset || "bsbm";
-		const runWorkflowCmd = `python3 python-utils/workflow.py --dataset ${datasetName}`;
-		const repoRef = meta.gitCommit || "main";
-
-		const summary = document.createElement("summary");
-		summary.innerHTML = `
-			<span class="protocol-title">Measurement Protocol</span>
-			<span class="protocol-summary-meta">${reps} measured repetitions · Separate JVM per engine</span>
-			<span class="protocol-chevron" aria-hidden="true">▾</span>
-		`;
-		details.appendChild(summary);
-
-		const body = document.createElement("div");
-		body.className = "protocol-body";
-
-		// Column 1: Reproduction Workflow
-		const colCmds = document.createElement("div");
-		colCmds.className = "protocol-col";
-		colCmds.innerHTML = `
-			<h4 class="protocol-section-title">Reproduce this benchmark</h4>
-			<p class="dataset-card__note" style="margin: 0 0 0.5rem;">
-				Run the complete, reproducible pipeline for the active dataset (handles acquisition, multi-format conversion, and isolated engine benchmarks):
-			</p>
-			<div class="protocol-cmd-box">
-				<code>${escapeHtml(runWorkflowCmd)}</code>
-				<button type="button" class="btn-copy-cmd" data-cmd="${escapeHtml(runWorkflowCmd)}">Copy</button>
-			</div>
-			<div style="display:flex;align-items:center;gap:1.25rem;margin-top:0.75rem;font-size:0.8125rem;">
-				<a class="protocol-link" href="./data/benchmark-report.json" target="_blank" download="benchmark-report.json" style="font-weight:600;">
-					Download report (.json) ⤓
-				</a>
-				<a class="protocol-link" href="https://github.com/corese-stack/corese-benchmark/blob/${escapeHtml(repoRef)}/src/main/java/fr/inria/corese/benchmark/harness/BenchmarkHarness.java" target="_blank" rel="noopener">
-					Harness implementation ↗
-				</a>
-			</div>
-		`;
-		const copyBtn = colCmds.querySelector(".btn-copy-cmd");
-		copyBtn.addEventListener("click", () => {
-			if (!navigator.clipboard?.writeText) {
-				copyBtn.textContent = "Error ✗";
-				setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
-				return;
-			}
-			navigator.clipboard.writeText(runWorkflowCmd).then(
-				() => {
-					copyBtn.textContent = "Copied ✓";
-					setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
-				},
-				() => {
-					copyBtn.textContent = "Error ✗";
-					setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
-				}
-			);
-		});
-
-		// Column 2: Execution Environment (Live data from report metadata)
-		const colEnv = document.createElement("div");
-		colEnv.className = "protocol-col";
-		colEnv.innerHTML = `
-			<h4 class="protocol-section-title">Execution environment & measurement settings</h4>
-			<dl class="protocol-facts">
-				<dt>Operating system</dt>
-				<dd>${escapeHtml(osDist)} (${escapeHtml(env.osKernel || "x86_64")})</dd>
-				<dt>Java runtime</dt>
-				<dd>${escapeHtml(jvmVer)}</dd>
-				<dt>Hardware</dt>
-				<dd>${escapeHtml(cpuName)} · ${env.cpuCores || 8} cores, ${env.cpuThreads || 8} threads</dd>
-				<dt>JVM flags</dt>
-				<dd><code>${escapeHtml(jvmFlags)}</code></dd>
-				<dt>Isolation</dt>
-				<dd>Sequential runs in dedicated child JVM processes per engine</dd>
-				<dt>Measurement</dt>
-				<dd>Median of ${reps} measured repetitions (warm-up: ${warmup})</dd>
-			</dl>
-		`;
-
-		body.appendChild(colCmds);
-		body.appendChild(colEnv);
-		details.appendChild(body);
-		return details;
-	}
-
-
-
 	#renderSummaryChart(rows, orderedEngines, catalog) {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
@@ -845,7 +762,10 @@ export class LoadingView {
 				},
 			});
 
-			attachChartPointerInteraction(chart, canvas, activeFormats, this.#canvasHover, signal);
+			attachChartPointerInteraction(chart, canvas, this.#canvasHover, signal, (dataset, index) => {
+				const format = activeFormats[index];
+				return dataset && format ? { kind: "measure", key: `${dataset._engineKey}|${format}` } : null;
+			});
 
 			chart._activeFormats = activeFormats;
 			this.#charts.set("summary", chart);
