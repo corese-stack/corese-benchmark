@@ -33,7 +33,7 @@ class DashboardApp {
 			? document.getElementById("benchmark-tabs")
 			: null;
 	unsubscribeEngines = null;
-	currentView = "overview";
+	currentView = "loading";
 	activeViewInstance = null;
 
 	destroy() {

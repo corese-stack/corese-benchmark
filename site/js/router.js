@@ -180,20 +180,21 @@ export function updateUrlLoading(state, { history = "replace" } = {}) {
 	commitUrlParams(params, history === "push");
 }
 
-export const VALID_VIEWS = ["overview", "loading", "sparql"];
+export const VALID_VIEWS = ["loading", "sparql"];
 
 /**
  * Extracts and validates the current active view from location.hash.
- * Fallback to 'overview' if hash is missing or unknown.
+ * Fallback to 'loading' if hash is missing or unknown.
  */
 export function getCurrentView() {
-	if (typeof window === "undefined") return "overview";
+	if (typeof window === "undefined") return "loading";
 	const rawHash = (window.location.hash || "")
 		.replace(/^#\/?/, "")
 		.trim()
 		.toLowerCase();
 	if (rawHash === "sparql-features") return "sparql";
-	return VALID_VIEWS.includes(rawHash) ? rawHash : "overview";
+	if (rawHash === "overview") return "loading";
+	return VALID_VIEWS.includes(rawHash) ? rawHash : "loading";
 }
 
 /**
@@ -201,7 +202,7 @@ export function getCurrentView() {
  */
 export function navigateToView(viewId) {
 	if (typeof window === "undefined") return;
-	const targetView = VALID_VIEWS.includes(viewId) ? viewId : "overview";
+	const targetView = VALID_VIEWS.includes(viewId) ? viewId : "loading";
 	window.location.hash = targetView;
 }
 
