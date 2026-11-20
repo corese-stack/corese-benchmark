@@ -10,10 +10,12 @@ from datetime import datetime, timezone
 
 JSON_SUFFIX = ".json"
 
-# Ensure Java 21 is used if JAVA_HOME is not already configured
+# Ensure Java 25 or 21 is used if JAVA_HOME is not already configured
 if "JAVA_HOME" not in os.environ:
     for _jdk_candidate in [
+        os.path.expanduser("~/.gradle/jdks/eclipse_adoptium-25-amd64-linux"),
         os.path.expanduser("~/.gradle/jdks/eclipse_adoptium-21-amd64-linux.2"),
+        "/usr/lib/jvm/java-25-openjdk",
         "/usr/lib/jvm/java-21-openjdk-amd64",
         "/usr/lib/jvm/java-21-openjdk",
     ]:
@@ -132,6 +134,14 @@ parser.add_argument(
     action="store_true",
     default=False,
     help="Quick mode: 1 repetition instead of 3 (faster, less accurate).",
+)
+parser.add_argument(
+    "--benchmark-type",
+    "--mode",
+    dest="benchmark_type",
+    choices=["all", "load", "query"],
+    default="all",
+    help="Benchmark execution mode: 'all' (loading + queries), 'load' (loading only), or 'query' (SPARQL queries only).",
 )
 parser.add_argument(
     "--query-timeout",
@@ -299,6 +309,9 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
     if args.quick:
         args_str += " --quick"
         print("  Quick mode: 1 repetition")
+    if getattr(args, "benchmark_type", "all") != "all":
+        args_str += f" --benchmark-type {args.benchmark_type}"
+        print(f"  Benchmark mode: {args.benchmark_type}")
     if args.query_timeout is not None:
         args_str += f" --query-timeout {args.query_timeout}"
         print(f"  Query timeout: {args.query_timeout}s")
@@ -313,12 +326,46 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
         raise
 
 
+def resolve_git_commit():
+    """Resolve current git commit hash for benchmark traceability."""
+    env_sha = os.environ.get("GITHUB_SHA")
+    if env_sha and len(env_sha) >= 7:
+        return env_sha.strip()
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        sha = res.stdout.strip()
+        if sha:
+            return sha
+    except Exception:
+        pass
+    return None
+
 def _extract_report_entries(r: dict) -> tuple[list, list, list]:
     """Helper to extract loading runs, query runs, and sparql queries from a report dict."""
     runs = list(r.get("runs", [])) or list(r.get("loadingRuns", []))
     qruns = list(r.get("queryRuns", []))
     queries = r.get("metadata", {}).get("queries")
     return runs, qruns, queries
+
+
+def _finalize_merged_report(merged, merged_queries):
+    """Enrich merged report with queries, generated timestamp and git commit SHA."""
+    if not merged:
+        return
+    if merged_queries:
+        merged["metadata"]["queries"] = merged_queries
+    if not merged["queryRuns"]:
+        del merged["queryRuns"]
+    merged["metadata"]["generatedAt"] = datetime.now(timezone.utc).isoformat()
+    git_sha = resolve_git_commit()
+    if git_sha and "gitCommit" not in merged["metadata"]:
+        merged["metadata"]["gitCommit"] = git_sha
 
 
 def merge_json_files(file_list, output_file, no_delete=None):
@@ -347,12 +394,7 @@ def merge_json_files(file_list, output_file, no_delete=None):
             merged["loadingRuns"] += runs
             merged["queryRuns"]   += qruns
 
-    if merged:
-        if merged_queries:
-            merged["metadata"]["queries"] = merged_queries
-        if not merged["queryRuns"]:
-            del merged["queryRuns"]
-        merged["metadata"]["generatedAt"] = datetime.now(timezone.utc).isoformat()
+    _finalize_merged_report(merged, merged_queries)
 
     with open(output_file, "w") as f:
         _json_early.dump(merged, f, indent=2)
@@ -522,7 +564,7 @@ if args.engines:
         return None
 
     def get_cached(engine, ds):
-        """Return path to cached JSON for engine×dataset if valid, else None."""
+        """Return path to cached JSON for engine×dataset if valid for current mode, else None."""
         safe = engine.replace('.', '_')
         path = os.path.join(cache_dir, f"{safe}_{ds}.json")
         if not os.path.exists(path):
@@ -532,7 +574,14 @@ if args.engines:
         try:
             with open(path) as _f:
                 _d = _json_early.load(_f)
-            if isinstance(_d.get("runs"), list) and len(_d["runs"]) > 0:
+            has_load = isinstance(_d.get("runs"), list) and len(_d["runs"]) > 0
+            has_query = isinstance(_d.get("queryRuns"), list) and len(_d["queryRuns"]) > 0
+            mode = getattr(args, "benchmark_type", "all")
+            if mode == "load" and has_load:
+                return path
+            if mode == "query" and has_query:
+                return path
+            if mode == "all" and has_load and (has_query or not QUERIES_FILES.get(ds)):
                 return path
         except (ValueError, OSError):
             return None
@@ -744,6 +793,11 @@ else:
 if latest:
     with open(latest) as f:
         site_data = _json_early.load(f)
+
+    # Ensure gitCommit is populated in site_data metadata if available
+    git_sha = resolve_git_commit()
+    if git_sha and "gitCommit" not in site_data.get("metadata", {}):
+        site_data.setdefault("metadata", {})["gitCommit"] = git_sha
 
     # Export all 3 dashboard files from the unified in-memory dataset
     export_site_data(site_data, site_data_dir)

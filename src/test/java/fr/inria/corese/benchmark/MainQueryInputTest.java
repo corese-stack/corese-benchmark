@@ -80,6 +80,44 @@ class MainQueryInputTest {
     }
 
     @Test
+    void cliHonorsBenchmarkModeLoadOnly() throws Exception {
+        Path data = Files.createDirectory(directory.resolve("data-load-only"));
+        Files.writeString(data.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Path catalogue = directory.resolve("workload-load.json");
+        Files.writeString(catalogue, """
+                {"queries":[
+                  {"id":"Q01","name":"q","file":"q.rq","dataset":"lubm"}
+                ]}
+                """);
+        Files.writeString(directory.resolve("q.rq"), "ASK {}");
+        Path output = directory.resolve("report-load-only.json");
+        Main.main(new String[]{data.toString(), output.toString(), "jena.test", "lubm",
+                catalogue.toString(), "--quick", "--no-isolate", "--benchmark-type", "load"});
+        var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
+        assertTrue(report.has("loadingRuns") && !report.path("loadingRuns").isEmpty());
+        assertFalse(report.has("queryRuns"));
+    }
+
+    @Test
+    void cliHonorsBenchmarkModeQueryOnly() throws Exception {
+        Path data = Files.createDirectory(directory.resolve("data-query-only"));
+        Files.writeString(data.resolve("lubm_small.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Path catalogue = directory.resolve("workload-query.json");
+        Files.writeString(catalogue, """
+                {"queries":[
+                  {"id":"Q01","name":"q","file":"q.rq","dataset":"lubm"}
+                ]}
+                """);
+        Files.writeString(directory.resolve("q.rq"), "ASK {}");
+        Path output = directory.resolve("report-query-only.json");
+        Main.main(new String[]{data.toString(), output.toString(), "jena.test", "lubm",
+                catalogue.toString(), "--quick", "--no-isolate", "--mode", "query"});
+        var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
+        assertTrue(report.path("loadingRuns").isEmpty());
+        assertTrue(report.has("queryRuns") && !report.path("queryRuns").isEmpty());
+    }
+
+    @Test
     void errorsDoNotFallBackToLegacyText() throws Exception {
         Path file = directory.resolve("broken.json");
         Files.writeString(file, "{}");

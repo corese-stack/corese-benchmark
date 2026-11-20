@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -66,14 +67,45 @@ public class Main {
         for (ProcessHandle ph : descendants) {
             try {
                 ph.onExit().get(2, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Exception ignored) {
                 // Timeout waiting on child exit
             }
         }
         try {
             p.waitFor(3, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } catch (Exception ignored) {
             // Timeout waiting on root exit
+        }
+    }
+
+    public enum BenchmarkMode {
+        ALL,
+        LOAD,
+        QUERY;
+
+        public static BenchmarkMode fromString(String val) {
+            if (val == null || val.isBlank()) {
+                throw new IllegalArgumentException("Benchmark mode must not be null or blank");
+            }
+            try {
+                return BenchmarkMode.valueOf(val.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                    "Invalid benchmark mode: '" + val + "'. Allowed values are: all, load, query", e
+                );
+            }
+        }
+
+        public boolean includesLoad() {
+            return this == ALL || this == LOAD;
+        }
+
+        public boolean includesQuery() {
+            return this == ALL || this == QUERY;
         }
     }
 
@@ -86,7 +118,8 @@ public class Main {
         boolean inference,
         boolean quick,
         int queryTimeoutSecs,
-        boolean isolateProcess
+        boolean isolateProcess,
+        BenchmarkMode mode
     ) {}
 
     private Main() {}
@@ -116,13 +149,15 @@ public class Main {
         }
 
         BenchmarkOptions opts = parseOptions(args);
-        QueryInput queryInput;
-        try {
-            queryInput = loadQueries(opts.queriesFile(), opts.datasetName());
-        } catch (IOException e) {
-            log.error("Failed to read queries file {}: {}", opts.queriesFile(), e.getMessage());
-            System.exit(1);
-            return;
+        QueryInput queryInput = new QueryInput(Collections.emptyList(), null);
+        if (opts.mode().includesQuery() && opts.queriesFile() != null) {
+            try {
+                queryInput = loadQueries(opts.queriesFile(), opts.datasetName());
+            } catch (IOException e) {
+                log.error("Failed to read queries file {}: {}", opts.queriesFile(), e.getMessage());
+                System.exit(1);
+                return;
+            }
         }
         List<String> queries = queryInput.queries();
 
@@ -241,6 +276,7 @@ public class Main {
         boolean quick        = false;
         int queryTimeoutSecs = -1;
         boolean isolate      = true;
+        BenchmarkMode mode   = BenchmarkMode.ALL;
 
         int i = 4;
         while (i < args.length) {
@@ -257,7 +293,10 @@ public class Main {
             } else if ("--query-timeout".equals(arg) && i + 1 < args.length) {
                 queryTimeoutSecs = parseTimeout(args[i + 1]);
                 i += 2;
-            } else if (queriesFile == null) {
+            } else if (("--benchmark-type".equals(arg) || "--mode".equals(arg)) && i + 1 < args.length) {
+                mode = parseMode(args[i + 1]);
+                i += 2;
+            } else if (queriesFile == null && !arg.startsWith("--")) {
                 queriesFile = arg;
                 i++;
             } else {
@@ -267,8 +306,12 @@ public class Main {
 
         return new BenchmarkOptions(
             datasetDir, outputFile, engines, datasetName,
-            queriesFile, inference, quick, queryTimeoutSecs, isolate
+            queriesFile, inference, quick, queryTimeoutSecs, isolate, mode
         );
+    }
+
+    private static BenchmarkMode parseMode(String value) {
+        return BenchmarkMode.fromString(value);
     }
 
     private static int parseTimeout(String value) {
@@ -331,10 +374,12 @@ public class Main {
             TripleStoreDriver driver = DriverFactory.create(engineName, opts.inference());
             BenchmarkHarness harness = new BenchmarkHarness(driver, opts.datasetName(), protocol);
 
-            List<FileResult> fileResults = harness.run(opts.datasetDir());
-            allFileResults.addAll(fileResults);
+            if (opts.mode().includesLoad()) {
+                List<FileResult> fileResults = harness.run(opts.datasetDir());
+                allFileResults.addAll(fileResults);
+            }
 
-            if (!queryInput.queries().isEmpty()) {
+            if (opts.mode().includesQuery() && !queryInput.queries().isEmpty()) {
                 List<QueryResult> queryResults = queryInput.catalogue() == null
                         ? harness.runQueryBenchmark(opts.datasetDir(), queryInput.queries())
                         : harness.runCatalogueBenchmark(opts.datasetDir(), queryInput.catalogue());
@@ -439,6 +484,10 @@ public class Main {
         if (opts.queryTimeoutSecs() > 0) {
             cmd.add("--query-timeout");
             cmd.add(String.valueOf(opts.queryTimeoutSecs()));
+        }
+        if (opts.mode() != BenchmarkMode.ALL) {
+            cmd.add("--mode");
+            cmd.add(opts.mode().name().toLowerCase(Locale.ROOT));
         }
         cmd.add("--no-isolate");
         return cmd;

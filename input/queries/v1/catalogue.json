@@ -75,7 +75,7 @@
         "high_selectivity",
         "index_lookup"
       ],
-      "description": "Cours et coordonnées du GraduateStudent0 du département 0.",
+      "description": "Courses and contact information of GraduateStudent0 in Department 0.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -96,7 +96,7 @@
         "selective_feature",
         "review_join"
       ],
-      "description": "Produits portant ProductFeature2719 avec libellé, fabricant et avis réels.",
+      "description": "Products featuring ProductFeature2719 with labels, producers, and real reviews.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -105,7 +105,7 @@
         "producer",
         "review"
       ],
-      "notes": "Feature2719 est observée sur Product1 dans le petit jeu local ; sa fréquence dépend de la génération."
+      "notes": "Feature2719 is observed on Product1 in the small local dataset; its frequency depends on generation parameters."
     },
     {
       "id": "Q03",
@@ -118,13 +118,13 @@
         "anti_join",
         "numeric_cast"
       ],
-      "description": "Produits sans offre à moins de 100 USD livrée sous trois jours.",
+      "description": "Products without offers under 100 USD delivered within three days (MINUS).",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
         "product"
       ],
-      "notes": "bsbm:price est typé bsbm:USD : conversion explicite de sa forme lexicale. Q03 et Q09 doivent produire le même multiensemble ; ?product est la seule variable partagée."
+      "notes": "bsbm:price is typed as bsbm:USD: explicit conversion of its lexical form. Q03 and Q09 must produce identical multisets; ?product is the only shared variable."
     },
     {
       "id": "Q04",
@@ -136,7 +136,7 @@
         "chain",
         "multi_hop"
       ],
-      "description": "Étudiant → cours ← enseignant → département → université, sans inférence.",
+      "description": "Student → course ← teacher → department → university traversal, without inference.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -158,7 +158,7 @@
         "cycle",
         "triangle"
       ],
-      "description": "Étudiants suivant un cours enseigné par leur propre directeur.",
+      "description": "Students enrolled in a course taught by their own academic advisor.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -166,7 +166,7 @@
         "advisor",
         "course"
       ],
-      "notes": "La jointure est cyclique ; le graphe RDF sous-jacent ne doit pas nécessairement contenir de cycle orienté."
+      "notes": "The join is cyclic; the underlying RDF graph does not necessarily contain a directed cycle."
     },
     {
       "id": "Q06",
@@ -178,14 +178,14 @@
         "transitive_plus",
         "hierarchy"
       ],
-      "description": "Ancêtres stricts des types de produit de la taxonomie BSBM.",
+      "description": "Strict transitive closure of product types in the BSBM taxonomy.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
         "type",
         "ancestor"
       ],
-      "notes": "Les arcs rdfs:subClassOf sont présents dans le dump, sans ajout d’ontologie ni inférence."
+      "notes": "rdfs:subClassOf edges are present in the dataset dump, without ontology additions or inference."
     },
     {
       "id": "Q07",
@@ -199,13 +199,13 @@
         "transitive_plus",
         "cycle_handling"
       ],
-      "description": "Types accessibles depuis ProductType1 en parcourant la hiérarchie dans les deux sens.",
+      "description": "Types reachable from ProductType1 traversing the hierarchy in both directions.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
         "reachable"
       ],
-      "notes": "Une arête parcourue dans les deux sens rend le point de départ accessible par un chemin de longueur positive ; la terminaison exige de gérer les revisites."
+      "notes": "An edge traversed in both directions makes the start point reachable via a path of positive length; termination requires handling revisits."
     },
     {
       "id": "Q08",
@@ -217,7 +217,7 @@
         "nested_optional",
         "independent_optional"
       ],
-      "description": "Personnes et noms obligatoires, dates de naissance et décès optionnelles avec OPTIONAL imbriqué.",
+      "description": "Mandatory persons and names, with optional birth and death dates via nested OPTIONAL.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -227,11 +227,11 @@
         "death",
         "birthPlace"
       ],
-      "notes": "Utilise persondata_en.nt de DBpedia 3.5.1. ?death reste non liée si ?birth est absente, même si le décès existe."
+      "notes": "Uses persondata_en.nt from DBpedia 3.5.1. ?death remains unbound if ?birth is missing, even if death date exists."
     },
     {
       "id": "Q09",
-      "name": "BSBM products without cheap fast offers (FILTER NOT EXISTS)",
+      "name": "BSBM products without cheap fast offers (NOT EXISTS)",
       "file": "bsbm/Q09-not-exists.rq",
       "dataset": "bsbm",
       "primaryFeature": "NEGATION",
@@ -240,13 +240,13 @@
         "anti_join",
         "numeric_cast"
       ],
-      "description": "Produits sans offre à moins de 100 USD livrée sous trois jours.",
+      "description": "Products without offers under 100 USD delivered within three days (NOT EXISTS).",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
         "product"
       ],
-      "notes": "bsbm:price est typé bsbm:USD : conversion explicite de sa forme lexicale. Q03 et Q09 doivent produire le même multiensemble ; ?product est la seule variable partagée."
+      "notes": "bsbm:price is typed as bsbm:USD: explicit conversion of its lexical form. Q03 and Q09 must produce identical multisets; ?product is the only shared variable."
     },
     {
       "id": "Q10",
@@ -262,7 +262,7 @@
         "min",
         "max"
       ],
-      "description": "Statistiques entières des évaluations par unité, avec au moins deux étudiants distincts.",
+      "description": "Integer evaluation statistics per unit, with at least two distinct students.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -273,7 +273,7 @@
         "minMark",
         "maxMark"
       ],
-      "notes": "Les notes sont des xsd:int. Les agrégats entiers évitent les écarts d’arrondi inter-moteurs."
+      "notes": "Ratings are xsd:int. Integer aggregates prevent inter-engine floating-point rounding discrepancies."
     },
     {
       "id": "Q11",
@@ -286,7 +286,7 @@
         "projection_scope",
         "outer_bgp_join"
       ],
-      "description": "Sous-requête comptant les évaluations par unité, jointe aux noms dans le bloc externe.",
+      "description": "Subquery counting evaluations per unit, joined to unit names in the outer block.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -294,7 +294,7 @@
         "name",
         "evaluationCount"
       ],
-      "notes": "La sous-requête est évaluée indépendamment ; seules ?unit et ?evaluationCount sont projetées vers le bloc externe. Ce n’est pas une sous-requête corrélée."
+      "notes": "The subquery is evaluated independently; only ?unit and ?evaluationCount are projected to the outer block. Not a correlated subquery."
     },
     {
       "id": "Q12",
@@ -309,7 +309,7 @@
         "contains",
         "lcase"
       ],
-      "description": "Inscriptions de bachelor en octobre entre 2003 inclus et 2006 exclu, avec filtre sur le prénom.",
+      "description": "Bachelor enrollments in October between 2003 inclusive and 2006 exclusive, with first name filter.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -317,7 +317,7 @@
         "firstName",
         "enrolledAt"
       ],
-      "notes": "Les dates du dump sont des xsd:string au format YYYY-MM-DD. Ajout explicite de minuit UTC avant conversion SPARQL standard, sans fonction spécifique au moteur."
+      "notes": "Dump dates are xsd:string in YYYY-MM-DD format. Explicit UTC midnight addition before standard SPARQL cast, with no engine-specific extensions."
     },
     {
       "id": "Q13",
@@ -332,7 +332,7 @@
         "offset",
         "numeric_cast"
       ],
-      "description": "Deuxième page de vingt offres les moins chères, avec départage déterministe.",
+      "description": "Second page of twenty lowest-priced offers, with deterministic tie-breaking.",
       "timeoutSecs": 30,
       "validationMode": "ordered_exact",
       "resultVariables": [
@@ -340,7 +340,7 @@
         "product",
         "price"
       ],
-      "notes": "bsbm:USD est converti en xsd:decimal. Les IRI d’offre et produit départagent les prix égaux ; toutes les variables projetées sont dans ORDER BY."
+      "notes": "bsbm:USD is converted to xsd:decimal. Offer and product IRIs resolve ties for equal prices; all projected variables appear in ORDER BY."
     },
     {
       "id": "Q14",
@@ -352,7 +352,7 @@
         "cross_graph_join",
         "fixed_graphs"
       ],
-      "description": "Jointure étudiant/cours entre deux contextes distincts issus du même fichier LUBM.",
+      "description": "Student/course join across distinct named graphs partitioned from the same LUBM dataset.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -360,7 +360,7 @@
         "department",
         "course"
       ],
-      "notes": "Utiliser prepare_dataset.py : people reçoit les triplets hors takesCourse/teacherOf ; courses reçoit takesCourse/teacherOf. Charger le fichier N-Quads obtenu en conservant les contextes."
+      "notes": "Run prepare_dataset.py: people receives triples outside takesCourse/teacherOf; courses receives takesCourse/teacherOf. Ingest the resulting N-Quads file preserving contexts."
     },
     {
       "id": "Q15",
@@ -373,7 +373,7 @@
         "group_by",
         "count"
       ],
-      "description": "Nombre de triplets et de sujets distincts dans chacun des graphes nommés.",
+      "description": "Triple and distinct subject counts within each named graph.",
       "timeoutSecs": 30,
       "validationMode": "unordered_exact",
       "resultVariables": [
@@ -381,7 +381,7 @@
         "tripleCount",
         "subjectCount"
       ],
-      "notes": "Même fichier N-Quads que Q14 ; aucun graphe par défaut, aucun mode union implicite."
+      "notes": "Same N-Quads file as Q14; empty default graph, no implicit union default graph mode."
     }
   ]
 }
