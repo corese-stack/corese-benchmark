@@ -1,9 +1,12 @@
 /** SPARQL feature timings and original query sources. */
 import { escapeHtml as esc, formatEngineId, parseEngineId } from "../engine-id.js";
-import { clearChartInteraction, colorWithAlpha, createEngineLegendConfig, getChartThemeTokens } from "../chart-utils.js";
+import { attachChartPointerInteraction, colorWithAlpha, createEngineLegendConfig, getChartThemeTokens } from "../chart-utils.js";
 import { getEngineStyle, renderEngineIndicatorSvg } from "../engines.js";
-import { focusStore, hoverSource, engineKeyOf } from "../focus-store.js";
+import { focusStore, hoverSource, engineKeyOf, presentationFor } from "../focus-store.js";
 import { parseUrlSparql, updateUrlSparql } from "../router.js";
+import { createProtocolTile, populateDatasetCards, attachDetailsAnimation, DATASET_CONFIGS, highlightSparql, renderSourceBox } from "../components/protocol-tile.js";
+
+export { DATASET_CONFIGS, highlightSparql };
 
 export const FEATURES = Object.freeze({
  BGP_JOIN: "BGP joins", PROPERTY_PATH: "Property paths",
@@ -14,6 +17,7 @@ export const FEATURES = Object.freeze({
 });
 const FEATURE_IDS = Object.keys(FEATURES);
 const CATALOGUE_URL = "data/sparql/v1/catalogue.json";
+
 const keyOf = (dataset, id) => JSON.stringify([dataset, id]);
 const canonicalEngine = (engine) => formatEngineId(parseEngineId(engine));
 const positive = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -76,49 +80,59 @@ export function summarizeScope(queries, index, engines, reference) {
   speedup: positive(value) ? value : null };
 }
 
-/** Single-pass lexer: escape each original token exactly once, including markup in literals. */
-export function highlightSparql(source) {
- const tokens = /#[^\n\r]*|<[^<>\s]*>|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[?$][\w]+|(?:[A-Za-z_][\w-]*)?:[\w.-]*|\b[A-Za-z_][\w-]*\b/g;
- const keywords = /^(PREFIX|BASE|SELECT|ASK|CONSTRUCT|DESCRIBE|WHERE|FROM|NAMED|GRAPH|OPTIONAL|UNION|MINUS|FILTER|NOT|EXISTS|BIND|AS|VALUES|SERVICE|SILENT|DISTINCT|REDUCED|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|ASC|DESC|COUNT|SUM|AVG|MIN|MAX|SAMPLE|GROUP_CONCAT|CONTAINS|LCASE|YEAR|MONTH|STR|CONCAT|REGEX|BOUND|IF|COALESCE|IN|true|false)$/i;
- let output = "", end = 0;
- for (const match of String(source).matchAll(tokens)) {
-  output += esc(source.slice(end, match.index));
-  const token = match[0];
-  const kind = token.startsWith("#") ? "comment" : /^["']/.test(token) ? "string" : /^[?$]/.test(token) ? "variable" : token.startsWith("<") || token.includes(":") ? "iri" : keywords.test(token) ? "keyword" : null;
-  output += kind ? `<span class="sf-token-${kind}">${esc(token)}</span>` : esc(token);
-  end = match.index + token.length;
- }
- return output + esc(source.slice(end));
-}
+const DATASETS = new Set(["lubm", "bsbm", "bowlogna", "dbpedia", "named-graphs"]);
 
 function badge(status) {
- const kind = status === "PASS" ? "pass" : ["MISMATCH", "TIMEOUT", "ERROR", "DUPLICATE"].includes(status) ? "fail" : "other";
- return `<span class="sf-badge sf-badge--${kind}">${esc(status)}</span>`;
+	if (status === "PASS") {
+		return `<span class="sf-badge sf-badge--pass">${esc(status)}</span>`;
+	}
+	if (["MISMATCH", "TIMEOUT", "ERROR", "DUPLICATE"].includes(status)) {
+		return `<span class="sf-badge sf-badge--fail">${esc(status)}</span>`;
+	}
+	return `<span class="sf-badge sf-badge--other">${esc(status)}</span>`;
+}
+
+function calculateMedian(values) {
+	if (!values.length) return null;
+	const middle = Math.floor(values.length / 2);
+	if (values.length % 2 !== 0) {
+		return values[middle];
+	}
+	return values[middle - 1] / 2 + values[middle] / 2;
 }
 
 /** Median of reported query medians, with no inferred or failed timings. */
 export function featureTimings(queries, index, engines) {
- return engines.map((engine) => ({ engine, axes: FEATURE_IDS.map((feature) => {
-  const scope = queries.filter((query) => query.primaryFeature === feature);
-  const values = scope.map((query) => index.get(keyOf(query.dataset, query.id))?.get(engine))
-   .filter((run) => statusOf(run) === "PASS" && measured(run.medianMs))
-   .map((run) => run.medianMs).sort((a, b) => a - b);
-  const middle = Math.floor(values.length / 2);
-  const medianMs = !values.length ? null : values.length % 2 ? values[middle]
-   : values[middle - 1] / 2 + values[middle] / 2;
-  return { feature, total: scope.length, count: values.length, medianMs };
- }) }));
+	return engines.map((engine) => ({ engine, axes: FEATURE_IDS.map((feature) => {
+		const scope = queries.filter((query) => query.primaryFeature === feature);
+		const values = scope.map((query) => index.get(keyOf(query.dataset, query.id))?.get(engine))
+			.filter((run) => statusOf(run) === "PASS" && measured(run.medianMs))
+			.map((run) => run.medianMs).sort((a, b) => a - b);
+		const medianMs = calculateMedian(values);
+		return { feature, total: scope.length, count: values.length, medianMs };
+	}) }));
 }
 
-const DATASETS = ["lubm", "bsbm", "bowlogna", "dbpedia", "named-graphs"];
+const jumpHighlightTimers = new WeakMap();
+
+function highlightJumpTarget(target) {
+ if (!target) return;
+ clearTimeout(jumpHighlightTimers.get(target));
+ target.classList.add("is-jump-highlighted");
+ jumpHighlightTimers.set(target, setTimeout(() => {
+  target.classList.remove("is-jump-highlighted");
+  jumpHighlightTimers.delete(target);
+ }, 1800));
+}
 
 export class SparqlFeaturesView {
  #root; #data; #engines; #index; #state;
- #catalogue = null; #controller = null; #sourceController = null; #chart = null;
+ #catalogue = null; #controller = null; #chart = null;
  #sourceCache = new Map();
  #chartController = null;
  #legendHover = hoverSource();
  #canvasHover = hoverSource();
+ #cachedQueryFeatureMap = null;
 
  constructor(container, data, engines = []) {
   this.#root = container;
@@ -128,10 +142,9 @@ export class SparqlFeaturesView {
   this.#setState(parseUrlSparql(window.location.search));
  }
 
- // Old links retain their dataset and sorting; removed controls cannot hide queries.
+ // Old links retain their sorting; removed controls cannot hide queries.
  #setState(state) {
   this.#state = { ...parseUrlSparql(""), ...state, reference: "", feature: "", q: "", chart: "bar" };
-  if (!DATASETS.includes(this.#state.dataset)) this.#state.dataset = "";
  }
 
  mount() {
@@ -150,40 +163,154 @@ export class SparqlFeaturesView {
   }, { signal });
   window.addEventListener("keydown", (event) => {
    if (event.key === "Escape") {
-    const dialog = this.#root?.querySelector("dialog[open]");
-    if (dialog) return; // Allow native dialog closing without clearing pin
     focusStore.clear();
    }
   }, { signal });
-  this.#root.addEventListener("click", (event) => {
-   const dataset = event.target.closest("[data-sf-state='dataset']");
-   if (dataset) {
-    this.#state.dataset = dataset.dataset.sfValue;
-    updateUrlSparql(this.#state);
-    this.#refresh();
-    return;
-   }
-   const sort = event.target.closest("[data-sf-sort]");
-   if (sort) {
-    const key = sort.dataset.sfSort;
-    this.#state.direction = this.#state.sort === key && this.#state.direction === "asc" ? "desc" : "asc";
-    this.#state.sort = key;
-    updateUrlSparql(this.#state);
-    this.#renderTable(this.#queries(), this.#engineKeys());
-    [...this.#root.querySelectorAll("[data-sf-sort]")].find((button) => button.dataset.sfSort === key)?.focus();
-    return;
-   }
-   if (event.target.closest("[data-sf-retry]")) { void this.#loadCatalogue(); return; }
-   const row = event.target.closest("[data-sf-query]");
-   if (row) void this.#openQuery(row.dataset.sfQuery);
-  }, { signal });
-  this.#root.addEventListener("close", (event) => {
-   if (event.target.matches("dialog")) this.#sourceController?.abort();
-  }, { signal, capture: true });
+  this.#root.addEventListener("click", (event) => this.#handleClick(event), { signal });
+  this.#root.addEventListener("toggle", (event) => this.#handleToggle(event, signal), { signal, capture: true });
   window.addEventListener("theme-changed", () => {
    if (this.#catalogue) this.#renderChart(this.#queries(), this.#engineKeys());
   }, { signal });
   void this.#loadCatalogue();
+ }
+
+ #handleClick(event) {
+  if (this.#handleCopyClick(event.target)) return;
+  if (this.#handleSortClick(event.target)) return;
+  if (event.target.closest("[data-sf-retry]")) {
+   void this.#loadCatalogue();
+   return;
+  }
+  if (this.#handleJumpClick(event.target)) return;
+  this.#handleSelectionClick(event.target);
+ }
+
+ #handleCopyClick(target) {
+  const copyCmdBtn = target.closest("[data-sf-copy-cmd]");
+  if (copyCmdBtn) {
+   const cmd = copyCmdBtn.dataset.sfCopyCmd;
+   if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(cmd).then(() => {
+     copyCmdBtn.textContent = "Copied ✓";
+     setTimeout(() => (copyCmdBtn.textContent = "Copy"), 1500);
+    }).catch(() => {
+     copyCmdBtn.textContent = "Error ✗";
+     setTimeout(() => (copyCmdBtn.textContent = "Copy"), 1500);
+    });
+   }
+   return true;
+  }
+  const copyQueryBtn = target.closest("[data-sf-copy-query]");
+  if (copyQueryBtn) {
+   const code = copyQueryBtn.closest(".sf-source-box, .sf-query-source-box")?.querySelector("pre code")?.textContent
+    || this.#root.querySelector("dialog pre code")?.textContent;
+   if (code && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(code).then(() => {
+     copyQueryBtn.textContent = "Copied ✓";
+     setTimeout(() => (copyQueryBtn.textContent = "Copy SPARQL"), 1500);
+    }).catch(() => {
+     copyQueryBtn.textContent = "Error ✗";
+     setTimeout(() => (copyQueryBtn.textContent = "Copy SPARQL"), 1500);
+    });
+   }
+   return true;
+  }
+  return false;
+ }
+
+ #handleSortClick(target) {
+  const sort = target.closest("[data-sf-sort]");
+  if (!sort) return false;
+  const key = sort.dataset.sfSort;
+  this.#state.direction = this.#state.sort === key && this.#state.direction === "asc" ? "desc" : "asc";
+  this.#state.sort = key;
+  updateUrlSparql(this.#state);
+  this.#renderTable(this.#queries(), this.#engineKeys());
+  [...this.#root.querySelectorAll("[data-sf-sort]")].find((button) => button.dataset.sfSort === key)?.focus();
+  return true;
+ }
+
+ #handleJumpClick(target) {
+  const jumpBtn = target.closest("[data-sf-jump-query]");
+  if (jumpBtn) {
+   return this.#jumpToQuery(jumpBtn.dataset.sfJumpQuery);
+  }
+  const jumpDsBtn = target.closest("[data-sf-jump-dataset]");
+  if (jumpDsBtn) {
+   return this.#jumpToDataset(jumpDsBtn.dataset.sfJumpDataset);
+  }
+  return false;
+ }
+
+ #jumpToQuery(key) {
+  const protocolTile = this.#root.querySelector(".protocol-tile");
+  if (protocolTile && !protocolTile.open) protocolTile.open = true;
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scrollBehavior = prefersReducedMotion ? "auto" : "smooth";
+
+  const targetItem = this.#root.querySelector(`.sf-query-item[data-sf-query-key='${key}']`);
+  if (targetItem) {
+   targetItem.open = true;
+   targetItem.scrollIntoView({ behavior: scrollBehavior, block: "center" });
+   highlightJumpTarget(targetItem);
+   targetItem.querySelector("summary")?.focus({ preventScroll: true });
+   return true;
+  }
+  const targetRow = this.#root.querySelector(`tr[data-sf-query='${key}']`);
+  if (targetRow) {
+   targetRow.scrollIntoView({ behavior: scrollBehavior, block: "center" });
+   highlightJumpTarget(targetRow);
+   targetRow.querySelector("button")?.focus({ preventScroll: true });
+  }
+  return true;
+ }
+
+ #jumpToDataset(ds) {
+  const targetCard = this.#root.querySelector(`.sf-dataset-card[data-sf-dataset-id='${ds}'], #dataset-${ds}`);
+  if (targetCard) {
+   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+   targetCard.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "center" });
+   highlightJumpTarget(targetCard);
+   targetCard.focus({ preventScroll: true });
+   return true;
+  }
+  return false;
+ }
+
+ #handleSelectionClick(target) {
+  const cell = target.closest("td[data-cell-key]");
+  if (cell) {
+   const key = cell.dataset.cellKey;
+   focusStore.togglePin({ kind: "cell", key });
+   return;
+  }
+  const row = target.closest("[data-sf-query]");
+  if (row) {
+   const key = row.dataset.sfQuery;
+   focusStore.togglePin({ kind: "query", key });
+  }
+ }
+
+ #handleToggle(event, signal) {
+  const details = event.target.closest(".sf-query-item");
+  if (!details?.open) return;
+  const file = details.dataset.sfQueryFile;
+  const codeEl = details.querySelector("pre code");
+  const statusEl = details.querySelector("[data-sf-source-status]");
+  if (file && codeEl && !codeEl.textContent) {
+   statusEl.textContent = "Loading query…";
+   this.#fetchQuerySource(file, signal)
+    .then((src) => {
+     codeEl.innerHTML = highlightSparql(src);
+     statusEl.textContent = "";
+     // If currently animating, smoothly adjust target height to avoid any jump
+     details._adjustHeight?.();
+    })
+    .catch(() => {
+     statusEl.textContent = "Query source unavailable.";
+     details._adjustHeight?.();
+    });
+  }
  }
 
  restoreState(state, engines) {
@@ -207,10 +334,8 @@ export class SparqlFeaturesView {
   this.#chartController?.abort();
   this.#legendHover.clear();
   this.#canvasHover.clear();
-  this.#sourceController?.abort();
   this.#chart?.destroy();
   this.#chart = null;
-  this.#root.querySelector("dialog[open]")?.close();
   this.#root.replaceChildren();
  }
 
@@ -225,7 +350,7 @@ export class SparqlFeaturesView {
    const seen = new Set();
    for (const query of catalogue.queries) {
     const key = keyOf(query.dataset, query.id);
-    if (!query.id || !query.name || !DATASETS.includes(query.dataset) ||
+    if (!query.id || !query.name || !query.file || !DATASETS.has(query.dataset) ||
      !Object.hasOwn(FEATURES, query.primaryFeature) || seen.has(key)) throw new Error("Invalid query");
     seen.add(key);
    }
@@ -242,28 +367,23 @@ export class SparqlFeaturesView {
  }
 
  #queries() {
-  return this.#catalogue.queries.filter((query) => !this.#state.dataset || query.dataset === this.#state.dataset);
+  return this.#catalogue?.queries || [];
  }
 
  #render() {
-  this.#root.innerHTML = `<div class="sf-view loading-view-container">
-   <div class="view-controls sf-controls">
-    <div class="sf-filter" role="group" aria-label="Dataset"><span class="sf-filter-label">DATASET:</span>
-     <div class="segmented-control sf-segments">${[["", "All datasets"], ...DATASETS.map((dataset) => [dataset, dataset])].map(([value, title]) =>
-      `<button type="button" class="segmented-control__btn" data-sf-state="dataset" data-sf-value="${value}" aria-pressed="false">${title}</button>`).join("")}</div>
-    </div>
-   </div>
-   <details class="protocol-tile sf-protocol">
-    <summary><span class="protocol-title">Dataset &amp; protocol</span><span class="protocol-summary-meta" data-sf-protocol-meta></span><span class="protocol-chevron" aria-hidden="true">▾</span></summary>
-    <div class="protocol-body"><div class="protocol-col"><h4 class="protocol-section-title">Dataset</h4><dl class="protocol-facts" data-sf-inputs></dl></div>
-     <div class="protocol-col"><h4 class="protocol-section-title">Measurement protocol</h4>
-      <dl class="protocol-facts"><dt>Aggregation</dt><dd>Median of reported query medians per feature, using PASS results only.</dd>
-       <dt>Repetitions</dt><dd>${esc(this.#data.metadata?.protocol?.repetitions ?? "Not reported")}</dd>
-       <dt>Timeout</dt><dd>${esc(this.#catalogue.defaults?.timeoutSecs ?? "Not reported")} s, unless overridden per query</dd>
-       <dt>Entailment</dt><dd>${esc(this.#catalogue.entailment ?? "Not reported")}</dd>
-       <dt>Validation</dt><dd>Reported SPARQL result comparison; not W3C certification. Missing timings remain blank.</dd></dl>
-     </div></div>
-   </details>
+  const protocolTile = createProtocolTile({
+   mode: "sparql",
+   reportData: this.#data,
+   state: this.#state,
+   catalogue: this.#catalogue,
+   isOpen: false,
+  });
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "sf-view loading-view-container";
+  wrapper.appendChild(protocolTile);
+
+  const sectionsHtml = `
    <section class="dashboard-section" aria-labelledby="sf-chart-title">
     <div class="section-header">
      <h3 id="sf-chart-title">Feature comparison</h3>
@@ -284,13 +404,9 @@ export class SparqlFeaturesView {
     </div>
     <div class="sf-scroll" tabindex="0" role="region" aria-label="Query details" data-sf-table></div>
    </section>
-   <dialog class="sf-dialog" aria-labelledby="sf-query-title" style="overscroll-behavior:contain">
-    <form method="dialog"><button type="submit" autofocus>Close</button></form>
-    <h3 id="sf-query-title"></h3><p class="section-meta" data-sf-query-meta></p>
-    <div data-sf-query-perf style="margin: 16px 0;"></div>
-    <p data-sf-source-status role="status"></p><pre tabindex="0"><code></code></pre>
-   </dialog>
-  </div>`;
+  `;
+  wrapper.insertAdjacentHTML("beforeend", sectionsHtml);
+  this.#root.replaceChildren(wrapper);
   this.#refresh();
  }
 
@@ -300,47 +416,151 @@ export class SparqlFeaturesView {
   const sortEngine = this.#state.sort.split(":")[1];
   if (sortEngine && !engines.includes(sortEngine)) this.#state.sort = "id";
   updateUrlSparql(this.#state);
-  this.#root.querySelectorAll("[data-sf-state='dataset']").forEach((button) => {
-   const active = button.dataset.sfValue === this.#state.dataset;
-   button.setAttribute("aria-pressed", String(active));
-   button.classList.toggle("is-active", active);
-  });
-  this.#root.querySelector("[data-sf-chart-meta]").textContent = `${queries.length} queries · Median execution time (ms) · Grouped by feature`;
+  const repoRef = this.#data?.metadata?.gitCommit || "main";
+  this.#root.querySelector("[data-sf-chart-meta]").textContent = `${queries.length} queries · Median of query medians · Lower is better`;
   this.#root.querySelector("[data-sf-table-meta]").textContent = `${queries.length} queries · Median execution time (ms) · Lower is better · Result validation`;
-  this.#root.querySelector("[data-sf-protocol-meta]").textContent = `${this.#state.dataset || "All datasets"} · SPARQL 1.1`;
+  this.#root.querySelector("[data-sf-protocol-meta]").textContent = `${queries.length} queries · 5 dataset configurations · SPARQL 1.1`;
   const datasets = [...new Set(queries.map((query) => query.dataset))];
-  this.#root.querySelector("[data-sf-inputs]").innerHTML = datasets.map((dataset) => {
-   const input = this.#catalogue.datasets?.[dataset];
-   const paths = input?.defaultGraphFiles || (input?.quadFile ? [input.quadFile] : []);
-   return `<dt>${esc(dataset)}</dt><dd style="overflow-wrap:anywhere">${esc(paths.join(", ") || "Not reported")}${input?.source ? `<br>Source: ${esc(input.source)}` : ""}${input?.graphIris ? `<br>Graphs: ${esc(input.graphIris.join(", "))}` : ""}</dd>`;
-  }).join("");
+
+  // Render Section 1: Datasets Responsive Grid (only if not already populated to preserve DOM state)
+  const inputsContainer = this.#root.querySelector("[data-sf-inputs]");
+  if (inputsContainer && !inputsContainer.hasChildNodes()) {
+   populateDatasetCards(inputsContainer, {
+    datasets,
+    queries,
+    repoRef,
+   });
+  }
+
+  // Render Section 2: Full Catalogue Queries (only if not already populated to preserve open states and loaded sources)
+  const catalogListEl = this.#root.querySelector("[data-sf-catalog-list]");
+  if (catalogListEl && !catalogListEl.hasChildNodes()) {
+   const defaultTimeout = this.#catalogue?.defaults?.timeoutSecs ?? 30;
+   const defaultMode = this.#catalogue?.defaults?.validationMode ?? "unordered_exact";
+   catalogListEl.innerHTML = `
+    <div class="sf-queries-catalog">
+     ${queries.map((q) => {
+      const dsInfo = DATASET_CONFIGS[q.dataset] || { name: q.dataset, fullName: q.dataset, shortFile: q.dataset };
+      const featureLabel = FEATURES[q.primaryFeature] || q.primaryFeature;
+      const timeoutSec = q.timeoutSecs ?? defaultTimeout;
+      const validationMode = q.validationMode ?? defaultMode;
+      const timeoutFact = timeoutSec !== defaultTimeout ? `<span class="sf-badge sf-badge--other">Timeout: ${esc(timeoutSec)} s</span>` : "";
+      const modeFact = validationMode === "ordered_exact" ? `<span class="sf-badge sf-badge--other" title="Requires strict row sequence equality in addition to RDF term equality">Row order validated</span>` : "";
+
+      const metaHtml = `
+       <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Dataset:</span>
+       <button type="button" class="sf-jump-dataset-btn" data-sf-jump-dataset="${esc(q.dataset)}" title="Jump to ${esc(dsInfo.fullName || dsInfo.name)} dataset in Section 1">
+        ${esc(dsInfo.name)} ↖
+       </button>
+       ${modeFact}
+       ${timeoutFact}
+      `;
+
+      return `<details class="sf-query-item" data-sf-query-key="${esc(keyOf(q.dataset, q.id))}" data-sf-query-file="${esc(q.file)}">
+       <summary class="sf-query-summary">
+        <div class="sf-query-summary-header">
+         <span class="sf-badge sf-badge--query">${esc(q.id)}</span>
+         <strong>${esc(q.name)}</strong>
+        </div>
+        <span class="sf-query-desc">${esc(q.description)}</span>
+        <span class="sf-badge sf-badge--other" style="font-size: 11px; margin-left: auto;">${esc(featureLabel)}</span>
+        <span class="protocol-chevron" aria-hidden="true">▾</span>
+       </summary>
+       <div class="sf-query-body" style="padding: 0; border-top: none;">
+        ${renderSourceBox(q.file, null, null, metaHtml)}
+       </div>
+      </details>`;
+     }).join("")}
+    </div>
+   `;
+   catalogListEl.querySelectorAll(".sf-query-item").forEach((item) => {
+    attachDetailsAnimation(item, { duration: 220 });
+   });
+  }
   this.#renderTable(queries, engines);
   this.#renderChart(queries, engines);
  }
 
+ #queryFeatureMap() {
+  if (!this.#cachedQueryFeatureMap) {
+   const map = new Map();
+   for (const q of this.#queries()) {
+    map.set(keyOf(q.dataset, q.id), q.primaryFeature);
+   }
+   this.#cachedQueryFeatureMap = map;
+  }
+  return this.#cachedQueryFeatureMap;
+ }
+
  #syncFocusVisuals() {
-  const isPinned = Boolean(focusStore.state.pinned);
+  const focus = focusStore.effectiveFocus;
+  const raw = focusStore.state;
+  const isPinned = Boolean(raw.pinned);
   this.#root.querySelectorAll(".badge-pinned").forEach((badge) => {
    badge.style.display = isPinned ? "inline-flex" : "none";
   });
-  const engine = engineKeyOf(focusStore.effectiveFocus?.target);
-  this.#root.querySelectorAll("[data-sf-table] [data-engine-key]").forEach((cell) => {
-   const match = cell.dataset.engineKey === engine;
-   cell.classList.toggle("is-column-highlighted", match);
-   cell.classList.toggle("is-column-pinned", match && Boolean(focusStore.state.pinned));
-   // Column focus needs cell styling: the shared loading styles target whole rows.
-   cell.style.opacity = engine && !match ? "0.22" : "";
-   cell.style.backgroundColor = match ? "var(--bg-hover)" : "";
-   cell.style.boxShadow = match && focusStore.state.pinned ? "inset 0 -2px var(--focus)" : "";
-  });
+
+  const target = focus?.target || null;
+  const targetEngine = engineKeyOf(target);
+  const qFeatureMap = this.#queryFeatureMap();
+  const context = {
+   getFeature: (qKey) => qFeatureMap.get(qKey),
+  };
+
+  // Update table container, rows, and cells
+  const tbody = this.#root.querySelector("[data-sf-table] tbody");
+  if (tbody) {
+   tbody.classList.toggle("has-focus", Boolean(focus));
+   tbody.querySelectorAll("tr[data-sf-query]").forEach((row) => {
+    const queryKey = row.dataset.sfQuery;
+    const rowPresentation = presentationFor(target, { kind: "query", queryKey }, context);
+    row.classList.toggle("is-row-highlighted", rowPresentation === "selected");
+    row.classList.toggle("is-row-related", rowPresentation === "related");
+    row.classList.toggle("is-row-pinned", Boolean(raw.pinned?.kind === "query" && raw.pinned.key === queryKey));
+    const btn = row.querySelector("button[data-sf-query-toggle]");
+    if (btn) btn.setAttribute("aria-pressed", rowPresentation === "selected" && isPinned ? "true" : "false");
+
+    // Individual cells in the row
+    row.querySelectorAll("td[data-engine-key]").forEach((cell) => {
+     const cellEngine = cell.dataset.engineKey;
+     const cellPresentation = presentationFor(target, { kind: "cell", engine: cellEngine, queryKey }, context);
+     cell.classList.toggle("is-cell-selected", cellPresentation === "selected");
+     cell.classList.toggle("is-cell-related", cellPresentation === "related");
+     cell.classList.toggle("is-column-highlighted", target?.kind === "engine" && cellEngine === targetEngine);
+     cell.classList.toggle("is-column-pinned", target?.kind === "engine" && cellEngine === targetEngine && isPinned);
+    });
+   });
+  }
+
+  // Update Chart.js grouped horizontal bars per-bar
   if (!this.#chart) return;
+  const features = FEATURE_IDS.filter((feature) => this.#queries().some((query) => query.primaryFeature === feature));
+
   for (const dataset of this.#chart.data.datasets) {
-   const color = !engine || dataset._engineKey === engine
-    ? dataset._baseColor : colorWithAlpha(dataset._baseColor, 0.22);
-   dataset.backgroundColor = color;
-   dataset.borderColor = color;
-   dataset.hoverBackgroundColor = color;
-   dataset.hoverBorderColor = color;
+   const engine = dataset._engineKey;
+   const baseColor = dataset._baseColor;
+
+   // Per-bar color array
+   const bgColors = [];
+   const borderColors = [];
+
+   for (const feature of features) {
+    const barPresentation = presentationFor(target, { kind: "bar", engine, feature }, context);
+
+    if (barPresentation === "selected" || barPresentation === "related" || barPresentation === "neutral") {
+     bgColors.push(baseColor);
+     borderColors.push(baseColor);
+    } else {
+     // unrelated: dimmed
+     bgColors.push(colorWithAlpha(baseColor, 0.22));
+     borderColors.push(colorWithAlpha(baseColor, 0.22));
+    }
+   }
+
+   dataset.backgroundColor = bgColors;
+   dataset.borderColor = borderColors;
+   dataset.hoverBackgroundColor = bgColors;
+   dataset.hoverBorderColor = borderColors;
   }
   this.#chart.update();
  }
@@ -358,19 +578,20 @@ export class SparqlFeaturesView {
   const hasTimings = series.some((entry) => entry.axes.some((axis) => axis.medianMs !== null));
   const available = typeof globalThis.Chart === "function";
   empty.hidden = engines.length > 0 && hasTimings && available;
-  empty.textContent = !engines.length ? "Select an engine." : !hasTimings ? "No timings available." : !available ? "Chart unavailable. See Query details." : "";
+  if (!engines.length) {
+   empty.textContent = "Select an engine.";
+  } else if (!hasTimings) {
+   empty.textContent = "No timings available.";
+  } else if (!available) {
+   empty.textContent = "Chart unavailable. See Query details.";
+  } else {
+   empty.textContent = "";
+  }
   canvas.parentElement.hidden = !empty.hidden;
   if (!empty.hidden) return;
   // Allow each engine bar its own space, including when many versions are selected.
   canvas.parentElement.style.height = `${Math.max(360, features.length * Math.max(76, engines.length * 24 + 22) + 90)}px`;
   this.#chartController = new AbortController();
-  const clearHover = () => {
-   this.#legendHover.clear();
-   clearChartInteraction(this.#chart, this.#canvasHover);
-  };
-  for (const event of ["pointerleave", "pointercancel", "mouseout"]) {
-   canvas.addEventListener(event, clearHover, { signal: this.#chartController.signal });
-  }
   const timings = series.flatMap((entry) => entry.axes.map((axis) => axis.medianMs)).filter(measured);
   const minimum = Math.min(...timings), maximum = Math.max(...timings);
   // Logarithmic bars retain small latencies across orders of magnitude.
@@ -389,13 +610,14 @@ export class SparqlFeaturesView {
    options: {
     indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: false,
     interaction: { mode: "nearest", intersect: true },
-    onHover: (_event, elements, chart) => {
-     const key = chart.data.datasets[elements[0]?.datasetIndex]?._engineKey;
-     this.#canvasHover.set(key ? { kind: "engine", key } : null);
-    },
     onClick: (_event, elements, chart) => {
-     const key = chart.data.datasets[elements[0]?.datasetIndex]?._engineKey;
-     if (key) focusStore.togglePin({ kind: "engine", key });
+     const el = elements[0];
+     if (!el) return;
+     const dataset = chart.data.datasets[el.datasetIndex];
+     const feature = features[el.index];
+     if (dataset?._engineKey && feature) {
+      focusStore.togglePin({ kind: "bar", engine: dataset._engineKey, feature, key: `${dataset._engineKey}|${feature}` });
+     }
     },
     layout: { padding: { top: 8, right: 16, bottom: 8 } },
     scales: {
@@ -416,101 +638,88 @@ export class SparqlFeaturesView {
       label: (context) => `${context.dataset.label}: ${milliseconds(context.raw)}`,
       afterLabel: (context) => {
        const axis = series[context.datasetIndex].axes.find((entry) => entry.feature === features[context.dataIndex]);
-       return `${axis.count}/${axis.total} queries · Median of query medians`;
+       return `${axis.count}/${axis.total} queries passed · Median of query medians`;
       },
      } },
     },
    },
   });
+  attachChartPointerInteraction(this.#chart, canvas, this.#canvasHover, this.#chartController.signal, (dataset, index) => {
+   const feature = features[index];
+   return dataset?._engineKey && feature ? { kind: "bar", engine: dataset._engineKey, feature, key: `${dataset._engineKey}|${feature}` } : null;
+  });
   this.#syncFocusVisuals();
  }
 
  #renderTable(queries, engines) {
-  const showDataset = !this.#state.dataset;
-  const baseColumns = [["id", "Query"], ["primaryFeature", "Feature"]];
-  if (showDataset) baseColumns.push(["dataset", "Dataset"]);
+  const baseColumns = [["id", "Query"], ["primaryFeature", "Feature"], ["dataset", "Dataset"]];
 
   const value = (query) => {
    const [field, engine] = this.#state.sort.split(":");
    if (!engine) return query[field];
    const run = this.#index.get(keyOf(query.dataset, query.id))?.get(engine);
-   return field === "status" ? statusOf(run) : measured(run?.[field]) ? run[field] : null;
+   if (field === "status") return statusOf(run);
+   return measured(run?.[field]) ? run[field] : null;
   };
 
   const sorted = [...queries].sort((a, b) => {
-   const av = value(a), bv = value(b);
-   if (av == null || bv == null) return av == null && bv == null ? a.id.localeCompare(b.id) : av == null ? 1 : -1;
+   const av = value(a);
+   const bv = value(b);
+   if (av == null || bv == null) {
+    if (av == null && bv == null) return a.id.localeCompare(b.id);
+    return av == null ? 1 : -1;
+   }
    const diff = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv), "en", { numeric: true });
    return (this.#state.direction === "desc" ? -diff : diff) || a.id.localeCompare(b.id);
   });
 
-  const header = (key, label) => `<th scope="col"${this.#state.sort === key ? ` aria-sort="${this.#state.direction === "asc" ? "ascending" : "descending"}"` : ""}><button type="button" data-sf-sort="${esc(key)}" aria-label="Sort by ${esc(label)}">${esc(label)}</button></th>`;
+  const header = (key, label) => {
+   const isSorted = this.#state.sort === key;
+   const sortDir = this.#state.direction === "asc" ? "ascending" : "descending";
+   const ariaSort = isSorted ? ` aria-sort="${sortDir}"` : "";
+   return `<th scope="col"${ariaSort}><button type="button" data-sf-sort="${esc(key)}" aria-label="Sort by ${esc(label)}">${esc(label)}</button></th>`;
+  };
+
   const engineHeader = (engine) => {
    const sortKey = `medianMs:${engine}`;
    const isSorted = this.#state.sort === sortKey;
-   const ariaSort = isSorted ? ` aria-sort="${this.#state.direction === "asc" ? "ascending" : "descending"}"` : "";
+   const sortDir = this.#state.direction === "asc" ? "ascending" : "descending";
+   const ariaSort = isSorted ? ` aria-sort="${sortDir}"` : "";
    const indicator = renderEngineIndicatorSvg(getEngineStyle(parseEngineId(engine), this.#data.enginesCatalog));
    return `<th scope="col" data-engine-key="${esc(engine)}" style="text-align: right;"${ariaSort}><button type="button" data-sf-sort="${esc(sortKey)}" aria-label="Sort by ${esc(engine)} median execution time" style="display: inline-flex; align-items: center; justify-content: flex-end; width: 100%; gap: 6px;">${indicator}<span>${esc(engine)}</span></button></th>`;
   };
 
   this.#root.querySelector("[data-sf-table]").innerHTML = `<table class="data-table"><thead>
    <tr>${baseColumns.map(([key, label]) => header(key, label)).join("")}${engines.map(engineHeader).join("")}</tr></thead>
-   <tbody>${sorted.map((query) => `<tr data-sf-query="${esc(keyOf(query.dataset, query.id))}"><th scope="row"><button type="button" title="${esc(query.name)}" aria-label="Open ${esc(query.id)}: ${esc(query.name)}">${esc(query.id)}</button></th><td>${esc(FEATURES[query.primaryFeature])}</td>${showDataset ? `<td>${esc(query.dataset)}</td>` : ""}${engines.map((engine) => {
-    const run = this.#index.get(keyOf(query.dataset, query.id))?.get(engine);
-    const status = statusOf(run);
-    const num = (v) => measured(v) ? v.toLocaleString("en", { maximumFractionDigits: 3 }) : "—";
-    const cellTooltip = `${esc(engine)}: ${num(run?.medianMs)} ms (TTFR: ${num(run?.medianTtfrMs)} ms) · Status: ${status}`;
-    if (status === "PASS") {
-     return `<td data-engine-key="${esc(engine)}" style="text-align: right; font-variant-numeric: tabular-nums;" title="${cellTooltip}">${num(run?.medianMs)} ms</td>`;
-    }
-    return `<td data-engine-key="${esc(engine)}" style="text-align: right;" title="${cellTooltip}">${badge(status)}</td>`;
-   }).join("")}</tr>`).join("")}</tbody></table>`;
+   <tbody>${sorted.map((query) => {
+    const dsInfo = DATASET_CONFIGS[query.dataset] || { name: query.dataset, shortFile: "" };
+    const qKey = keyOf(query.dataset, query.id);
+    return `<tr data-sf-query="${esc(qKey)}"><th scope="row"><div style="display: inline-flex; align-items: center; gap: 4px;"><button type="button" data-sf-query-toggle title="Pin query ${esc(query.id)}" aria-label="Pin query ${esc(query.id)}: ${esc(query.name)}" aria-pressed="false">${esc(query.id)}</button><button type="button" class="sf-query-link-btn" data-sf-jump-query="${esc(qKey)}" title="View SPARQL source in Protocol catalogue ↑">Source ↗</button></div></th><td>${esc(FEATURES[query.primaryFeature])}</td><td><div style="line-height: 1.3;"><strong>${esc(dsInfo.name)}</strong><br><span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${esc(dsInfo.shortFile)}</span></div></td>${engines.map((engine) => {
+     const run = this.#index.get(keyOf(query.dataset, query.id))?.get(engine);
+     const status = statusOf(run);
+     const num = (v) => measured(v) ? v.toLocaleString("en", { maximumFractionDigits: 3 }) : "—";
+     const cellTooltip = `${esc(engine)}: ${num(run?.medianMs)} ms (TTFR: ${num(run?.medianTtfrMs)} ms) · Status: ${esc(status)}`;
+     const cellKey = `${engine}|${qKey}`;
+     if (status === "PASS") {
+      return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right; font-variant-numeric: tabular-nums;" title="${cellTooltip}">${num(run?.medianMs)} ms</td>`;
+     }
+     return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right;" title="${cellTooltip}">${badge(status)}</td>`;
+    }).join("")}</tr>`;
+   }).join("")}</tbody></table>`;
   this.#syncFocusVisuals();
  }
 
- async #openQuery(key) {
-  const query = this.#catalogue.queries.find((entry) => keyOf(entry.dataset, entry.id) === key);
-  if (!query) return;
-  this.#sourceController?.abort();
-  const controller = new AbortController();
-  this.#sourceController = controller;
-  const dialog = this.#root.querySelector("dialog");
-  dialog.querySelector("h3").textContent = `${query.id} · ${query.name}`;
-  dialog.querySelector("[data-sf-query-meta]").textContent = `${query.dataset} · ${FEATURES[query.primaryFeature]} · ${query.validationMode || this.#catalogue.defaults?.validationMode || "Not reported"}`;
-  
-  // Render performance summary table inside dialog
-  const perfDiv = dialog.querySelector("[data-sf-query-perf]");
-  const engines = this.#engineKeys();
-  const num = (v) => measured(v) ? `${v.toLocaleString("en", { maximumFractionDigits: 3 })} ms` : "—";
-  perfDiv.innerHTML = `<table class="data-table" style="font-size: 12px; margin-bottom: 12px;">
-   <thead><tr><th scope="col">Engine</th><th scope="col" style="text-align: right;">Median</th><th scope="col" style="text-align: right;">TTFR</th><th scope="col" style="text-align: center;">Status</th></tr></thead>
-   <tbody>${engines.map((engine) => {
-    const run = this.#index.get(keyOf(query.dataset, query.id))?.get(engine);
-    const style = getEngineStyle(parseEngineId(engine), this.#data.enginesCatalog);
-    const indicator = renderEngineIndicatorSvg(style);
-    return `<tr><td><span style="display: inline-flex; align-items: center; gap: 6px;">${indicator}<strong>${esc(engine)}</strong></span></td><td style="text-align: right; font-variant-numeric: tabular-nums;">${num(run?.medianMs)}</td><td style="text-align: right; font-variant-numeric: tabular-nums;">${num(run?.medianTtfrMs)}</td><td style="text-align: center;">${badge(statusOf(run))}</td></tr>`;
-   }).join("")}</tbody></table>`;
-
-  const status = dialog.querySelector("[data-sf-source-status]");
-  const code = dialog.querySelector("code");
-  code.textContent = "";
-  status.textContent = "Loading query…";
-  if (!dialog.open) dialog.showModal();
-  try {
-   if (typeof query.file !== "string" || !/^[\w-]+\/[\w.-]+\.rq$/.test(query.file)) throw new Error("Invalid source");
-   let source = this.#sourceCache.get(query.file);
-   if (source === undefined) {
-    const response = await fetch(`data/sparql/v1/${query.file}`, { signal: controller.signal });
-    if (!response.ok) throw new Error("Source unavailable");
-    source = await response.text();
-    if (controller.signal.aborted) return;
-    this.#sourceCache.set(query.file, source);
-   }
-   if (controller.signal.aborted) return;
-   code.innerHTML = highlightSparql(source);
-   status.textContent = query.file;
-  } catch {
-   if (!controller.signal.aborted) status.textContent = "Query source unavailable.";
+ async #fetchQuerySource(file, signal) {
+  if (typeof file !== "string" || !/^[\w-]+\/[\w.-]+\.rq$/.test(file)) {
+   throw new Error("Invalid query file path");
   }
+  let source = this.#sourceCache.get(file);
+  if (source === undefined) {
+   const response = await fetch(`data/sparql/v1/${file}`, { signal });
+   if (!response.ok) throw new Error("Source unavailable");
+   source = await response.text();
+   this.#sourceCache.set(file, source);
+  }
+  return source;
  }
 }

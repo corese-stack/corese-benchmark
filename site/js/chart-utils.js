@@ -94,8 +94,14 @@ export function findBarElement(chart, x, y) {
 /**
  * Attaches pointer interactions (pointermove, pointerleave, scroll) on a Chart.js canvas
  * and binds hover focus target updates cleanly with AbortSignal lifecycle.
+ *
+ * @param {object} chart - Chart.js instance
+ * @param {HTMLCanvasElement} canvas - The canvas element
+ * @param {object} hoverTarget - hoverSource instance (with .set() and .clear())
+ * @param {AbortSignal} signal - AbortSignal for event cleanup
+ * @param {Function} [resolveTarget] - Optional callback (dataset, index) => { kind, key } or null
  */
-export function attachChartPointerInteraction(chart, canvas, activeFormats, hoverTarget, signal) {
+export function attachChartPointerInteraction(chart, canvas, hoverTarget, signal, resolveTarget = null) {
 	const clearState = () => clearChartInteraction(chart, hoverTarget);
 
 	canvas.addEventListener("pointerleave", clearState, { signal });
@@ -117,10 +123,15 @@ export function attachChartPointerInteraction(chart, canvas, activeFormats, hove
 			const hit = findBarElement(chart, x, y);
 			if (hit) {
 				const dataset = chart.data.datasets[hit.datasetIndex];
-				const format = activeFormats[hit.index];
-				if (dataset && format) {
-					const measureKey = `${dataset._engineKey}|${format}`;
-					hoverTarget.set({ kind: "measure", key: measureKey });
+				let target = null;
+				if (resolveTarget) {
+					target = resolveTarget(dataset, hit.index);
+				} else if (dataset?._engineKey) {
+					target = { kind: "engine", key: dataset._engineKey };
+				}
+
+				if (target) {
+					hoverTarget.set(target);
 					const activeElements = [{ datasetIndex: hit.datasetIndex, index: hit.index }];
 					chart.setActiveElements(activeElements);
 					if (chart.tooltip) {
@@ -182,7 +193,7 @@ export function createEngineLegendConfig({ onEngineHover, onEngineLeave, onEngin
 					const baseColor = ds._baseColor || "#888";
 
 					let isMatch = true;
-					if (focus) {
+					if (focus && engineKeyOf(focus.target)) {
 						isMatch = matchesEngine(focus.target, ds._engineKey);
 					}
 
@@ -197,7 +208,7 @@ export function createEngineLegendConfig({ onEngineHover, onEngineLeave, onEngin
 				const focus = focusStore.effectiveFocus;
 				const dsIndex = ctx.datasetIndex;
 				const ds = ctx.chart.data.datasets[dsIndex];
-				if (!ds || !focus) return textColor;
+				if (!ds || !focus || !engineKeyOf(focus.target)) return textColor;
 
 				return matchesEngine(focus.target, ds._engineKey) ? textColor : "rgba(128, 128, 128, 0.4)";
 			},

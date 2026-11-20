@@ -211,12 +211,10 @@ export class EngineManager extends EventTarget {
 	#pendingRafs = new Set();
 	#autoScrollRaf = null;
 	#resizeObserver = null;
-	#highlightTimeout = null;
 	#middleClickArmedKey = null;
 	#activeGhosts = new Set();
 	#ghostTimeouts = new Set();
 	#dragSuppressedClick = false;
-	#currentHoverToken = null;
 
 	constructor() {
 		super();
@@ -331,7 +329,6 @@ export class EngineManager extends EventTarget {
 	}
 
 	#chipPointerHover = hoverSource();
-	#chipFocusHover = hoverSource();
 
 	togglePinEngine(key) {
 		focusStore.togglePin({ kind: "engine", key });
@@ -725,12 +722,12 @@ export class EngineManager extends EventTarget {
 			"focus-changed",
 			(e) => {
 				const { focus, rawState } = e.detail;
-				const effectiveEngineKey =
-					focus?.target.kind === "engine"
-						? focus.target.key
-						: focus?.target.kind === "measure"
-							? focus.target.key.split("|")[0]
-							: null;
+				let effectiveEngineKey = null;
+				if (focus?.target.kind === "engine") {
+					effectiveEngineKey = focus.target.key;
+				} else if (focus?.target.kind === "measure") {
+					effectiveEngineKey = focus.target.key.split("|")[0];
+				}
 
 				const pinnedEngineKey =
 					rawState.pinned?.kind === "engine"

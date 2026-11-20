@@ -14,14 +14,148 @@ export function sameTarget(a, b) {
 }
 
 /**
- * Extracts canonical engine key from a focus target (engine or measure).
+ * Extracts canonical engine key from a focus target (engine, measure, cell, or bar).
  * Returns null if target is null or not resolvable to an engine.
  */
 export function engineKeyOf(target) {
 	if (!target?.key) return null;
 	if (target.kind === "engine") return target.key;
-	if (target.kind === "measure") return target.key.split("|")[0];
+	if (target.kind === "measure" || target.kind === "bar") return target.key.split("|")[0];
+	if (target.kind === "cell") {
+		// Key format: `${engine}|${JSON.stringify([dataset, queryId])}`
+		const idx = target.key.indexOf("|");
+		return idx !== -1 ? target.key.slice(0, idx) : null;
+	}
 	return null;
+}
+
+function presentationForQuery(tKey, item, resolveFeature) {
+	if (item.queryKey) return item.queryKey === tKey ? "selected" : "unrelated";
+	if (item.feature) {
+		const queryFeature = resolveFeature(tKey);
+		return queryFeature && item.feature === queryFeature ? "related" : "unrelated";
+	}
+	return "unrelated";
+}
+
+function cellPresentationDetailed(item, cellEngine, cellQueryKey, resolveFeature) {
+	if (item.kind === "cell" || (item.engine && item.queryKey)) {
+		return item.engine === cellEngine && item.queryKey === cellQueryKey ? "selected" : "unrelated";
+	}
+	if (item.engine && item.feature) {
+		return item.engine === cellEngine && item.feature === resolveFeature(cellQueryKey) ? "related" : "unrelated";
+	}
+	return null;
+}
+
+function presentationForCell(focusTarget, tKey, item, resolveFeature) {
+	const cellEngine = engineKeyOf(focusTarget);
+	const cellQueryKey = tKey.slice(tKey.indexOf("|") + 1);
+
+	const detailed = cellPresentationDetailed(item, cellEngine, cellQueryKey, resolveFeature);
+	if (detailed) return detailed;
+
+	if (item.queryKey) {
+		return item.queryKey === cellQueryKey ? "related" : "unrelated";
+	}
+	if (item.engine) {
+		return item.engine === cellEngine ? "related" : "unrelated";
+	}
+	return "unrelated";
+}
+
+function barPresentationDetailed(item, barEngine, barFeature, resolveFeature) {
+	if (item.engine && item.feature) {
+		return item.engine === barEngine && item.feature === barFeature ? "selected" : "unrelated";
+	}
+	if (item.engine && item.queryKey) {
+		const qFeature = resolveFeature(item.queryKey);
+		return item.engine === barEngine && qFeature === barFeature ? "related" : "unrelated";
+	}
+	return null;
+}
+
+function presentationForBar(focusTarget, tKey, item, resolveFeature) {
+	const barEngine = engineKeyOf(focusTarget);
+	const barFeature = tKey.slice(tKey.indexOf("|") + 1);
+
+	const detailed = barPresentationDetailed(item, barEngine, barFeature, resolveFeature);
+	if (detailed) return detailed;
+
+	if (item.queryKey) {
+		const qFeature = resolveFeature(item.queryKey);
+		return qFeature === barFeature ? "related" : "unrelated";
+	}
+	if (item.engine) {
+		return item.engine === barEngine ? "related" : "unrelated";
+	}
+	return "unrelated";
+}
+
+function presentationForFeature(tKey, item, resolveFeature) {
+	if (item.feature) {
+		return item.feature === tKey ? "selected" : "unrelated";
+	}
+	if (item.queryKey) {
+		return resolveFeature(item.queryKey) === tKey ? "related" : "unrelated";
+	}
+	return "neutral";
+}
+
+function presentationForEngine(tKey, item) {
+	if (!item.engine) return "neutral";
+	return item.engine === tKey ? "selected" : "unrelated";
+}
+
+function presentationForMeasure(tKey, item) {
+	if (item.measureKey) {
+		return item.measureKey === tKey ? "selected" : "unrelated";
+	}
+	if (!item.engine) return "unrelated";
+	const mEngine = tKey.split("|")[0];
+	return item.engine === mEngine ? "related" : "unrelated";
+}
+
+function createFeatureResolver(context) {
+	return (qKey) => {
+		if (!qKey || !context) return null;
+		if (context instanceof Map) return context.get(qKey) || null;
+		if (typeof context.getFeature === "function") return context.getFeature(qKey) || null;
+		return context[qKey] || null;
+	};
+}
+
+/**
+ * Resolves presentation state for an entity given the current focus target and catalogue relationships.
+ * Returns: 'selected' | 'related' | 'unrelated' | 'neutral'
+ *
+ * @param {object|null} focusTarget - { kind: 'engine' | 'measure' | 'query' | 'feature' | 'cell', key: string }
+ * @param {object} item - Query or Measure descriptor:
+ *   { kind: 'query'|'cell'|'bar'|'row'|'engine', engine?, queryKey?, feature?, dataset?, queryId? }
+ * @param {Map|object} [context] - Optional relationships (e.g. queryKey -> feature)
+ */
+export function presentationFor(focusTarget, item, context = null) {
+	if (!focusTarget?.key) return "neutral";
+
+	const resolveFeature = createFeatureResolver(context);
+	const { kind: tKind, key: tKey } = focusTarget;
+
+	switch (tKind) {
+	case "engine":
+		return presentationForEngine(tKey, item);
+	case "query":
+		return presentationForQuery(tKey, item, resolveFeature);
+	case "feature":
+		return presentationForFeature(tKey, item, resolveFeature);
+	case "cell":
+		return presentationForCell(focusTarget, tKey, item, resolveFeature);
+	case "bar":
+		return presentationForBar(focusTarget, tKey, item, resolveFeature);
+	case "measure":
+		return presentationForMeasure(tKey, item);
+	default:
+		return "neutral";
+	}
 }
 
 /**

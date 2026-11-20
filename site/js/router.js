@@ -215,6 +215,14 @@ export function parseUrlSparql(searchStr) {
   pin = { kind: "engine", key: rawPin.slice(7) };
  } else if (rawPin.startsWith("measure:")) {
   pin = { kind: "measure", key: rawPin.slice(8) };
+ } else if (rawPin.startsWith("query:")) {
+  pin = { kind: "query", key: rawPin.slice(6) };
+ } else if (rawPin.startsWith("cell:")) {
+  pin = { kind: "cell", key: rawPin.slice(5) };
+ } else if (rawPin.startsWith("bar:")) {
+  pin = { kind: "bar", key: rawPin.slice(4) };
+ } else if (rawPin.startsWith("feature:")) {
+  pin = { kind: "feature", key: rawPin.slice(8) };
  }
  return {
   reference: params.get("sf-ref") || "",

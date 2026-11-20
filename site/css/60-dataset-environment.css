@@ -1,0 +1,186 @@
+/* ==========================================================================
+   Dataset Card & Environment Specs
+   ========================================================================== */
+
+.dataset-meta-card {
+	padding: 24px;
+}
+
+.dataset-meta-card__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 12px;
+}
+
+.dataset-meta-card__title {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--text);
+}
+
+.dataset-meta-card__cat {
+	font-size: 12px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.dataset-meta-card__triples {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+}
+
+.dataset-meta-card__desc {
+	margin: 0;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--text-muted);
+	max-width: 800px;
+}
+
+.env-spec-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 16px;
+	padding: 20px;
+}
+
+.spec-block {
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.spec-block__title {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-bottom: 4px;
+}
+
+.spec-block__item {
+	font-size: 13px;
+	color: var(--text);
+}
+
+.jvm-flags-box {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+}
+
+.jvm-flag {
+	font-size: 11px;
+	padding: 3px 6px;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: var(--text);
+}
+
+.protocol-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 16px;
+	padding: 20px;
+}
+
+.protocol-card {
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.protocol-card__title {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+}
+
+.protocol-card__value {
+	font-size: 22px;
+	font-weight: 700;
+	color: var(--text);
+}
+
+.protocol-card__desc {
+	margin: 0;
+	font-size: 12px;
+	color: var(--text-muted);
+	line-height: 1.4;
+}
+
+.chart-svg-container {
+	width: 100%;
+	overflow-x: auto;
+}
+
+.chart-svg {
+	width: 100%;
+	height: auto;
+	display: block;
+}
+
+.chart-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid var(--border);
+}
+
+.chart-legend-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--text);
+}
+
+.chart-legend-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+}
+
+/* ==========================================================================
+   Engine Chip Reordering & Drag States
+   ========================================================================== */
+
+.engine-chip.is-dragging {
+	cursor: grabbing;
+	z-index: 1000;
+	will-change: transform;
+	box-shadow:
+		0 4px 10px rgba(0, 0, 0, 0.16),
+		0 1px 2px rgba(0, 0, 0, 0.08);
+	border-color: var(--focus);
+	background: var(--bg);
+	transition: none;
+}
+
+.engine-chip.is-settling {
+	z-index: 999;
+	cursor: grabbing;
+	will-change: transform;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	transition: transform var(--chip-settle-duration)
+		cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
