@@ -159,8 +159,8 @@ public class ConvertDatasets {
             } catch (Exception e) {
                 log.debug("Failed to delete temp file {}: {}", tempFile, e.getMessage());
             }
-            log.error("  Could not generate {} for {}: {}", formatName, sourceNt.getFileName(), t.getMessage(), t);
-            throw new IllegalStateException("Failed to generate " + formatName + " for " + sourceNt.getFileName(), t);
+            log.warn("  Skipping format {} for {} (format serialization constraint or unsupported IRI: {})",
+                    formatName, sourceNt.getFileName(), t.getMessage());
         }
     }
 
