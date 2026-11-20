@@ -750,7 +750,7 @@ elif args.engines:
     expected_output_files = [
         os.path.join(
             out_json_dir,
-            f"{timestamp}{"_" + ds if len(dataset_names) > 1 else ""}_{engines_tag}.json",
+            f"{timestamp}_{ds}_{engines_tag}.json" if len(dataset_names) > 1 else f"{timestamp}_{engines_tag}.json",
         )
         for ds in dataset_names
     ]
