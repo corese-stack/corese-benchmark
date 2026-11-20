@@ -48,6 +48,23 @@ class WorkflowQueriesTest(unittest.TestCase):
             self.namespace["run_benchmark"]("jena", "out.json", "lubm", "/tmp/data")
             self.assertIn(__file__, run.call_args.args[0][-1])
 
+    def test_validate_single_report_rejects_null_runs(self):
+        project = Path(__file__).resolve().parents[2]
+        source = ast.parse((project / "python-utils" / "workflow.py").read_text())
+        names = {"_validate_run_list", "_validate_single_report_dict"}
+        selected = [n for n in source.body if isinstance(n, ast.FunctionDef) and n.name in names]
+        ns = {}
+        exec(compile(ast.Module(body=selected, type_ignores=[]), "workflow.py", "exec"), ns)
+        validate = ns["_validate_single_report_dict"]
+
+        for key in ("runs", "loadingRuns", "queryRuns"):
+            with self.subTest(key=key):
+                report = {"metadata": {}, "runs": [{}], "queryRuns": [{}]}
+                report[key] = None
+                with self.assertRaises(RuntimeError) as ctx:
+                    validate(report, "test.json")
+                self.assertIn(f"non-list '{key}' field", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

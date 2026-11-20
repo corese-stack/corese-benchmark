@@ -20,18 +20,25 @@ TMP_RUNS_DIR = os.path.join(PROJECT_DIR, "build", "day_runs")
 NIGHT_RUNS_DIR = os.path.join(PROJECT_DIR, "build", "night_runs")
 JSON_GLOB = "*.json"
 
+# Seuil temporel de coupure pour la nouvelle campagne propre du week-end
+CAMPAIGN_CUTOFF_DATE = "2026-11-20T17:00:00Z"
+
 def run_cmd(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
 def fetch_latest_artifacts():
     os.makedirs(TMP_RUNS_DIR, exist_ok=True)
-    res = run_cmd("gh run list --repo corese-stack/corese-benchmark --workflow=ci.yml --limit 10 --json databaseId,status,conclusion,updatedAt")
+    res = run_cmd("gh run list --repo corese-stack/corese-benchmark --workflow=ci.yml --limit 20 --json databaseId,status,conclusion,updatedAt,createdAt,headBranch")
     if res.returncode != 0:
         print("[sync] Error listing runs:", res.stderr)
         return []
     runs = json.loads(res.stdout)
     downloaded = []
     for r in runs:
+        # Ignore runs prior to new campaign reset
+        created = r.get("createdAt") or r.get("updatedAt") or ""
+        if created < CAMPAIGN_CUTOFF_DATE:
+            continue
         if r.get("status") == "completed" and r.get("conclusion") == "success":
             rid = str(r["databaseId"])
             target_dir = os.path.join(TMP_RUNS_DIR, f"run-{rid}")

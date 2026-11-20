@@ -66,9 +66,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DEFAULT_CORESE_NEXT_COMMIT: 489efac76510c91673c24f240408b71ba30a5874
-  BASE_ENGINES: corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb
-  ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm
+  DEFAULT_CORESE_NEXT_COMMIT: c96f23df4b408b892a91a24d889757de0f4d6c1f
+  BASE_ENGINES: corese.next,corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb
+  ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm,named-graphs
 
 jobs:
 

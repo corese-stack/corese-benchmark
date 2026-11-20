@@ -39,6 +39,7 @@ public final class DriverFactory {
      *         {@code corese.next} is requested but the Corese 5 JAR is absent
      */
     public static TripleStoreDriver create(String engineName, boolean inference) {
+        EngineRuntimeVerifier.verifyEngineName(engineName);
         if ("corese.next".equals(engineName) || "corese.local".equals(engineName)) {
             return createCoreseNext(engineName);
         } else if (engineName.startsWith("corese.")) {

@@ -4,11 +4,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,34 +20,45 @@ class PersistentStorageDriverTest {
             "ex:s1 ex:p ex:o1 .\n" +
             "ex:s2 ex:p \"literal value\" .\n";
 
+    static Stream<String> persistentEngineNames() {
+        return Stream.of(
+            "jena." + EngineRuntimeVerifier.getExpectedJenaVersion() + ".tdb2",
+            "rdf4j." + EngineRuntimeVerifier.getExpectedRdf4jVersion() + ".native",
+            "rdf4j." + EngineRuntimeVerifier.getExpectedRdf4jVersion() + ".lmdb"
+        );
+    }
+
     @Test
     @DisplayName("DriverFactory correctly instantiates storage variations")
     void testDriverFactoryStorageModes() {
-        TripleStoreDriver jenaMem = DriverFactory.create("jena.6.2.0", false);
+        String jenaVer = EngineRuntimeVerifier.getExpectedJenaVersion();
+        String rdf4jVer = EngineRuntimeVerifier.getExpectedRdf4jVersion();
+
+        TripleStoreDriver jenaMem = DriverFactory.create("jena." + jenaVer, false);
         assertInstanceOf(JenaDriver.class, jenaMem);
         assertFalse(((JenaDriver) jenaMem).isTdb2());
 
-        TripleStoreDriver jenaTdb2 = DriverFactory.create("jena.6.2.0.tdb2", false);
+        TripleStoreDriver jenaTdb2 = DriverFactory.create("jena." + jenaVer + ".tdb2", false);
         assertInstanceOf(JenaDriver.class, jenaTdb2);
         assertTrue(((JenaDriver) jenaTdb2).isTdb2());
 
-        TripleStoreDriver rdf4jMem = DriverFactory.create("rdf4j.5.3.2", false);
+        TripleStoreDriver rdf4jMem = DriverFactory.create("rdf4j." + rdf4jVer, false);
         assertInstanceOf(RDF4JDriver.class, rdf4jMem);
         assertFalse(((RDF4JDriver) rdf4jMem).isNativeStore());
 
-        TripleStoreDriver rdf4jNative = DriverFactory.create("rdf4j.5.3.2.native", false);
+        TripleStoreDriver rdf4jNative = DriverFactory.create("rdf4j." + rdf4jVer + ".native", false);
         assertInstanceOf(RDF4JDriver.class, rdf4jNative);
         assertTrue(((RDF4JDriver) rdf4jNative).isNativeStore());
         assertFalse(((RDF4JDriver) rdf4jNative).isLmdbStore());
 
-        TripleStoreDriver rdf4jLmdb = DriverFactory.create("rdf4j.5.3.2.lmdb", false);
+        TripleStoreDriver rdf4jLmdb = DriverFactory.create("rdf4j." + rdf4jVer + ".lmdb", false);
         assertInstanceOf(RDF4JDriver.class, rdf4jLmdb);
         assertTrue(((RDF4JDriver) rdf4jLmdb).isLmdbStore());
         assertFalse(((RDF4JDriver) rdf4jLmdb).isNativeStore());
     }
 
     @ParameterizedTest(name = "Persistent driver {0} loads, queries, clears, and closes")
-    @ValueSource(strings = {"jena.test.tdb2", "rdf4j.test.native", "rdf4j.test.lmdb"})
+    @MethodSource("persistentEngineNames")
     void testPersistentDriverLifecycle(String engineName, @TempDir Path tempDir) throws Exception {
         Path file = tempDir.resolve("sample.ttl");
         Files.writeString(file, TURTLE_SAMPLE);

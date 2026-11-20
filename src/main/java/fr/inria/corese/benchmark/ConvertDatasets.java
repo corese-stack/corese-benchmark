@@ -94,9 +94,11 @@ public class ConvertDatasets {
             }
             convertFile(ntFile);
         } catch (OutOfMemoryError oom) {
-            log.error("Out of memory converting file: {} — skipping to protect pipeline", ntFile.getFileName());
+            log.error("Out of memory converting file: {} — aborting conversion", ntFile.getFileName(), oom);
+            throw new IllegalStateException("OOM converting " + ntFile.getFileName(), oom);
         } catch (Exception e) {
-            log.error("Failed to convert file {}: {} — skipping", ntFile.getFileName(), e.getMessage());
+            log.error("Failed to convert file {}: {}", ntFile.getFileName(), e.getMessage(), e);
+            throw new IllegalStateException("Failed to convert " + ntFile.getFileName(), e);
         }
     }
 
@@ -135,13 +137,7 @@ public class ConvertDatasets {
 
         // 6. RDFa (.html) XHTML+RDFa 1.1 representation
         Path htmlFile = ntFile.resolveSibling(baseName + ".html");
-        safeGenerateFile(htmlFile, out -> {
-            try {
-                writeRdfaHtml(model, htmlFile, baseName);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }, "RDFa", ntFile);
+        safeGenerateFile(htmlFile, out -> writeRdfaHtml(model, out, baseName), "RDFa", ntFile);
     }
 
     @FunctionalInterface
@@ -163,58 +159,59 @@ public class ConvertDatasets {
             } catch (Exception e) {
                 log.debug("Failed to delete temp file {}: {}", tempFile, e.getMessage());
             }
-            log.warn("  Could not generate {} for {}: {}", formatName, sourceNt.getFileName(), t.getMessage());
+            log.error("  Could not generate {} for {}: {}", formatName, sourceNt.getFileName(), t.getMessage(), t);
+            throw new IllegalStateException("Failed to generate " + formatName + " for " + sourceNt.getFileName(), t);
         }
     }
 
-    private static void writeRdfaHtml(Model model, Path htmlFile, String title) throws IOException {
-        try (var writer = Files.newBufferedWriter(htmlFile, StandardCharsets.UTF_8)) {
-            writer.write("<!DOCTYPE html>\n");
-            writer.write("<html xmlns=\"http://www.w3.org/1999/xhtml\" version=\"XHTML+RDFa 1.1\" prefix=\"rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns# rdfs: http://www.w3.org/2000/01/rdf-schema# xsd: http://www.w3.org/2001/XMLSchema#\">\n");
-            writer.write("<head><title>");
-            writer.write(escapeXml(title));
-            writer.write("</title></head>\n<body>\n<div>\n");
+    private static void writeRdfaHtml(Model model, OutputStream out, String title) throws IOException {
+        var writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(out, StandardCharsets.UTF_8));
+        writer.write("<!DOCTYPE html>\n");
+        writer.write("<html xmlns=\"http://www.w3.org/1999/xhtml\" version=\"XHTML+RDFa 1.1\" prefix=\"rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns# rdfs: http://www.w3.org/2000/01/rdf-schema# xsd: http://www.w3.org/2001/XMLSchema#\">\n");
+        writer.write("<head><title>");
+        writer.write(escapeXml(title));
+        writer.write("</title></head>\n<body>\n<div>\n");
 
-            var it = model.listStatements();
-            while (it.hasNext()) {
-                var stmt = it.nextStatement();
-                var s = stmt.getSubject();
-                var p = stmt.getPredicate();
-                var o = stmt.getObject();
+        var it = model.listStatements();
+        while (it.hasNext()) {
+            var stmt = it.nextStatement();
+            var s = stmt.getSubject();
+            var p = stmt.getPredicate();
+            var o = stmt.getObject();
 
-                String subjAttr = s.isURIResource() ? " about=\"" + escapeXml(s.getURI()) + "\"" : "";
-                String predAttr = " property=\"" + escapeXml(p.getURI()) + "\"";
+            String subjAttr = s.isURIResource() ? " about=\"" + escapeXml(s.getURI()) + "\"" : "";
+            String predAttr = " property=\"" + escapeXml(p.getURI()) + "\"";
 
-                writer.write("  <span");
-                writer.write(subjAttr);
-                writer.write(predAttr);
-                if (o.isURIResource()) {
-                    writer.write(" resource=\"");
-                    writer.write(escapeXml(o.asResource().getURI()));
-                    writer.write("\"></span>\n");
-                } else if (o.isLiteral()) {
-                    var lit = o.asLiteral();
-                    String dt = lit.getDatatypeURI();
-                    String lang = lit.getLanguage();
-                    if (dt != null && !dt.isEmpty()) {
-                        writer.write(" datatype=\"");
-                        writer.write(escapeXml(dt));
-                        writer.write("\"");
-                    }
-                    if (lang != null && !lang.isEmpty()) {
-                        writer.write(" xml:lang=\"");
-                        writer.write(escapeXml(lang));
-                        writer.write("\"");
-                    }
-                    writer.write(">");
-                    writer.write(escapeXml(lit.getLexicalForm()));
-                    writer.write("</span>\n");
-                } else {
-                    writer.write("></span>\n");
+            writer.write("  <span");
+            writer.write(subjAttr);
+            writer.write(predAttr);
+            if (o.isURIResource()) {
+                writer.write(" resource=\"");
+                writer.write(escapeXml(o.asResource().getURI()));
+                writer.write("\"></span>\n");
+            } else if (o.isLiteral()) {
+                var lit = o.asLiteral();
+                String dt = lit.getDatatypeURI();
+                String lang = lit.getLanguage();
+                if (dt != null && !dt.isEmpty()) {
+                    writer.write(" datatype=\"");
+                    writer.write(escapeXml(dt));
+                    writer.write("\"");
                 }
+                if (lang != null && !lang.isEmpty()) {
+                    writer.write(" xml:lang=\"");
+                    writer.write(escapeXml(lang));
+                    writer.write("\"");
+                }
+                writer.write(">");
+                writer.write(escapeXml(lit.getLexicalForm()));
+                writer.write("</span>\n");
+            } else {
+                writer.write("></span>\n");
             }
-            writer.write("</div>\n</body>\n</html>\n");
         }
+        writer.write("</div>\n</body>\n</html>\n");
+        writer.flush();
     }
 
     private static String escapeXml(String text) {

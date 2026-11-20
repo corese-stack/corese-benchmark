@@ -76,3 +76,4 @@ python-utils/datasets/__pycache__/
 ## #################################################################
 logs/
 *.log
+/archive_pre_campaign/

@@ -22,8 +22,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -149,6 +151,16 @@ public class Main {
         }
 
         BenchmarkOptions opts = parseOptions(args);
+        // Fail-Fast: validate entire engine matrix before launching benchmarks
+        for (String engineName : opts.engines()) {
+            try {
+                fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.verifyEngineName(engineName.trim());
+            } catch (IllegalArgumentException e) {
+                log.error("Engine matrix validation failed: {}", e.getMessage());
+                System.exit(1);
+                return;
+            }
+        }
         QueryInput queryInput = new QueryInput(Collections.emptyList(), null);
         if (opts.mode().includesQuery() && opts.queriesFile() != null) {
             try {
@@ -163,13 +175,14 @@ public class Main {
 
         List<FileResult> allFileResults = new ArrayList<>();
         List<QueryResult> allQueryResults = new ArrayList<>();
+        Map<String, Object> childEnvironment = new LinkedHashMap<>();
 
         BenchmarkProtocol proto = BenchmarkProtocol.fromOptions(opts.quick(), opts.queryTimeoutSecs());
         boolean shouldIsolate = opts.isolateProcess();
         for (String engineName : opts.engines()) {
             String cleanName = engineName.trim();
             if (shouldIsolate) {
-                runChild(cleanName, opts, allFileResults, allQueryResults);
+                runChild(cleanName, opts, allFileResults, allQueryResults, childEnvironment);
             } else {
                 runEngine(cleanName, opts, queryInput, allFileResults, allQueryResults, proto);
             }
@@ -178,7 +191,7 @@ public class Main {
         crossValidateQueries(allQueryResults);
 
         try {
-            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile(), proto);
+            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile(), proto, childEnvironment.isEmpty() ? null : childEnvironment);
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
             System.exit(1);
@@ -386,9 +399,11 @@ public class Main {
                 allQueryResults.addAll(queryResults);
             }
         } catch (OutOfMemoryError e) {
-            log.error("Engine {} ran out of memory on dataset '{}' — skipping to next engine", engineName, opts.datasetName(), e);
+            log.error("Engine {} ran out of memory on dataset '{}'", engineName, opts.datasetName(), e);
+            throw e;
         } catch (Exception e) {
-            log.error("Engine {} failed: {} — skipping to next engine", engineName, e.getMessage(), e);
+            log.error("Engine {} failed: {}", engineName, e.getMessage(), e);
+            throw new IllegalStateException("Execution failed for engine " + engineName, e);
         }
     }
 
@@ -397,7 +412,8 @@ public class Main {
         String engineName,
         BenchmarkOptions opts,
         List<FileResult> allFileResults,
-        List<QueryResult> allQueryResults
+        List<QueryResult> allQueryResults,
+        Map<String, Object> childEnvironment
     ) {
         log.info("Launching isolated child JVM for engine: {}", engineName);
         Path tmp = null;
@@ -411,18 +427,22 @@ public class Main {
             if (!completed) {
                 terminateProcessTree(p);
                 log.error("Engine {} timed out in isolated subprocess after {} minutes", engineName, timeoutMinutes);
+                throw new IllegalStateException("Subprocess execution timed out for engine " + engineName + " after " + timeoutMinutes + " minutes");
             } else if (p.exitValue() != 0) {
                 log.error("Engine {} failed in isolated subprocess with exit code {}", engineName, p.exitValue());
+                throw new IllegalStateException("Subprocess execution failed for engine " + engineName + " with exit code " + p.exitValue());
             }
             // Even if process failed partway through (e.g. OOM on one file), salvage whatever runs were recorded
-            readChildReport(tmp, allFileResults, allQueryResults);
+            readChildReport(tmp, allFileResults, allQueryResults, childEnvironment);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             terminateProcessTree(p);
             log.warn("Isolated execution interrupted for engine: {}", engineName);
+            throw new IllegalStateException("Execution interrupted for engine " + engineName, e);
         } catch (Exception e) {
             terminateProcessTree(p);
             log.error("Failed to run isolated subprocess for engine {}: {}", engineName, e.getMessage(), e);
+            throw (e instanceof RuntimeException re) ? re : new IllegalStateException(e);
         } finally {
             terminateProcessTree(p);
             if (tmp != null) {
@@ -438,13 +458,21 @@ public class Main {
     private static void readChildReport(
         Path tmp,
         List<FileResult> allFileResults,
-        List<QueryResult> allQueryResults
+        List<QueryResult> allQueryResults,
+        Map<String, Object> childEnvironment
     ) throws Exception {
         if (!Files.exists(tmp)) {
             return;
         }
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         JsonNode root = mapper.readTree(tmp.toFile());
+        if (childEnvironment.isEmpty() && root.has("metadata") && root.get("metadata").has("environment")) {
+            JsonNode envNode = root.get("metadata").get("environment");
+            Map<String, Object> envMap = mapper.convertValue(envNode, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            if (envMap != null) {
+                childEnvironment.putAll(envMap);
+            }
+        }
         if (root.has("loadingRuns")) {
             FileResult[] frs = mapper.treeToValue(root.get("loadingRuns"), FileResult[].class);
             allFileResults.addAll(Arrays.asList(frs));

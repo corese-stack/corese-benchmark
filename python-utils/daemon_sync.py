@@ -12,21 +12,19 @@ import sys
 PROJECT_DIR = "/home/rceres/Projects/Corese/corese-benchmark"
 ORCHESTRATE_SCRIPT = os.path.join(PROJECT_DIR, "python-utils", "orchestrate_day.py")
 
-DEFAULT_DATASETS = "dbpedia,bowlogna,lubm,bsbm"
+DEFAULT_DATASETS = "dbpedia,bowlogna,lubm,bsbm,named-graphs"
 DEFAULT_SCALES = "small,medium"
 
-# Liste ordonnée des configurations manquantes à exécuter progressivement
+# Liste ordonnée des configurations d'engins valides à exécuter progressivement
 WORKLOAD_QUEUE = [
-    # 1. Jena 6.2.0 (in progress / queued)
-    {"engines": "jena.6.2.0", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
-    # 2. Corese 4.6.5 (in progress / queued)
+    # 1. Corese Next (dernière version de feature/corese-next)
+    {"engines": "corese.next", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
+    # 2. Jena 6.2.0 (in-memory & tdb2)
+    {"engines": "jena.6.2.0,jena.6.2.0.tdb2", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
+    # 3. Corese 4.6.5 stable
     {"engines": "corese.4.6.5", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
-    # 3. RDF4J 5.3.2 (versions antérieures stables)
-    {"engines": "rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
-    # 4. Jena 6.1.0 & 6.1.0.tdb2
-    {"engines": "jena.6.1.0,jena.6.1.0.tdb2", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
-    # 5. RDF4J 5.3.1
-    {"engines": "rdf4j.5.3.1,rdf4j.5.3.1.lmdb", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES}
+    # 4. RDF4J 6.1.0 (in-memory, native, lmdb)
+    {"engines": "rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb", "datasets": DEFAULT_DATASETS, "scales": DEFAULT_SCALES},
 ]
 
 def log(msg):

@@ -53,6 +53,8 @@ class MainQueryInputTest {
 
     @Test
     void cliWritesFilteredCatalogueMetadataAndQueryText() throws Exception {
+        String jenaEngine = "jena." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedJenaVersion();
+        String rdf4jEngine = "rdf4j." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedRdf4jVersion();
         Path data = Files.createDirectory(directory.resolve("data"));
         Files.writeString(data.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
         String sparql = "SELECT * WHERE {\n ?s ?p ?o\n}\n";
@@ -66,7 +68,7 @@ class MainQueryInputTest {
                 ]}
                 """);
         Path output = directory.resolve("report.json");
-        Main.main(new String[]{data.toString(), output.toString(), "jena.test,rdf4j.test", "lubm",
+        Main.main(new String[]{data.toString(), output.toString(), jenaEngine + "," + rdf4jEngine, "lubm",
                 catalogue.toString(), "--quick", "--no-isolate"});
         var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
         assertEquals(2, report.path("queryRuns").size());
@@ -81,6 +83,7 @@ class MainQueryInputTest {
 
     @Test
     void cliHonorsBenchmarkModeLoadOnly() throws Exception {
+        String jenaEngine = "jena." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedJenaVersion();
         Path data = Files.createDirectory(directory.resolve("data-load-only"));
         Files.writeString(data.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
         Path catalogue = directory.resolve("workload-load.json");
@@ -91,7 +94,7 @@ class MainQueryInputTest {
                 """);
         Files.writeString(directory.resolve("q.rq"), "ASK {}");
         Path output = directory.resolve("report-load-only.json");
-        Main.main(new String[]{data.toString(), output.toString(), "jena.test", "lubm",
+        Main.main(new String[]{data.toString(), output.toString(), jenaEngine, "lubm",
                 catalogue.toString(), "--quick", "--no-isolate", "--benchmark-type", "load"});
         var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
         assertTrue(report.has("loadingRuns") && !report.path("loadingRuns").isEmpty());
@@ -100,6 +103,7 @@ class MainQueryInputTest {
 
     @Test
     void cliHonorsBenchmarkModeQueryOnly() throws Exception {
+        String jenaEngine = "jena." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedJenaVersion();
         Path data = Files.createDirectory(directory.resolve("data-query-only"));
         Files.writeString(data.resolve("lubm_small.nt"), "<urn:s> <urn:p> <urn:o> .");
         Path catalogue = directory.resolve("workload-query.json");
@@ -110,7 +114,7 @@ class MainQueryInputTest {
                 """);
         Files.writeString(directory.resolve("q.rq"), "ASK {}");
         Path output = directory.resolve("report-query-only.json");
-        Main.main(new String[]{data.toString(), output.toString(), "jena.test", "lubm",
+        Main.main(new String[]{data.toString(), output.toString(), jenaEngine, "lubm",
                 catalogue.toString(), "--quick", "--no-isolate", "--mode", "query"});
         var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
         assertTrue(report.path("loadingRuns").isEmpty());

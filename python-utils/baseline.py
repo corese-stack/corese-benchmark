@@ -17,7 +17,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-IMMUTABLE_ENGINES = ("corese.4.6.5", "jena.6.2.0", "rdf4j.5.3.2")
+IMMUTABLE_ENGINES = ("corese.4.6.5", "jena.6.2.0", "rdf4j.6.1.0")
 
 # SPARQL category patterns matching SparqlAnalyser.java
 _P_IRI = re.compile(r"<[^>]*>")

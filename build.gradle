@@ -107,6 +107,34 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 25
 }
 
+def jenaResolvedVersion = project.hasProperty('jenaVersion') ? project.jenaVersion : '6.2.0'
+def rdf4jResolvedVersion = project.hasProperty('rdf4jVersion') ? project.rdf4jVersion : '6.1.0'
+def coreseResolvedVersion = '4.6.5'
+if (project.hasProperty('coreseVersion')) {
+    coreseResolvedVersion = project.coreseVersion
+} else if (project.hasProperty('coreseCommit')) {
+    coreseResolvedVersion = 'commit'
+} else if (project.hasProperty('coreseJar')) {
+    coreseResolvedVersion = 'jar'
+}
+
+def generateEngineProperties = tasks.register('generateEngineProperties') {
+    def outputDir = layout.buildDirectory.dir("generated/engine-info")
+    outputs.dir(outputDir)
+    inputs.property("jenaVersion", jenaResolvedVersion)
+    inputs.property("rdf4jVersion", rdf4jResolvedVersion)
+    inputs.property("coreseVersion", coreseResolvedVersion)
+    doLast {
+        def dir = outputDir.get().asFile
+        dir.mkdirs()
+        def infoFile = new File(dir, "engine-runtimes.properties")
+        infoFile.text = "jena.version=${jenaResolvedVersion}\nrdf4j.version=${rdf4jResolvedVersion}\ncorese.version=${coreseResolvedVersion}\n"
+    }
+}
+
+sourceSets.main.output.dir(generateEngineProperties)
+classes.dependsOn(generateEngineProperties)
+
 test {
     useJUnitPlatform()
     maxHeapSize = '4g'

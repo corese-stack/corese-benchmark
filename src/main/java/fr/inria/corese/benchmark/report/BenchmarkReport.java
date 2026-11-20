@@ -52,6 +52,10 @@ public final class BenchmarkReport {
     }
 
     public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath, BenchmarkProtocol protocolConfig) throws Exception {
+        write(results, queryResults, queries, outputPath, protocolConfig, null);
+    }
+
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath, BenchmarkProtocol protocolConfig, Map<String, Object> environmentOverride) throws Exception {
         Map<String, Object> report = new LinkedHashMap<>();
 
         // Metadata
@@ -59,10 +63,14 @@ public final class BenchmarkReport {
         metadata.put("version", "2.0");
         metadata.put("generatedAt", Instant.now().toString());
 
-        try {
-            metadata.put("environment", SystemEnvironmentCollector.collect());
-        } catch (Exception e) {
-            log.warn("Could not collect system environment metadata: {}", e.getMessage());
+        if (environmentOverride != null && !environmentOverride.isEmpty()) {
+            metadata.put("environment", environmentOverride);
+        } else {
+            try {
+                metadata.put("environment", SystemEnvironmentCollector.collect());
+            } catch (Exception e) {
+                log.warn("Could not collect system environment metadata: {}", e.getMessage());
+            }
         }
 
         BenchmarkProtocol proto = (protocolConfig != null) ? protocolConfig : BenchmarkProtocol.defaultProtocol();
