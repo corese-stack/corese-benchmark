@@ -470,8 +470,8 @@ function renderDatasetCardHtml(ds, { queries, repoRef, activeDataset, mode, repo
 			</div>
 			<dl class="sf-dataset-card-facts">
 				<dt>File</dt><dd>${fileLink}</dd>
-				<dt>Graph</dt><dd><span class="sf-badge sf-badge--other">${esc(info.graph)}</span></dd>
-				<dt>Size</dt><dd><span class="sf-badge sf-badge--other" style="font-family: var(--font-mono);" data-sf-dataset-size="${esc(ds)}">${esc(sizeLabel)}</span></dd>
+				<dt>Graph</dt><dd>${esc(info.graph)}</dd>
+				<dt>Size</dt><dd data-sf-dataset-size="${esc(ds)}" style="font-variant-numeric: tabular-nums;">${esc(sizeLabel)}</dd>
 				${queryFacts}
 			</dl>
 			<div class="sf-dataset-card-footer">
