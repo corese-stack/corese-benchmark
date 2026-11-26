@@ -32,7 +32,11 @@ sys.path.insert(0, current_dir)
 from baseline import (
     IMMUTABLE_ENGINES,
     export_site_data,
+    has_scale_loading_coverage,
     load_baseline,
+    load_expected_v1_queries,
+    has_v1_query_coverage,
+    valid_loading_run,
     merge_reports,
     plan_engines,
     save_baseline,
@@ -337,7 +341,7 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
     cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
     print(f"Running benchmark: {' '.join(cmd)}")
     try:
-        subprocess.run(cmd, cwd=project_dir, check=True, stderr=subprocess.PIPE)
+        subprocess.run(cmd, cwd=project_dir, check=True, timeout=7200, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
         stderr_text = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
         if stderr_text:
@@ -448,7 +452,10 @@ def merge_json_files(file_list, output_file, no_delete=None):
     with open(output_file, "w") as f:
         _json_early.dump(merged, f, indent=2)
 
-    _keep = set(no_delete or [])
+    with open(output_file, encoding="utf-8") as stream:
+        _validate_single_report_dict(_json_early.load(stream), output_file)
+
+    _keep = set(no_delete or []) | {output_file}
     for path in file_list:
         if path not in _keep:
             os.remove(path)
@@ -571,11 +578,20 @@ elif args.engines:
             extra += [f"-Prdf4jVersion={versions['rdf4j']}"]
         return extra
 
+    expected_queries = load_expected_v1_queries()
+    expected_queries = {
+        ds: ids for ds, ids in expected_queries.items()
+        if QUERIES_FILES.get(ds, "").endswith("catalogue.json")
+        and args.benchmark_type != "load"
+    }
+    requested_scales = [s.strip() for s in args.scales.split(",") if s.strip()]
     baseline_data = load_baseline(args.baseline)
     execution_plan = plan_engines(
         engines_list,
         dataset_names,
         baseline_data,
+        expected_queries=expected_queries,
+        requested_scales=requested_scales,
         force_all=args.force_all_engines,
         update_baseline=args.update_baseline,
     )
@@ -593,7 +609,7 @@ elif args.engines:
         safe = engine.replace('.', '_')
         dst = os.path.join(cache_dir, f"{safe}_{ds}.json")
         runs = [
-            r for r in baseline_data.get("runs", [])
+            r for r in (baseline_data.get("runs") or baseline_data.get("loadingRuns") or [])
             if r.get("engine") == engine and r.get("dataset") == ds
         ]
         qruns = [
@@ -625,8 +641,19 @@ elif args.engines:
         try:
             with open(path) as _f:
                 _d = _json_early.load(_f)
-            has_load = isinstance(_d.get("runs"), list) and len(_d["runs"]) > 0
-            has_query = isinstance(_d.get("queryRuns"), list) and len(_d["queryRuns"]) > 0
+            _validate_single_report_dict(_d, path)
+            has_load = has_scale_loading_coverage(
+                _d.get("runs") or _d.get("loadingRuns") or [],
+                engine,
+                ds,
+                requested_scales,
+            )
+            has_query = any(
+                q.get("engine") == engine and q.get("dataset") == ds
+                for q in _d.get("queryRuns", [])
+            )
+            if ds in expected_queries:
+                has_query = has_v1_query_coverage(_d, engine, ds, expected_queries)
             mode = getattr(args, "benchmark_type", "all")
             if mode == "load" and has_load:
                 return path
@@ -634,7 +661,7 @@ elif args.engines:
                 return path
             if mode == "all" and has_load and (has_query or not QUERIES_FILES.get(ds)):
                 return path
-        except (ValueError, OSError):
+        except (ValueError, OSError, RuntimeError, TypeError):
             return None
         return None
 

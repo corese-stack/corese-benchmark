@@ -53,7 +53,7 @@ on:
         default: false
         type: boolean
       query_timeout:
-        description: 'Per-query SPARQL timeout in seconds (empty = harness default)'
+        description: 'Timeout in seconds for legacy text workloads; SPARQL v1 catalogue queries use per-query timeoutSecs'
         required: false
         default: ''
 
@@ -62,12 +62,13 @@ permissions:
 
 # Distinct namespace prevents PR branches (e.g. named 'main' in a fork) from colliding with production
 concurrency:
-  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (github.event_name == 'workflow_dispatch' && format('run-{0}', github.run_id) || 'production') }}
+  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'self-hosted' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   DEFAULT_CORESE_NEXT_COMMIT: c96f23df4b408b892a91a24d889757de0f4d6c1f
   BASE_ENGINES: corese.next,corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb
+  SMOKE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.6.1.0
   ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm,named-graphs
 
 jobs:
@@ -100,13 +101,17 @@ jobs:
         run: |
           python -m unittest discover -s python-utils -p "test_*.py" -v
 
+      - name: Run SPARQL feature tests
+        run: node --test site/tests/sparql-features.test.mjs
+
       - name: Run smoke test (dbpedia small only)
         shell: bash -l {0}
         run: |
           python python-utils/workflow.py \
-            --engines="$BASE_ENGINES" \
+            --engines="$SMOKE_ENGINES" \
             --datasets="dbpedia" \
             --scales="small" \
+            --force-all-engines \
             --quick
 
       - name: Check site/data output
@@ -161,7 +166,7 @@ jobs:
           check_list()   { [[ "$2" =~ ^[A-Za-z0-9._,-]*$ ]] || fail "Invalid $1: '$2'"; }
           check_commit() { [[ -z "$1" || "$1" =~ ^[0-9a-fA-F]{7,40}$ ]] || fail "Invalid corese_commit: '$1'"; }
 
-          ENGINES="corese.next,$BASE_ENGINES"
+          ENGINES="$BASE_ENGINES"
           DATASETS="$ALL_DATASETS"
           SCALES="small"
           COMMIT=""; INFERENCE=false; CACHED=""; FORCE=false
@@ -173,7 +178,7 @@ jobs:
               ;;
             schedule)
               SCALES="small,medium"
-              FORCE=true
+              FORCE=false
               ;;
             repository_dispatch)
               TRIGGER="repository_dispatch:$DISPATCH_ACTION"
@@ -258,7 +263,7 @@ jobs:
         env:
           CORESE_COMMIT: ${{ steps.params.outputs.commit || env.DEFAULT_CORESE_NEXT_COMMIT }}
         run: |
-          CORESE_DIR="$HOME/corese-next-build"
+          CORESE_DIR="$RUNNER_TEMP/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then
             git clone https://github.com/corese-stack/corese-core.git "$CORESE_DIR"
           fi

@@ -41,6 +41,7 @@ class WorkflowQueriesTest(unittest.TestCase):
                 command = run.call_args.args[0]
                 self.assertIn(f"{dataset} {self.namespace['QUERIES_FILES'][dataset]}", command[-1])
                 self.assertEqual(self.namespace["project_dir"], run.call_args.kwargs["cwd"])
+                self.assertEqual(run.call_args.kwargs["timeout"], 7200)
 
     def test_legacy_query_file_override_is_preserved(self):
         self.namespace["QUERIES_FILES"]["lubm"] = __file__

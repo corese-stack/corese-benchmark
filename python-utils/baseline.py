@@ -1,7 +1,7 @@
 """baseline.py — Module for managing immutable reference baseline benchmarks and report merging.
 
 This module provides:
-1. Frozen baseline management for immutable releases (Corese 4.6.5, Apache Jena 6.2.0, Eclipse RDF4J 5.3.2).
+1. Frozen baseline management for immutable releases (Corese 4.6.5/4.6.4, Apache Jena 6.2.0 including TDB2, Eclipse RDF4J 6.1.0 including Native/LMDB).
 2. Intelligent engine execution planning: skips immutable engines already present in baseline.
 3. Safe, deterministic merging of fresh runs with baseline runs into unified JSON, JS, and CSV outputs.
 """
@@ -10,14 +10,88 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
 import re
 import sys
-import tempfile
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-IMMUTABLE_ENGINES = ("corese.4.6.5", "jena.6.2.0", "rdf4j.6.1.0")
+IMMUTABLE_ENGINES = (
+    "corese.4.6.5", "corese.4.6.4", "jena.6.2.0", "jena.6.2.0.tdb2",
+    "rdf4j.6.1.0", "rdf4j.6.1.0.native", "rdf4j.6.1.0.lmdb",
+)
+DEFAULT_CATALOGUE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "site", "data", "sparql", "v1", "catalogue.json",
+)
+SCALED_DATASETS = frozenset({"lubm", "bsbm"})
+TERMINAL_LOADING_FAILURES = frozenset({"OOM", "TIMEOUT", "ERROR"})
+
+
+def load_expected_v1_queries(catalogue_path: str = DEFAULT_CATALOGUE_PATH) -> dict[str, set[str]]:
+    """Read curated v1 query IDs grouped by dataset; fail on an invalid catalogue."""
+    with open(catalogue_path, encoding="utf-8") as stream:
+        catalogue = json.load(stream)
+    expected: dict[str, set[str]] = {}
+    for query in catalogue["queries"]:
+        if re.fullmatch(r"Q\d+", query["id"]):
+            expected.setdefault(query["dataset"], set()).add(query["id"])
+    if not expected:
+        raise ValueError("Catalogue contains no SPARQL v1 queries")
+    return expected
+
+
+def has_v1_query_coverage(
+    report: dict, engine: str, dataset: str, expected_queries: dict[str, set[str]],
+    *, require_pass: bool = False,
+) -> bool:
+    """Check exact catalogue IDs for one engine and dataset, excluding legacy rows."""
+    expected = expected_queries.get(dataset, set())
+    present = {
+        query.get("queryId") for query in report.get("queryRuns", [])
+        if query.get("engine") == engine and query.get("dataset") == dataset
+        and re.fullmatch(r"Q\d+", query.get("queryId", ""))
+        and (not require_pass or query.get("status") == "PASS")
+    }
+    return expected <= present
+
+
+def valid_loading_run(run: dict) -> bool:
+    """Accept successful loading observations with finite, nonnegative measurements."""
+    elapsed = run.get("loadingTimeMs")
+    triples = run.get("triples")
+    return (
+        run.get("status") in (None, "SUCCESS") and not run.get("errorMessage")
+        and isinstance(elapsed, (int, float)) and math.isfinite(elapsed) and elapsed >= 0
+        and isinstance(triples, (int, float)) and math.isfinite(triples) and triples > 0
+    )
+
+
+def has_scale_loading_coverage(
+    runs: list[dict],
+    engine: str,
+    dataset: str,
+    requested_scales: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    """Verify valid loading runs for one engine/dataset, enforcing per-scale coverage on scaled datasets."""
+    matching = [r for r in runs if r.get("engine") == engine and r.get("dataset") == dataset]
+    if not any(valid_loading_run(r) for r in matching):
+        return False
+    if dataset in SCALED_DATASETS and requested_scales:
+        for scale in requested_scales:
+            scale_norm = scale.strip().lower()
+            if not scale_norm:
+                continue
+            token = f"_{scale_norm}."
+            if not any(
+                (str(r.get("scale", "")).lower() == scale_norm or token in str(r.get("file", "")).lower())
+                and (valid_loading_run(r) or r.get("status") in TERMINAL_LOADING_FAILURES)
+                for r in matching
+            ):
+                return False
+    return True
 
 # SPARQL category patterns matching SparqlAnalyser.java
 _P_IRI = re.compile(r"<[^>]*>")
@@ -88,6 +162,8 @@ def plan_engines(
     requested_datasets: list[str],
     baseline: dict,
     *,
+    expected_queries: dict[str, set[str]] | None = None,
+    requested_scales: list[str] | tuple[str, ...] | None = None,
     force_all: bool = False,
     update_baseline: bool = False,
 ) -> ExecutionPlan:
@@ -96,19 +172,25 @@ def plan_engines(
     An engine is eligible for baseline cache if:
     1. It is declared in IMMUTABLE_ENGINES.
     2. Neither force_all nor update_baseline is set.
-    3. The baseline contains valid loading run records for all requested datasets.
+    3. The baseline contains valid loading run records covering requested scales for all datasets.
+    4. Catalogue datasets contain every expected v1 query ID. Legacy datasets retain loading-only checks.
     """
     if force_all or update_baseline:
         return ExecutionPlan(cached_engines=[], fresh_engines=list(requested_engines))
 
-    baseline_runs = baseline.get("runs", [])
-    have_coverage = {(r["engine"], r["dataset"]) for r in baseline_runs if "engine" in r and "dataset" in r}
+    if expected_queries is None:
+        expected_queries = load_expected_v1_queries()
+    baseline_runs = baseline.get("runs") or baseline.get("loadingRuns") or []
 
     cached: list[str] = []
     fresh: list[str] = []
 
     for eng in requested_engines:
-        if eng in IMMUTABLE_ENGINES and all((eng, ds) in have_coverage for ds in requested_datasets):
+        if eng in IMMUTABLE_ENGINES and all(
+            has_scale_loading_coverage(baseline_runs, eng, ds, requested_scales)
+            and has_v1_query_coverage(baseline, eng, ds, expected_queries)
+            for ds in requested_datasets
+        ):
             cached.append(eng)
         else:
             fresh.append(eng)
@@ -224,7 +306,7 @@ def save_baseline(baseline_data: dict, destination_path: str) -> None:
         raise ValueError("Refusing to save empty baseline")
 
     # Strictly check that ONLY immutable engines are saved into baseline
-    for r in runs:
+    for r in runs + baseline_data.get("loadingRuns", []) + baseline_data.get("queryRuns", []):
         eng = r.get("engine", "")
         if eng not in IMMUTABLE_ENGINES:
             raise ValueError(f"Refusing to save non-immutable engine into baseline: {eng}")
@@ -233,9 +315,9 @@ def save_baseline(baseline_data: dict, destination_path: str) -> None:
     if dest_dir:
         os.makedirs(dest_dir, exist_ok=True)
 
-    with tempfile.NamedTemporaryFile("w", dir=dest_dir or ".", delete=False, encoding="utf-8") as f:
-        tmp_path = f.name
-        json.dump(baseline_data, f, indent=2)
+    tmp_path = os.path.join(dest_dir or ".", f".baseline.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    with open(tmp_path, "x", encoding="utf-8") as f:
+        json.dump(baseline_data, f, separators=(",", ":"))
 
     try:
         # Validation: re-read to ensure valid JSON
@@ -264,6 +346,9 @@ def _fmt_float(val: float | None) -> str:
 
 def export_site_data(merged_data: dict, site_data_dir: str) -> None:
     """Generate benchmark-report.json, report-data.js, and benchmark-report.csv from a single merged dict."""
+    loading_runs = list(merged_data.get("runs") or merged_data.get("loadingRuns") or [])
+    merged_data = {**merged_data, "runs": loading_runs, "loadingRuns": list(loading_runs),
+                   "queryRuns": list(merged_data.get("queryRuns") or [])}
     os.makedirs(site_data_dir, exist_ok=True)
 
     json_path = os.path.join(site_data_dir, "benchmark-report.json")
@@ -273,7 +358,7 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
 
     js_path = os.path.join(site_data_dir, "report-data.js")
     with open(js_path, "w", encoding="utf-8") as f:
-        f.write(f"window.__BENCHMARK_DATA__ = {json.dumps(merged_data, indent=2)};\n")
+        f.write(f"window.BENCHMARK_REPORT = {json.dumps(merged_data, indent=2)};\n")
     print(f"[site] Wrote {js_path}")
 
     csv_path = os.path.join(site_data_dir, "benchmark-report.csv")
@@ -283,7 +368,7 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
         writer.writerow([
             "engine", "dataset", "file", "triples", "loadingTimeMs",
             "throughputTriplesPerSec", "memoryBeforeMb", "memoryAfterMb",
-            "memoryDeltaMb", "cpuPercent"
+            "memoryDeltaMb", "cpuPercent", "status", "errorMessage"
         ])
         for r in merged_data.get("runs", []):
             writer.writerow([
@@ -297,6 +382,8 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
                 _fmt_float(r.get("memoryAfterMb")),
                 _fmt_float(r.get("memoryDeltaMb")),
                 _fmt_float(r.get("cpuPercent")),
+                r.get("status") or "SUCCESS",
+                r.get("errorMessage", ""),
             ])
         writer.writerow([])
         # 2. Query runs table

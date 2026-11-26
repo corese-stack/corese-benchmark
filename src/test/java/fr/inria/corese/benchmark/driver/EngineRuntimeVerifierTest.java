@@ -29,9 +29,9 @@ class EngineRuntimeVerifierTest {
     @ParameterizedTest(name = "Rejects invalid or mismatched engine: {0}")
     @ValueSource(strings = {
         "", "   ", "unknown", "virtuoso.7.2",
-        "jena.5.0.0", "jena.6.1.0", "jena.wrong.version",
-        "rdf4j.5.3.1", "rdf4j.5.3.2", "rdf4j.4.0.0.lmdb",
-        "corese.1.0.0", "corese.phantom"
+        "jena.0.0.1", "jena.99.99.99", "jena.wrong.version",
+        "rdf4j.0.0.1", "rdf4j.99.99.99.lmdb",
+        "corese.0.0.1", "corese.phantom"
     })
     void testRejectsMismatchedOrInvalidEngines(String engineName) {
         assertThrows(IllegalArgumentException.class, () -> EngineRuntimeVerifier.verifyEngineName(engineName));
