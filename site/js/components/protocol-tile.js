@@ -71,6 +71,52 @@ export const DATASET_CONFIGS = Object.freeze({
 	},
 });
 
+const LOADING_DATASET_FILES = Object.freeze({
+	bsbm: { shortFile: "bsbm_medium.nt", fullFile: "input/bsbm/view_small_medium/bsbm_medium.nt" },
+	lubm: { shortFile: "lubm_medium.nt", fullFile: "input/lubm/unzip_medium/lubm_medium.nt" },
+	"named-graphs": { shortFile: "named-graphs.nq", format: "N-Quads" },
+	dbpedia: { shortFile: "persondata_en.nt", fullFile: "input/dbpedia/unzip/persondata_en.nt" },
+	bowlogna: { shortFile: "Department0.nt", fullFile: "input/bowlogna/unzip/Department0.nt" },
+});
+
+export function resolveDatasetCardConfig(datasetId, mode = "sparql") {
+	const config = DATASET_CONFIGS[datasetId] || {
+		name: datasetId,
+		fullName: datasetId,
+		shortFile: "Not reported",
+		fullFile: "Not reported",
+		format: "RDF",
+		graph: "Default graph",
+	};
+	if (mode === "loading") return { ...config, ...LOADING_DATASET_FILES[datasetId] };
+	return config;
+}
+
+function isPositiveTripleCount(triples) {
+	return typeof triples === "number" && Number.isFinite(triples) && triples > 0;
+}
+
+export function resolveDatasetTripleCount(dataset, reportData, mode = "sparql") {
+	const info = resolveDatasetCardConfig(dataset, mode);
+	const files = dataset === "named-graphs"
+		? ["named-graphs.nq", "corese-feature-lubm.nq", "lubm_named.nq"]
+		: [info.shortFile];
+	const runs = reportData?.loadingRuns || reportData?.runs || [];
+	const counts = runs.filter((run) => run.dataset === dataset
+		&& files.includes(run.file) && isPositiveTripleCount(run.triples))
+		.map((run) => run.triples).sort((a, b) => a - b);
+	if (!counts.length) return null;
+	const mid = Math.floor(counts.length / 2);
+	if (counts.length % 2) return Math.round(counts[mid]);
+	return Math.round(counts[mid - 1] / 2 + counts[mid] / 2);
+}
+
+export function formatDatasetSizeBadge(triples, datasetId) {
+	if (!isPositiveTripleCount(triples)) return "—";
+	const unit = datasetId === "named-graphs" ? "quads" : "triples";
+	return `${triples.toLocaleString("en")} ${unit}`;
+}
+
 const SPARQL_KEYWORDS = new Set([
 	"prefix", "base", "select", "ask", "construct", "describe", "where", "from", "named",
 	"graph", "optional", "union", "minus", "filter", "not", "exists", "bind", "as",
@@ -388,6 +434,53 @@ export function createProtocolTile({
 	return details;
 }
 
+function renderDatasetQueryFacts(queries) {
+	if (!queries.length) return "";
+	const badges = queries.map((query) => {
+		const key = JSON.stringify([query.dataset, query.id]);
+		return `<button type="button" class="sf-badge sf-badge--query" style="cursor: pointer;" data-sf-jump-query="${esc(key)}" title="${esc(query.id)}: ${esc(query.name)}">${esc(query.id)}</button>`;
+	}).join("");
+	return `<dt>Queries</dt><dd><div style="display: flex; flex-wrap: wrap; gap: 4px;">${badges}</div></dd>`;
+}
+
+function renderDatasetLinks(info, repoRef) {
+	const upstream = info.upstreamUrl
+		? `<a href="${esc(info.upstreamUrl)}" class="protocol-link" target="_blank" rel="noopener">Upstream ↗</a>` : "";
+	const download = info.downloadUrl
+		? `<a href="${esc(info.downloadUrl)}" class="protocol-link" target="_blank" rel="noopener" style="font-weight: 600;">Download ⤓</a>` : "";
+	const script = info.scriptPath
+		? `<a href="https://github.com/corese-stack/corese-benchmark/blob/${esc(repoRef)}/${esc(info.scriptPath)}" class="protocol-link" target="_blank" rel="noopener">Script ↗</a>` : "";
+	return upstream + download + script;
+}
+
+function renderDatasetCardHtml(ds, { queries, repoRef, activeDataset, mode, reportData }) {
+	const info = resolveDatasetCardConfig(ds, mode);
+	const queryFacts = renderDatasetQueryFacts(queries.filter((query) => query.dataset === ds));
+	const fileLink = buildDatasetFileLink(info, repoRef);
+	const links = renderDatasetLinks(info, repoRef);
+	const sizeLabel = formatDatasetSizeBadge(resolveDatasetTripleCount(ds, reportData, mode), ds);
+	const isCurrentActive = activeDataset?.toLowerCase() === ds.toLowerCase();
+	const cardModifier = isCurrentActive ? 'style="border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus);"' : "";
+
+	return `
+		<div class="sf-dataset-card" id="dataset-${esc(ds)}" data-sf-dataset-id="${esc(ds)}" tabindex="-1" ${cardModifier}>
+			<div class="sf-dataset-card-header">
+				<h5 class="sf-dataset-card-title">${esc(info.fullName || info.name)}</h5>
+				<span class="tag-format">${esc(info.format || "RDF")}</span>
+			</div>
+			<dl class="sf-dataset-card-facts">
+				<dt>File</dt><dd>${fileLink}</dd>
+				<dt>Graph</dt><dd><span class="sf-badge sf-badge--other">${esc(info.graph)}</span></dd>
+				<dt>Size</dt><dd><span class="sf-badge sf-badge--other" style="font-family: var(--font-mono);" data-sf-dataset-size="${esc(ds)}">${esc(sizeLabel)}</span></dd>
+				${queryFacts}
+			</dl>
+			<div class="sf-dataset-card-footer">
+				<div class="sf-dataset-links">${links}</div>
+			</div>
+		</div>
+	`;
+}
+
 /**
  * Populate Section 1 dataset cards into container.
  */
@@ -396,54 +489,13 @@ export function populateDatasetCards(container, {
 	queries = [],
 	repoRef = "main",
 	activeDataset = null,
+	mode = "sparql",
+	reportData = null,
 } = {}) {
 	if (!container) return;
-	const keyOf = (dataset, id) => JSON.stringify([dataset, id]);
-
-	container.innerHTML = `
-		<div class="sf-dataset-grid">
-			${datasets.map((ds) => {
-				const info = DATASET_CONFIGS[ds] || {
-					name: ds,
-					fullName: ds,
-					shortFile: "Not reported",
-					fullFile: "Not reported",
-					format: "RDF",
-					graph: "Default graph",
-				};
-				const dsQueries = queries.filter((q) => q.dataset === ds);
-				const queryBadges = dsQueries.length ? dsQueries.map((q) =>
-					`<button type="button" class="sf-badge sf-badge--query" style="cursor: pointer;" data-sf-jump-query="${esc(keyOf(q.dataset, q.id))}" title="${esc(q.id)}: ${esc(q.name)}">${esc(q.id)}</button>`
-				).join("") : "";
-
-				const fileLink = buildDatasetFileLink(info, repoRef);
-
-				const isCurrentActive = activeDataset?.toLowerCase() === ds.toLowerCase();
-				const cardModifier = isCurrentActive ? 'style="border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus);"' : "";
-
-				return `
-					<div class="sf-dataset-card" id="dataset-${esc(ds)}" data-sf-dataset-id="${esc(ds)}" tabindex="-1" ${cardModifier}>
-						<div class="sf-dataset-card-header">
-							<h5 class="sf-dataset-card-title">${esc(info.fullName || info.name)}</h5>
-							<span class="tag-format">${esc(info.format || "RDF")}</span>
-						</div>
-						<dl class="sf-dataset-card-facts">
-							<dt>File</dt><dd>${fileLink}</dd>
-							<dt>Graph</dt><dd><span class="sf-badge sf-badge--other">${esc(info.graph)}</span></dd>
-							${queryBadges ? `<dt>Queries</dt><dd><div style="display: flex; flex-wrap: wrap; gap: 4px;">${queryBadges}</div></dd>` : ""}
-						</dl>
-						<div class="sf-dataset-card-footer">
-							<div class="sf-dataset-links">
-								${info.upstreamUrl ? `<a href="${esc(info.upstreamUrl)}" class="protocol-link" target="_blank" rel="noopener">Upstream ↗</a>` : ""}
-								${info.downloadUrl ? `<a href="${esc(info.downloadUrl)}" class="protocol-link" target="_blank" rel="noopener" style="font-weight: 600;">Download ⤓</a>` : ""}
-								${info.scriptPath ? `<a href="https://github.com/corese-stack/corese-benchmark/blob/${esc(repoRef)}/${esc(info.scriptPath)}" class="protocol-link" target="_blank" rel="noopener">Script ↗</a>` : ""}
-							</div>
-						</div>
-					</div>
-				`;
-			}).join("")}
-		</div>
-	`;
+	const options = { queries, repoRef, activeDataset, mode, reportData };
+	const cards = datasets.map((ds) => renderDatasetCardHtml(ds, options)).join("");
+	container.innerHTML = `<div class="sf-dataset-grid">${cards}</div>`;
 }
 
 /**

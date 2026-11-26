@@ -1,6 +1,6 @@
 /** SPARQL feature timings and original query sources. */
 import { escapeHtml as esc, formatEngineId, parseEngineId } from "../engine-id.js";
-import { attachChartPointerInteraction, colorWithAlpha, createEngineLegendConfig, getChartThemeTokens } from "../chart-utils.js";
+import { attachChartPointerInteraction, colorWithAlpha, createEngineLegendConfig, getChartThemeTokens, createStatusBadgePlugin, normalizeRunStatus, formatStatusBadgeLabel } from "../chart-utils.js";
 import { getEngineStyle, renderEngineIndicatorSvg } from "../engines.js";
 import { focusStore, hoverSource, engineKeyOf, presentationFor } from "../focus-store.js";
 import { parseUrlSparql, updateUrlSparql } from "../router.js";
@@ -23,7 +23,7 @@ const canonicalEngine = (engine) => formatEngineId(parseEngineId(engine));
 const positive = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 const measured = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 const milliseconds = (v) => measured(v) ? `${v.toLocaleString("en", { maximumFractionDigits: 3 })} ms` : "—";
-export const statusOf = (run) => run ? String(run.status || "UNKNOWN").toUpperCase() : "MISSING";
+export const statusOf = (run) => run ? normalizeRunStatus(run.status || "UNKNOWN") : "MISSING";
 
 /** Duplicates are ambiguous, not extra independent observations. Never average medians. */
 export function indexRuns(runs = []) {
@@ -83,13 +83,22 @@ export function summarizeScope(queries, index, engines, reference) {
 const DATASETS = new Set(["lubm", "bsbm", "bowlogna", "dbpedia", "named-graphs"]);
 
 function badge(status) {
-	if (status === "PASS") {
-		return `<span class="sf-badge sf-badge--pass">${esc(status)}</span>`;
-	}
-	if (["MISMATCH", "TIMEOUT", "ERROR", "DUPLICATE"].includes(status)) {
-		return `<span class="sf-badge sf-badge--fail">${esc(status)}</span>`;
-	}
-	return `<span class="sf-badge sf-badge--other">${esc(status)}</span>`;
+ const value = normalizeRunStatus(status);
+ const variants = { PASS: "pass", SUCCESS: "pass", TIMEOUT: "timeout", OOM: "fail", ERROR: "fail", MISMATCH: "fail", DUPLICATE: "fail" };
+ const variant = Object.hasOwn(variants, value) ? variants[value] : "missing";
+ return `<span class="sf-badge sf-badge--${variant}">${esc(formatStatusBadgeLabel(value))}</span>`;
+}
+
+/** Priority selects the pill; counts preserve every observed cause, without inferred timing. */
+export function featureStatusSummary(queries, index, engine) {
+ const runs = queries.map((query) => index.get(keyOf(query.dataset, query.id))?.get(engine));
+ const counts = {};
+ for (const run of runs) { const status = statusOf(run); counts[status] = (counts[status] || 0) + 1; }
+ const passed = counts.PASS || 0;
+ const status = ["DUPLICATE", "MISMATCH", "OOM", "ERROR", "TIMEOUT"].find((value) => counts[value]) || "MISSING";
+ const causes = Object.entries(counts).map(([value, count]) => `${value}: ${count}`).join(", ");
+ const detail = `${passed}/${queries.length} queries passed (${causes || "MISSING"})`;
+ return { status, shortLabel: formatStatusBadgeLabel(status), detail, engineKey: engine };
 }
 
 function calculateMedian(values) {
@@ -429,6 +438,8 @@ export class SparqlFeaturesView {
     datasets,
     queries,
     repoRef,
+    mode: "sparql",
+    reportData: this.#data,
    });
   }
 
@@ -577,7 +588,7 @@ export class SparqlFeaturesView {
   const empty = this.#root.querySelector("[data-sf-chart-empty]");
   const hasTimings = series.some((entry) => entry.axes.some((axis) => axis.medianMs !== null));
   const available = typeof globalThis.Chart === "function";
-  empty.hidden = engines.length > 0 && hasTimings && available;
+  empty.hidden = engines.length > 0 && features.length > 0 && available;
   if (!engines.length) {
    empty.textContent = "Select an engine.";
   } else if (!hasTimings) {
@@ -601,9 +612,15 @@ export class SparqlFeaturesView {
   const { text, grid } = getChartThemeTokens();
   this.#chart = new globalThis.Chart(canvas, {
    type: "bar",
+   plugins: [createStatusBadgePlugin()],
    data: { labels: features.map((feature) => FEATURES[feature]), datasets: series.map((entry) => {
     const style = getEngineStyle(parseEngineId(entry.engine), this.#data.enginesCatalog);
-    return { label: entry.engine, _engineKey: entry.engine, _baseColor: style.color, data: features.map((feature) => entry.axes.find((axis) => axis.feature === feature).medianMs),
+    const statuses = features.map((feature) => {
+     const scope = queries.filter((query) => query.primaryFeature === feature);
+     const info = featureStatusSummary(scope, this.#index, entry.engine);
+     return { ...info, presentation: (target) => presentationFor(target, { kind: "bar", engine: entry.engine, feature }, { getFeature: (key) => this.#queryFeatureMap().get(key) }) };
+    });
+    return { _statuses: statuses, label: entry.engine, _engineKey: entry.engine, _baseColor: style.color, data: features.map((feature) => entry.axes.find((axis) => axis.feature === feature).medianMs),
      backgroundColor: style.color, borderColor: style.color, borderWidth: 1,
      borderRadius: 3, maxBarThickness: 20, categoryPercentage: 0.8, barPercentage: 0.9 };
    }) },
@@ -635,8 +652,9 @@ export class SparqlFeaturesView {
       focusStore, textColor: text,
      }),
      tooltip: { callbacks: {
-      label: (context) => `${context.dataset.label}: ${milliseconds(context.raw)}`,
+      label: (context) => context.raw === null ? `${context.dataset.label}: ${context.dataset._statuses[context.dataIndex].shortLabel}` : `${context.dataset.label}: ${milliseconds(context.raw)}`,
       afterLabel: (context) => {
+       if (context.raw === null) return context.dataset._statuses[context.dataIndex].detail;
        const axis = series[context.datasetIndex].axes.find((entry) => entry.feature === features[context.dataIndex]);
        return `${axis.count}/${axis.total} queries passed · Median of query medians`;
       },
@@ -691,22 +709,27 @@ export class SparqlFeaturesView {
 
   this.#root.querySelector("[data-sf-table]").innerHTML = `<table class="data-table"><thead>
    <tr>${baseColumns.map(([key, label]) => header(key, label)).join("")}${engines.map(engineHeader).join("")}</tr></thead>
-   <tbody>${sorted.map((query) => {
-    const dsInfo = DATASET_CONFIGS[query.dataset] || { name: query.dataset, shortFile: "" };
-    const qKey = keyOf(query.dataset, query.id);
-    return `<tr data-sf-query="${esc(qKey)}"><th scope="row"><div style="display: inline-flex; align-items: center; gap: 4px;"><button type="button" data-sf-query-toggle title="Pin query ${esc(query.id)}" aria-label="Pin query ${esc(query.id)}: ${esc(query.name)}" aria-pressed="false">${esc(query.id)}</button><button type="button" class="sf-query-link-btn" data-sf-jump-query="${esc(qKey)}" title="View SPARQL source in Protocol catalogue ↑">Source ↗</button></div></th><td>${esc(FEATURES[query.primaryFeature])}</td><td><div style="line-height: 1.3;"><strong>${esc(dsInfo.name)}</strong><br><span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${esc(dsInfo.shortFile)}</span></div></td>${engines.map((engine) => {
-     const run = this.#index.get(keyOf(query.dataset, query.id))?.get(engine);
-     const status = statusOf(run);
-     const num = (v) => measured(v) ? v.toLocaleString("en", { maximumFractionDigits: 3 }) : "—";
-     const cellTooltip = `${esc(engine)}: ${num(run?.medianMs)} ms (TTFR: ${num(run?.medianTtfrMs)} ms) · Status: ${esc(status)}`;
-     const cellKey = `${engine}|${qKey}`;
-     if (status === "PASS") {
-      return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right; font-variant-numeric: tabular-nums;" title="${cellTooltip}">${num(run?.medianMs)} ms</td>`;
-     }
-     return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right;" title="${cellTooltip}">${badge(status)}</td>`;
-    }).join("")}</tr>`;
-   }).join("")}</tbody></table>`;
+   <tbody>${sorted.map((query) => this.#renderQueryRow(query, engines)).join("")}</tbody></table>`;
   this.#syncFocusVisuals();
+ }
+
+ #renderQueryRow(query, engines) {
+  const dsInfo = DATASET_CONFIGS[query.dataset] || { name: query.dataset, shortFile: "" };
+  const qKey = keyOf(query.dataset, query.id);
+  return `<tr data-sf-query="${esc(qKey)}"><th scope="row"><div style="display: inline-flex; align-items: center; gap: 4px;"><button type="button" data-sf-query-toggle title="Pin query ${esc(query.id)}" aria-label="Pin query ${esc(query.id)}: ${esc(query.name)}" aria-pressed="false">${esc(query.id)}</button><button type="button" class="sf-query-link-btn" data-sf-jump-query="${esc(qKey)}" title="View SPARQL source in Protocol catalogue ↑">Source ↗</button></div></th><td>${esc(FEATURES[query.primaryFeature])}</td><td><div style="line-height: 1.3;"><strong>${esc(dsInfo.name)}</strong><br><span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${esc(dsInfo.shortFile)}</span></div></td>${engines.map((engine) => this.#renderQueryCell(query, engine, qKey)).join("")}</tr>`;
+ }
+
+ #renderQueryCell(query, engine, qKey) {
+   const run = this.#index.get(keyOf(query.dataset, query.id))?.get(engine);
+   const status = statusOf(run);
+   const num = (v) => measured(v) ? v.toLocaleString("en", { maximumFractionDigits: 3 }) : "—";
+   const errorPrefix = run?.errorMessage ? esc(run.errorMessage) + " · " : "";
+   const cellTooltip = `${errorPrefix}${esc(engine)}: ${num(run?.medianMs)} ms (TTFR: ${num(run?.medianTtfrMs)} ms) · Status: ${esc(status)}`;
+   const cellKey = `${engine}|${qKey}`;
+   if (status === "PASS") {
+    return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right; font-variant-numeric: tabular-nums;" title="${cellTooltip}">${num(run?.medianMs)} ms</td>`;
+   }
+   return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right;" title="${cellTooltip}">${badge(status)}</td>`;
  }
 
  async #fetchQuerySource(file, signal) {

@@ -3,17 +3,48 @@
  * Evaluates ingestion throughput, retained heap, and JVM heap telemetry across engines.
  */
 
-import { attachChartPointerInteraction, clearChartInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement, getChartThemeTokens } from "../chart-utils.js";
+import { attachChartPointerInteraction, clearChartInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement, getChartThemeTokens, createStatusBadgePlugin, normalizeRunStatus, formatStatusBadgeLabel } from "../chart-utils.js";
 import { createProtocolTile, populateDatasetCards } from "../components/protocol-tile.js";
 import { escapeHtml, formatEngineId, isBranchVersion, parseEngineId } from "../engine-id.js";
 import {
 	getEngineStyle,
 	renderEngineIndicatorSvg,
 } from "../engines.js";
-import { focusStore, hoverSource, engineKeyOf } from "../focus-store.js";
+import { focusStore, hoverSource, engineKeyOf, presentationFor } from "../focus-store.js";
 import { parseUrlLoading, updateUrlLoading } from "../router.js";
 
 const ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
+
+function effectiveLoadingStatus(run) {
+	if (run?.status) {
+		return normalizeRunStatus(run.status);
+	}
+	if (
+		run &&
+		!run.errorMessage &&
+		typeof run.triples === "number" && Number.isFinite(run.triples) && run.triples > 0 &&
+		typeof run.loadingTimeMs === "number" && Number.isFinite(run.loadingTimeMs) && run.loadingTimeMs >= 0
+	) {
+		return "SUCCESS";
+	}
+	return "MISSING";
+}
+const successful = (run) => effectiveLoadingStatus(run) === "SUCCESS";
+function loadingStatus(run, engineKey, metric = "measurement") {
+ const status = effectiveLoadingStatus(run);
+ const reason = run?.errorMessage || ({ OOM: "JVM heap limit exceeded", TIMEOUT: "Load exceeded the configured time limit", ERROR: "Loading failed", MISSING: "No run reported" })[status] || "No valid measurement reported";
+ return { status: ["SUCCESS", "PASS"].includes(status) ? "MISSING" : status,
+  shortLabel: formatStatusBadgeLabel(["SUCCESS", "PASS"].includes(status) ? "MISSING" : status),
+  detail: `${reason} — ${metric} unmeasurable`, engineKey };
+}
+function loadingBadge(info) {
+ return `<span class="status-badge status-badge--${info.status.toLowerCase()}" title="${escapeHtml(info.detail)}">${escapeHtml(info.shortLabel)}</span>`;
+}
+
+function loadingMetric(value, valid, format, fallback = "—") {
+ if (!valid || !Number.isFinite(value) || value < 0) return fallback;
+ return format(value);
+}
 
 export class LoadingView {
 	#root = null;
@@ -312,9 +343,11 @@ export class LoadingView {
 		const datasetsContainer = protocolTile.querySelector("[data-protocol-datasets]");
 		if (datasetsContainer) {
 			populateDatasetCards(datasetsContainer, {
-				datasets: ["bsbm", "lubm", "dbpedia", "bowlogna"],
+				datasets: ["bsbm", "lubm", "dbpedia", "bowlogna", "named-graphs"],
 				repoRef,
 				activeDataset: this.#state.dataset,
+				mode: "loading",
+				reportData: this.#data,
 			});
 		}
 		section.appendChild(protocolTile);
@@ -647,6 +680,10 @@ export class LoadingView {
 		body.appendChild(canvas);
 
 		section.appendChild(body);
+		const caption = document.createElement("p");
+		caption.className = "status-chart-caption";
+		caption.textContent = "Bars show measured throughput. Badges show unmeasurable runs: ⚠ OOM · ◷ TIMEOUT · × ERROR · — MISSING.";
+		section.appendChild(caption);
 		return section;
 	}
 
@@ -666,6 +703,7 @@ export class LoadingView {
 		// Datasets strictly ordered and styled following engine selector norms
 		const datasets = orderedEngines.map((engConfig) => {
 			const color = engConfig.style.color;
+			const statuses = [];
 			const dataPoints = activeFormats.map((fmt) => {
 				const isDbpedia = this.#state.dataset.toLowerCase() === "dbpedia";
 				const matchingRows = rows.filter((row) => {
@@ -679,12 +717,15 @@ export class LoadingView {
 					? matchingRows.find((row) => row.file?.startsWith("persondata_en.")) || matchingRows[0]
 					: matchingRows[0];
 
-				return r && r.throughputTriplesPerSec > 0 ? Math.round(r.throughputTriplesPerSec / 1000) : null;
+				const valid = successful(r) && Number.isFinite(r.throughputTriplesPerSec) && r.throughputTriplesPerSec >= 0;
+				statuses.push(valid ? null : { ...loadingStatus(r, engConfig.key, "throughput"), presentation: (target) => presentationFor(target, { engine: engConfig.key, measureKey: `${engConfig.key}|${fmt}` }) });
+				return valid ? r.throughputTriplesPerSec / 1000 : null;
 			});
 
 			return {
 				label: engConfig.label,
 				data: dataPoints,
+				_statuses: statuses,
 				backgroundColor: color,
 				borderRadius: 4,
 				maxBarThickness: 36,
@@ -698,6 +739,7 @@ export class LoadingView {
 		try {
 			const chart = new window.Chart(canvas, {
 				type: "bar",
+				plugins: [createStatusBadgePlugin()],
 				data: {
 					labels: formatLabels,
 					datasets: datasets,
@@ -729,14 +771,15 @@ export class LoadingView {
 						}),
 						tooltip: {
 							callbacks: {
-								label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw} kTriples/s`,
+								label: (ctx) => ctx.raw === null ? `${ctx.dataset.label}: ${ctx.dataset._statuses[ctx.dataIndex].detail}` : ` ${ctx.dataset.label}: ${ctx.raw.toLocaleString("en", { maximumFractionDigits: 1 })} kTriples/s`,
 							},
 						},
 					},
 					layout: {
 						padding: {
-							top: 8,
-							bottom: 8,
+							top: 16,
+							left: 12,
+							bottom: 16,
 						},
 					},
 					scales: {
@@ -745,6 +788,7 @@ export class LoadingView {
 							ticks: { color: textColor, font: { weight: 600 } },
 						},
 						y: {
+							beginAtZero: true,
 							grace: "15%",
 							grid: { color: gridColor },
 							ticks: {
@@ -826,14 +870,15 @@ export class LoadingView {
 
 		// Compute per-engine summary across active formats
 		const engineSummaries = filteredEngines.map((engConfig) => {
-			const engineRows = rows.filter((r) => {
+			const selectedRows = rows.filter((r) => (formatEngineId(parseEngineId(r.engine)) === engConfig.key || r.engine === engConfig.key) && this.#state.formats.has(r.format || r.file?.split(".").pop()));
+			const engineRows = selectedRows.filter((r) => {
 				const rowKey = formatEngineId(parseEngineId(r.engine));
 				const fmt = r.format || r.file?.split(".").pop();
 				return (rowKey === engConfig.key || r.engine === engConfig.key) &&
-					this.#state.formats.has(fmt) &&
+					this.#state.formats.has(fmt) && successful(r) &&
 					typeof r.memoryDeltaMb === "number" &&
 					Number.isFinite(r.memoryDeltaMb) &&
-					r.memoryDeltaMb > 0 &&
+					r.memoryDeltaMb >= 0 &&
 					r.triples > 0;
 			});
 
@@ -870,11 +915,16 @@ export class LoadingView {
 				maxB,
 				medianMib,
 				details: bValues,
+				ran: selectedRows.length > 0,
+				statusInfo: { ...loadingStatus(selectedRows.find((r) => !successful(r)) || selectedRows[0], engConfig.key),
+				 detail: selectedRows.map((r) => `.${r.format || r.file?.split(".").pop()}: ${loadingStatus(r, engConfig.key).detail}`).join("; ") },
 			};
-		}).filter((item) => item.medianB !== null);
+		}).filter((item) => item.ran);
 
 		// Sort engines by median B / triple ascending (lower is better)
-		engineSummaries.sort((a, b) => (a.medianB ?? 999999) - (b.medianB ?? 999999));
+		engineSummaries.sort((a, b) => (a.medianB ?? Infinity) - (b.medianB ?? Infinity));
+
+		canvas.parentElement.style.height = `${Math.max(220, engineSummaries.length * 38 + 90)}px`;
 
 		const labels = engineSummaries.map((s) => s.label);
 		const dataValues = engineSummaries.map((s) => s.medianB);
@@ -886,12 +936,14 @@ export class LoadingView {
 		try {
 			const chart = new window.Chart(canvas, {
 				type: "bar",
+				plugins: [createStatusBadgePlugin()],
 				data: {
 					labels: labels,
 					datasets: [
 						{
 							label: "Median Retained Heap",
 							data: dataValues,
+							_statuses: engineSummaries.map((summary) => summary.medianB === null ? summary.statusInfo : null),
 							backgroundColor: colors,
 							borderRadius: 4,
 							barThickness: 24,
@@ -922,6 +974,7 @@ export class LoadingView {
 								label: (ctx) => {
 									const summary = engineSummaries[ctx.dataIndex];
 									if (!summary) return "";
+									if (summary.medianB === null) return summary.statusInfo.detail;
 									const mibStr = summary.medianMib ? ` (${summary.medianMib.toFixed(1)} MiB)` : "";
 									const rangeStr = summary.minB !== summary.maxB ? ` [range: ${summary.minB} – ${summary.maxB} B/t]` : "";
 									return ` Median: ${summary.medianB} B / triple${mibStr}${rangeStr}`;
@@ -1072,14 +1125,15 @@ export class LoadingView {
 
 		// Compute per-engine disk footprint summary across active formats
 		const engineSummaries = diskEngines.map((engConfig) => {
-			const engineRows = rows.filter((r) => {
+			const selectedRows = rows.filter((r) => (formatEngineId(parseEngineId(r.engine)) === engConfig.key || r.engine === engConfig.key) && this.#state.formats.has(r.format || r.file?.split(".").pop()));
+			const engineRows = selectedRows.filter((r) => {
 				const rowKey = formatEngineId(parseEngineId(r.engine));
 				const fmt = r.format || r.file?.split(".").pop();
 				return (rowKey === engConfig.key || r.engine === engConfig.key) &&
-					this.#state.formats.has(fmt) &&
+					this.#state.formats.has(fmt) && successful(r) &&
 					typeof r.diskFootprintBytes === "number" &&
 					Number.isFinite(r.diskFootprintBytes) &&
-					r.diskFootprintBytes > 0 &&
+					r.diskFootprintBytes >= 0 &&
 					r.triples > 0;
 			});
 
@@ -1117,8 +1171,11 @@ export class LoadingView {
 				maxB,
 				medianMib,
 				details: bValues,
+				ran: selectedRows.length > 0,
+				statusInfo: { ...loadingStatus(selectedRows.find((r) => !successful(r)) || selectedRows[0], engConfig.key),
+				 detail: selectedRows.map((r) => `.${r.format || r.file?.split(".").pop()}: ${loadingStatus(r, engConfig.key).detail}`).join("; ") },
 			};
-		}).filter((item) => item.medianB !== null);
+		}).filter((item) => item.ran);
 
 		if (engineSummaries.length === 0) {
 			const parent = canvas.parentElement;
@@ -1132,7 +1189,9 @@ export class LoadingView {
 			return;
 		}
 
-		engineSummaries.sort((a, b) => (a.medianB ?? 999999) - (b.medianB ?? 999999));
+		engineSummaries.sort((a, b) => (a.medianB ?? Infinity) - (b.medianB ?? Infinity));
+
+		canvas.parentElement.style.height = `${Math.max(220, engineSummaries.length * 38 + 90)}px`;
 
 		const labels = engineSummaries.map((s) => s.label);
 		const dataValues = engineSummaries.map((s) => s.medianB);
@@ -1144,12 +1203,14 @@ export class LoadingView {
 		try {
 			const chart = new window.Chart(canvas, {
 				type: "bar",
+				plugins: [createStatusBadgePlugin()],
 				data: {
 					labels: labels,
 					datasets: [
 						{
 							label: "Median Disk Footprint",
 							data: dataValues,
+							_statuses: engineSummaries.map((summary) => summary.medianB === null ? summary.statusInfo : null),
 							backgroundColor: colors,
 							borderRadius: 4,
 							barThickness: 24,
@@ -1179,6 +1240,7 @@ export class LoadingView {
 								label: (ctx) => {
 									const summary = engineSummaries[ctx.dataIndex];
 									if (!summary) return "";
+									if (summary.medianB === null) return summary.statusInfo.detail;
 									const mibStr = summary.medianMib ? ` (${summary.medianMib.toFixed(1)} MiB)` : "";
 									const rangeStr = summary.minB !== summary.maxB ? ` [range: ${summary.minB} – ${summary.maxB} B/t]` : "";
 									return ` Median: ${summary.medianB} B / triple${mibStr}${rangeStr}`;
@@ -1273,12 +1335,12 @@ export class LoadingView {
 		const section = document.createElement("div");
 		section.className = "dashboard-section";
 
-		// Discover active formats that actually have timeSeries data
+		// Include attempted formats so failures without telemetry remain visible
 		const availableFormats = ALL_FORMATS.filter((f) => {
 			if (!this.#state.formats.has(f)) return false;
 			return rows.some((r) => {
 				const rFmt = r.format || r.file?.split(".").pop();
-				return rFmt === f && Array.isArray(r.timeSeries) && r.timeSeries.length >= 2;
+				return rFmt === f;
 			});
 		});
 
@@ -1380,6 +1442,36 @@ export class LoadingView {
 		}
 
 		section.appendChild(body);
+		const failedRows = rows.filter((run) => (run.format || run.file?.split(".").pop()) === currentFormat && !successful(run));
+		if (failedRows.length) {
+		 const strip = document.createElement("div");
+		 strip.className = "telemetry-status-strip";
+		 strip.setAttribute("aria-label", "Failed ingestion runs");
+		 for (const run of failedRows) {
+		  const key = formatEngineId(parseEngineId(run.engine));
+		  const config = orderedEngines.find((engine) => engine.key === key);
+		  if (!config) continue;
+		  const info = loadingStatus(run, key, "heap telemetry");
+		  const button = document.createElement("button");
+		  button.type = "button"; button.dataset.engineKey = key; button.title = info.detail;
+		  button.innerHTML = `<span class="telemetry-status-dot" style="background:${config.style.color}"></span><span>${escapeHtml(config.label)}</span>${loadingBadge(info)}`;
+		  const target = { kind: "engine", key };
+		  const signal = this.#renderAbortController?.signal;
+		  button.addEventListener("pointerenter", () => this.#tableHover.set(target), { signal });
+		  button.addEventListener("pointerleave", () => this.#tableHover.clear(), { signal });
+		  button.addEventListener("focus", () => this.#tableHover.set(target), { signal });
+		  button.addEventListener("blur", () => this.#tableHover.clear(), { signal });
+		  button.addEventListener("click", () => focusStore.togglePin(target), { signal });
+		  const sync = () => {
+		   const focused = engineKeyOf(focusStore.effectiveFocus?.target);
+		   button.classList.toggle("is-dimmed", Boolean(focused && focused !== key));
+		   button.setAttribute("aria-pressed", String(engineKeyOf(focusStore.state.pinned) === key));
+		  };
+		  focusStore.addEventListener("focus-changed", sync, { signal }); sync();
+		  strip.appendChild(button);
+		 }
+		 section.appendChild(strip);
+		}
 		return section;
 	}
 
@@ -1462,7 +1554,11 @@ export class LoadingView {
 			});
 		});
 
-		if (datasets.length === 0) return;
+		if (datasets.length === 0) {
+		 canvas.parentElement.style.height = "80px";
+		 canvas.replaceWith(Object.assign(document.createElement("p"), { className: "status-chart-caption", textContent: "No measured heap telemetry for this format. Failed runs are listed below." }));
+		 return;
+		}
 
 		const { grid: gridColor, text: textColor } = getChartThemeTokens();
 
@@ -1585,6 +1681,8 @@ export class LoadingView {
 			const idxA = formatOrder.indexOf(fmtA);
 			const idxB = formatOrder.indexOf(fmtB);
 			if (idxA !== idxB) return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+			const statusOrder = Number(successful(b)) - Number(successful(a));
+			if (statusOrder) return statusOrder;
 			// Within same format: highest throughput first (podium)
 			return (b.throughputTriplesPerSec || 0) - (a.throughputTriplesPerSec || 0);
 		});
@@ -1633,65 +1731,8 @@ export class LoadingView {
 			tbody.appendChild(tr);
 		} else {
 			sortedRows.forEach((r) => {
-				const tr = document.createElement("tr");
-				const parsed = parseEngineId(r.engine);
-				const engineKey = formatEngineId(parsed);
-				const fmt = r.format || r.file.split(".").pop();
-				const measureKey = `${engineKey}|${fmt}`;
-
-				// Visually separate format blocks with a clean border
-				if (lastFormat !== null && lastFormat !== fmt) {
-					tr.classList.add("group-separator");
-				}
-				lastFormat = fmt;
-
-				tr.dataset.engineKey = engineKey;
-				tr.dataset.measureKey = measureKey;
-
-				const style = getEngineStyle(parsed, catalog);
-				const indicatorSvg = renderEngineIndicatorSvg(style);
-
-				const repsStr = (r.repetitionsMs || []).join(", ");
-				const throughputK = (r.throughputTriplesPerSec / 1000).toFixed(0);
-				const isDisk = parsed.storageId === "tdb2" || parsed.storageId === "native" || parsed.storageId === "lmdb";
-				let diskText = "N/A";
-				if (isDisk) {
-					diskText = r.diskFootprintBytes ? `${(r.diskFootprintBytes / (1024 * 1024)).toFixed(1)} MiB` : "—";
-				}
-				const diskCell = hasOnDiskEngines
-					? `<td class="text-right font-mono text-muted">${diskText}</td>`
-					: "";
-
-				tr.innerHTML = `
-					<td>
-						<span class="tag-format" style="font-weight:700;">.${escapeHtml(fmt.toUpperCase())}</span>
-					</td>
-					<td>
-						<span style="display:inline-flex;align-items:center;gap:6px;">
-							${indicatorSvg}
-							<span class="engine-badge" style="color:${style.color};">${escapeHtml(r.engine)}</span>
-						</span>
-					</td>
-					<td class="text-right font-mono font-medium">${r.loadingTimeMs ? `${r.loadingTimeMs} ms` : "—"}</td>
-					<td class="text-right font-mono font-medium" style="color:var(--focus);">${throughputK} k/s</td>
-					<td class="text-right font-mono text-muted">${r.memoryDeltaMb ? `${r.memoryDeltaMb.toFixed(1)} MiB` : "—"}</td>
-					${diskCell}
-					<td class="text-right font-mono text-xs text-muted">[${escapeHtml(repsStr)}]</td>
-				`;
-
-				// Hover via deduplicated source (attached AFTER innerHTML)
-				tr.addEventListener("mouseenter", () => {
-					this.#tableHover.set({ kind: "measure", key: measureKey });
-				});
-				tr.addEventListener("mouseleave", () => {
-					this.#tableHover.clear();
-				});
-
-				// Click to toggle pin
-				tr.addEventListener("click", () => {
-					focusStore.togglePin({ kind: "measure", key: measureKey });
-				});
-
+				const tr = this.#renderTableRow(r, catalog, hasOnDiskEngines, lastFormat);
+				lastFormat = r.format || r.file.split(".").pop();
 				tbody.appendChild(tr);
 			});
 		}
@@ -1701,4 +1742,68 @@ export class LoadingView {
 		section.appendChild(wrapper);
 		return section;
 	}
+	#renderTableRow(r, catalog, hasOnDiskEngines, lastFormat) {
+		const tr = document.createElement("tr");
+		const parsed = parseEngineId(r.engine);
+		const engineKey = formatEngineId(parsed);
+		const fmt = r.format || r.file.split(".").pop();
+		const measureKey = `${engineKey}|${fmt}`;
+
+		// Visually separate format blocks with a clean border
+		if (lastFormat !== null && lastFormat !== fmt) {
+			tr.classList.add("group-separator");
+		}
+
+		tr.dataset.engineKey = engineKey;
+		tr.dataset.measureKey = measureKey;
+
+		const style = getEngineStyle(parsed, catalog);
+		const indicatorSvg = renderEngineIndicatorSvg(style);
+
+		const valid = successful(r);
+		const info = loadingStatus(r, engineKey, "throughput");
+		const repsStr = valid ? (r.repetitionsMs || []).filter((v) => Number.isFinite(v) && v >= 0).join(", ") : "";
+		const throughputK = (r.throughputTriplesPerSec / 1000).toFixed(0);
+		const isDisk = parsed.storageId === "tdb2" || parsed.storageId === "native" || parsed.storageId === "lmdb";
+		let diskText = valid ? "N/A" : "—";
+		if (isDisk && valid) {
+			diskText = Number.isFinite(r.diskFootprintBytes) && r.diskFootprintBytes >= 0 ? `${(r.diskFootprintBytes / (1024 * 1024)).toFixed(1)} MiB` : "—";
+		}
+		const diskCell = hasOnDiskEngines
+			? `<td class="text-right font-mono text-muted">${diskText}</td>`
+			: "";
+
+		tr.innerHTML = `
+			<td>
+				<span class="tag-format" style="font-weight:700;">.${escapeHtml(fmt.toUpperCase())}</span>
+			</td>
+			<td>
+				<span style="display:inline-flex;align-items:center;gap:6px;">
+					${indicatorSvg}
+					<span class="engine-badge" style="color:${style.color};">${escapeHtml(r.engine)}</span>
+				</span>
+			</td>
+			<td class="text-right font-mono font-medium">${loadingMetric(r.loadingTimeMs, valid, (value) => value + " ms")}</td>
+			<td class="text-right font-mono font-medium" style="color:var(--focus);">${loadingMetric(r.throughputTriplesPerSec, valid, () => throughputK + " k/s", loadingBadge(info))}</td>
+			<td class="text-right font-mono text-muted">${loadingMetric(r.memoryDeltaMb, valid, (value) => value.toFixed(1) + " MiB")}</td>
+			${diskCell}
+			<td class="text-right font-mono text-xs text-muted">${repsStr ? "[" + escapeHtml(repsStr) + "]" : "—"}</td>
+		`;
+
+		// Hover via deduplicated source (attached AFTER innerHTML)
+		tr.addEventListener("mouseenter", () => {
+			this.#tableHover.set({ kind: "measure", key: measureKey });
+		});
+		tr.addEventListener("mouseleave", () => {
+			this.#tableHover.clear();
+		});
+
+		// Click to toggle pin
+		tr.addEventListener("click", () => {
+			focusStore.togglePin({ kind: "measure", key: measureKey });
+		});
+
+		return tr;
+	}
+
 }

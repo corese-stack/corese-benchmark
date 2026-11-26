@@ -136,7 +136,7 @@ export async function loadBenchmarkReport(
 	const queryRuns = rawQueryRuns.map(normalizeQueryRun);
 
 	const rawLoadingRuns = Array.isArray(rawData.loadingRuns)
-		? rawData.loadingRuns.filter((r) => r && typeof r === "object")
+		? rawData.loadingRuns.filter((r) => r && typeof r === "object").map(normalizeRun)
 		: [];
 
 	return {
@@ -174,10 +174,26 @@ function normalizeQueryRun(qrun) {
  */
 function normalizeRun(run) {
 	const sanitize = (val) => (val === -1 ? null : val);
+	const loadingTimeMs = sanitize(run.loadingTimeMs);
+	const triples = sanitize(run.triples);
+	let status = run.status;
+	if (
+		!status &&
+		!run.errorMessage &&
+		typeof triples === "number" &&
+		Number.isFinite(triples) &&
+		triples > 0 &&
+		typeof loadingTimeMs === "number" &&
+		Number.isFinite(loadingTimeMs) &&
+		loadingTimeMs >= 0
+	) {
+		status = "SUCCESS";
+	}
 
 	return {
 		...run,
-		loadingTimeMs: sanitize(run.loadingTimeMs),
+		status,
+		loadingTimeMs,
 		throughputTriplesPerSec: sanitize(run.throughputTriplesPerSec),
 		memoryDeltaMb: sanitize(run.memoryDeltaMb),
 		cpuPercent: sanitize(run.cpuPercent),

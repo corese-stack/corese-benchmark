@@ -5,6 +5,8 @@
 /* Segmented Control Standard (Single-choice tabs) */
 .segmented-control {
 	display: inline-flex;
+	flex-wrap: wrap;
+	max-width: 100%;
 	align-items: center;
 	background: var(--bg-hover);
 	padding: 2px;
@@ -370,3 +372,23 @@
 	color: var(--accent);
 }
 
+
+/* Shared semantic pills: labels and symbols convey meaning without color. */
+.status-badge, .sf-badge {
+ display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+ padding: 3px 8px; border: 1px solid var(--status-muted-border); border-radius: 999px;
+ background: var(--status-muted-bg); color: var(--status-muted-text);
+ font: 700 11px/1.25 var(--font-sans); vertical-align: middle;
+}
+.status-badge--oom, .status-badge--error, .status-badge--mismatch, .status-badge--duplicate {
+ background: var(--status-fail-bg); color: var(--status-fail-text); border-color: var(--status-fail-border);
+}
+.status-badge--timeout { background: var(--status-timeout-bg); color: var(--status-timeout-text); border-color: var(--status-timeout-border); }
+.status-badge--pass { background: var(--tag-active-bg); color: var(--tag-active-text); border-color: var(--tag-active-border); }
+.status-badge--missing, .status-badge--not_tested { background: var(--status-muted-bg); color: var(--status-muted-text); border-color: var(--status-muted-border); }
+.telemetry-status-strip { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.telemetry-status-strip button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-surface); color: var(--text); cursor: pointer; font: 12px var(--font-sans); }
+.telemetry-status-strip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.telemetry-status-strip button.is-dimmed { opacity: 0.22; }
+.telemetry-status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.status-chart-caption { margin: 0; padding: 0 20px 14px; font-size: 12px; line-height: 1.6; color: var(--text-muted); }

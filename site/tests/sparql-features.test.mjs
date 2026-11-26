@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { featureTimings, aggregateFeatures, indexRuns, highlightSparql, statusOf, summarizeScope } from '../js/views/sparql-features.js';
 import { parseUrlSparql, updateUrlSparql, getCurrentView } from '../js/router.js';
 import { loadBenchmarkReport } from '../js/api.js';
+import { DATASET_CONFIGS, resolveDatasetCardConfig, resolveDatasetTripleCount, formatDatasetSizeBadge } from '../js/components/protocol-tile.js';
 const q = (id, feature = 'BGP_JOIN', dataset = 'bsbm') => ({ id, dataset, primaryFeature: feature });
 const r = (queryId, engine, medianMs, status = 'PASS', dataset = 'bsbm') => ({ queryId, engine, medianMs, status, dataset });
 const aggregate = (queries, runs) => aggregateFeatures(queries, indexRuns(runs), ['corese.next'], 'jena.6.2.0')[0].axes;
@@ -118,4 +119,198 @@ test('absolute timings preserve zero, exclude ambiguity and failures, and keep d
  const axis = featureTimings(queries, index, ['corese.next'])[0].axes[0];
  assert.equal(axis.count, 1); assert.equal(axis.medianMs, 0);
  assert.equal(featureTimings(queries, index, ['rdf4j.5'])[0].axes[0].medianMs, null);
+});
+
+test('status normalization, labels and Node palettes share canonical semantics', async () => {
+ const { normalizeRunStatus, formatStatusBadgeLabel, getStatusBadgePalette } = await import('../js/chart-utils.js');
+ for (const [input, expected] of [[' success ', 'SUCCESS'], ['pass', 'PASS'], ['out-of-memory', 'OOM'], ['timed out', 'TIMEOUT'], [null, 'MISSING'], ['not_tested', 'MISSING'], ['duplicate', 'DUPLICATE']]) assert.equal(normalizeRunStatus(input), expected);
+ for (const [status, label] of [['OOM', '⚠ OOM'], ['TIMEOUT', '◷ TIMEOUT'], ['ERROR', '× ERROR'], ['MISMATCH', '≠ MISMATCH'], ['DUPLICATE', '⊘ DUPLICATE'], ['MISSING', '— MISSING']]) assert.equal(formatStatusBadgeLabel(status), label);
+ assert.deepEqual(getStatusBadgePalette('ERROR'), getStatusBadgePalette('OOM'));
+ assert.notDeepEqual(getStatusBadgePalette('TIMEOUT'), getStatusBadgePalette('ERROR'));
+});
+
+test('failed feature summaries preserve all causes and count missing and ambiguous queries', async () => {
+ const { featureStatusSummary } = await import('../js/views/sparql-features.js');
+ const queries = [q('a'), q('b')];
+ for (const status of ['TIMEOUT', 'ERROR', 'MISMATCH', 'DUPLICATE']) {
+  const runs = indexRuns([r('a', 'corese.next', -1, status), r('b', 'corese.next', -1, status)]);
+  const summary = featureStatusSummary(queries, runs, 'corese.next');
+  assert.equal(summary.status, status); assert.match(summary.detail, /0\/2 queries passed/);
+  assert.equal(featureTimings(queries, runs, ['corese.next'])[0].axes[0].medianMs, null);
+ }
+ const mixed = featureStatusSummary(queries, indexRuns([r('a', 'corese.next', -1, 'TIMEOUT')]), 'corese.next');
+ assert.equal(mixed.status, 'TIMEOUT'); assert.match(mixed.detail, /TIMEOUT: 1, MISSING: 1/);
+ assert.equal(featureStatusSummary(queries, new Map(), 'corese.next').status, 'MISSING');
+ const duplicate = indexRuns([r('a', 'corese.next', 1), r('a', 'corese.next', 2)]);
+ assert.equal(featureStatusSummary(queries, duplicate, 'corese.next').status, 'DUPLICATE');
+});
+
+test('real bundled Chart.js null badges preserve data, native tooltip, hit testing and click', async () => {
+ const { readFile } = await import('node:fs/promises');
+ const { runInThisContext } = await import('node:vm');
+ const { createStatusBadgePlugin, findBarElement } = await import('../js/chart-utils.js');
+ runInThisContext(await readFile(new URL('../vendor/chart.umd.min.js', import.meta.url), 'utf8'));
+ const Chart = globalThis.Chart;
+ try {
+  for (const indexAxis of ['x', 'y']) {
+   const canvas = { width: 600, height: 400, style: {}, getAttribute: () => null };
+   const context = new Proxy({ canvas, measureText: (text) => ({ width: String(text).length * 7 }), getLineDash: () => [] }, { get: (object, key) => object[key] || (() => {}) });
+   canvas.getContext = () => context;
+   let clicked = null;
+   const chart = new Chart(canvas, { type: 'bar', plugins: [createStatusBadgePlugin()],
+    data: { labels: ['measured', 'failed'], datasets: [{ data: [10, null], _statuses: [null, { status: 'TIMEOUT', detail: 'unmeasurable', engineKey: 'corese.next' }] }] },
+    options: { indexAxis, responsive: false, animation: false, onClick: (_e, elements) => { clicked = elements[0]; }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => item.raw === null ? item.dataset._statuses[item.dataIndex].detail : String(item.raw) } } } } });
+   const box = chart._statusBadgeHitBoxes[0];
+   assert.ok(box); assert.deepEqual(chart.data.datasets[0].data, [10, null]);
+   assert.ok(box.x >= chart.chartArea.left && box.x + box.w <= chart.chartArea.right + 0.001);
+   assert.ok(box.y >= chart.chartArea.top && box.y + box.h <= chart.chartArea.bottom + 0.001);
+   const point = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+   assert.equal(findBarElement(chart, point.x, point.y).index, 1);
+   chart.tooltip.setActiveElements([{ datasetIndex: 0, index: 1 }], point);
+   assert.equal(chart.tooltip.opacity, 1); assert.equal(chart.tooltip.dataPoints[0].raw, null);
+   assert.deepEqual(chart.tooltip.body[0].lines, ['unmeasurable']);
+   assert.ok(Number.isFinite(chart.tooltip.x) && Number.isFinite(chart.tooltip.y));
+   chart.notifyPlugins('beforeEvent', { event: { ...point, type: 'click' } });
+   assert.equal(clicked.index, 1);
+   chart.destroy();
+  }
+ } finally { delete globalThis.Chart; }
+});
+
+test('semantic status text meets WCAG AA in each declared theme', async () => {
+ const { readFile } = await import('node:fs/promises');
+ const css = await readFile(new URL('../css/00-base.css', import.meta.url), 'utf8');
+ const luminance = (hex) => hex.match(/[0-9a-f]{2}/gi).map(part => parseInt(part, 16) / 255)
+  .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+  .reduce((total, value, i) => total + value * [0.2126, 0.7152, 0.0722][i], 0);
+ const themes = css.split('}').filter(block => block.includes('--status-fail-bg'));
+ assert.equal(themes.length, 4);
+ for (const block of themes) {
+  const tokens = Object.fromEntries([...block.matchAll(/--status-(fail|timeout|muted)-(bg|text|border):\s*(#[0-9a-f]{6})/g)].map(match => [`${match[1]}-${match[2]}`, match[3]]));
+  for (const group of ['fail', 'timeout', 'muted']) {
+   const a = luminance(tokens[`${group}-bg`]), b = luminance(tokens[`${group}-text`]);
+   assert.ok((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5, `${group} text contrast`);
+  }
+ }
+});
+
+test('dense all-null vertical groups rotate without overlap and discard hidden hit boxes', async () => {
+ const { readFile } = await import('node:fs/promises');
+ const { runInThisContext } = await import('node:vm');
+ const { createStatusBadgePlugin } = await import('../js/chart-utils.js');
+ runInThisContext(await readFile(new URL('../vendor/chart.umd.min.js', import.meta.url), 'utf8'));
+ const Chart = globalThis.Chart;
+ const canvas = { width: 300, height: 400, style: {}, getAttribute: () => null };
+ const context = new Proxy({ canvas, measureText: (text) => ({ width: String(text).length * 7 }), getLineDash: () => [] }, { get: (object, key) => object[key] || (() => {}) });
+ canvas.getContext = () => context;
+ const chart = new Chart(canvas, { type: 'bar', plugins: [createStatusBadgePlugin()],
+  data: { labels: ['NT'], datasets: Array.from({length:16}, () => ({data:[null],_statuses:[{status:'OOM'}]})) },
+  options: { responsive:false,animation:false,plugins:{legend:{display:false}} } });
+ try {
+  const boxes = chart._statusBadgeHitBoxes;
+  assert.equal(boxes.length,16);
+  for (let i=0;i<boxes.length;i++) {
+   assert.ok(boxes[i].h > boxes[i].w);
+   if(i) assert.ok(boxes[i-1].x+boxes[i-1].w <= boxes[i].x);
+  }
+  chart.setDatasetVisibility(0,false); chart.update('none');
+  assert.equal(chart._statusBadgeHitBoxes.length,15);
+  assert.ok(chart._statusBadgeHitBoxes.every(box=>box.datasetIndex!==0));
+ } finally {chart.destroy();delete globalThis.Chart;}
+});
+
+test('loadBenchmarkReport infers SUCCESS only for legacy loading runs with valid measurements', async () => {
+ const { loadBenchmarkReport } = await import('../js/api.js');
+ const payload = {
+  metadata: {},
+  runs: [
+   { engine: 'rdf4j.5.3.2.native', dataset: 'lubm', file: 'lubm_medium.nt', triples: 1340939, loadingTimeMs: 12000, throughputTriplesPerSec: 111744, status: null, errorMessage: null },
+   { engine: 'jena.6.2.0', dataset: 'bsbm', file: 'bsbm_medium.nt', triples: -1, loadingTimeMs: -1, throughputTriplesPerSec: -1, status: null, errorMessage: null },
+   { engine: 'corese.4.6.5', dataset: 'bsbm', file: 'bsbm_medium.nt', triples: -1, loadingTimeMs: -1, throughputTriplesPerSec: -1, status: 'TIMEOUT', errorMessage: 'Timed out' },
+  ],
+  loadingRuns: [
+   { engine: 'rdf4j.5.3.2.native', dataset: 'lubm', file: 'lubm_medium.nt', triples: 1340939, loadingTimeMs: 12000, throughputTriplesPerSec: 111744, status: null, errorMessage: null },
+  ],
+  queryRuns: [],
+ };
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async () => new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } });
+ try {
+  const report = await loadBenchmarkReport('data/benchmark-report.json');
+  assert.equal(report.runs[0].status, 'SUCCESS');
+  assert.equal(report.loadingRuns[0].status, 'SUCCESS');
+  assert.equal(report.runs[1].status, null);
+  assert.equal(report.runs[1].loadingTimeMs, null);
+  assert.equal(report.runs[2].status, 'TIMEOUT');
+ } finally {
+  globalThis.fetch = originalFetch;
+ }
+});
+
+
+test('dataset card files follow the view without changing SPARQL configurations', () => {
+ for (const dataset of Object.keys(DATASET_CONFIGS)) {
+  assert.equal(resolveDatasetCardConfig(dataset), DATASET_CONFIGS[dataset]);
+ }
+ assert.equal(resolveDatasetCardConfig('lubm').shortFile, 'lubm_small.nt');
+ assert.equal(resolveDatasetCardConfig('lubm').fullFile, 'input/lubm/unzip_small/lubm_small.nt');
+ for (const [dataset, shortFile, fullFile] of [
+  ['bsbm', 'bsbm_medium.nt', 'input/bsbm/view_small_medium/bsbm_medium.nt'],
+  ['lubm', 'lubm_medium.nt', 'input/lubm/unzip_medium/lubm_medium.nt'],
+  ['dbpedia', 'persondata_en.nt', 'input/dbpedia/unzip/persondata_en.nt'],
+  ['bowlogna', 'Department0.nt', 'input/bowlogna/unzip/Department0.nt'],
+ ]) {
+  const config = resolveDatasetCardConfig(dataset, 'loading');
+  assert.equal(config.shortFile, shortFile);
+  assert.equal(config.fullFile, fullFile);
+ }
+ assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').shortFile, 'named-graphs.nq');
+ assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').format, 'N-Quads');
+});
+
+test('dataset triple counts use the exact median of the canonical file for each mode', () => {
+ const runs = [
+  ...[1000003, 1000000, 1000001, 999999].map(triples => ({ dataset: 'bsbm', file: 'bsbm_medium.nt', triples })),
+  ...[102, 100, 900].map(triples => ({ dataset: 'bsbm', file: 'bsbm_small.nt', triples })),
+  { dataset: 'lubm', file: 'bsbm_medium.nt', triples: 42 },
+  { dataset: 'bsbm', file: 'other.nt', triples: 42 },
+ ];
+ const before = structuredClone(runs);
+ assert.equal(resolveDatasetTripleCount('bsbm', { runs }, 'loading'), 1000001);
+ assert.equal(resolveDatasetTripleCount('bsbm', { runs }), 102);
+ assert.equal(resolveDatasetTripleCount('bsbm', { loadingRuns: runs, runs: [] }, 'loading'), 1000001);
+ assert.equal(resolveDatasetTripleCount('bsbm', { loadingRuns: [], runs }, 'loading'), null);
+ assert.deepEqual(runs, before);
+});
+
+test('named graph counts accept all canonical aliases and ignore failed sentinel runs', () => {
+ const loadingRuns = [
+  { dataset: 'named-graphs', file: 'named-graphs.nq', triples: 101 },
+  { dataset: 'named-graphs', file: 'corese-feature-lubm.nq', triples: 103 },
+  { dataset: 'named-graphs', file: 'lubm_named.nq', triples: 105 },
+  { dataset: 'named-graphs', file: 'named-graphs.nq', triples: -1, status: 'ERROR' },
+  { dataset: 'named-graphs', file: 'corese-feature-lubm.nq', triples: -1, status: 'TIMEOUT' },
+  { dataset: 'named-graphs', file: 'other.nq', triples: 900 },
+  { dataset: 'lubm', file: 'named-graphs.nq', triples: 900 },
+ ];
+ for (const mode of ['loading', 'sparql']) {
+  assert.equal(resolveDatasetTripleCount('named-graphs', { loadingRuns }, mode), 103);
+ }
+});
+
+test('dataset counts stay unknown without finite positive measurements', () => {
+ const runs = [-1, 0, NaN, Infinity, -Infinity, null, undefined, '100'].map(triples =>
+  ({ dataset: 'bsbm', file: 'bsbm_small.nt', triples }));
+ assert.equal(resolveDatasetTripleCount('bsbm', { runs }), null);
+ assert.equal(resolveDatasetTripleCount('bsbm', { runs: [] }), null);
+ assert.equal(resolveDatasetTripleCount('bsbm', null), null);
+ assert.equal(resolveDatasetTripleCount('bsbm'), null);
+});
+
+test('dataset size badges format measured triples and quads or show an em dash', () => {
+ assert.equal(formatDatasetSizeBadge(1000000, 'bsbm'), '1,000,000 triples');
+ assert.equal(formatDatasetSizeBadge(1000000, 'named-graphs'), '1,000,000 quads');
+ for (const value of [null, undefined, -1, 0, NaN, Infinity, '100']) {
+  assert.equal(formatDatasetSizeBadge(value, 'bsbm'), '—');
+ }
 });

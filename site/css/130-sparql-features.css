@@ -14,10 +14,11 @@
 .sf-view .data-table th[scope="row"] { text-transform: none; }
 .sf-view tr[data-sf-query] { cursor: pointer; }
 .sf-view :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
-.sf-badge { border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
-.sf-badge--pass { color: var(--tag-active-text); background: var(--tag-active-bg); }
-.sf-badge--fail { color: var(--text); background: var(--bg-hover); font-weight: 700; border-style: dashed; }
-.sf-badge--other { color: var(--text-muted); }
+ .sf-badge { display: inline-flex; align-items: center; border: 1px solid var(--status-muted-border); border-radius: 999px; padding: 3px 8px; font: 700 11px/1.25 var(--font-sans); white-space: nowrap; }
+.sf-badge--pass { color: var(--tag-active-text); background: var(--tag-active-bg); border-color: var(--tag-active-border); }
+.sf-badge--fail, .sf-badge--error { color: var(--status-fail-text); background: var(--status-fail-bg); border-color: var(--status-fail-border); }
+.sf-badge--timeout { color: var(--status-timeout-text); background: var(--status-timeout-bg); border-color: var(--status-timeout-border); }
+.sf-badge--other, .sf-badge--missing { color: var(--status-muted-text); background: var(--status-muted-bg); border-color: var(--status-muted-border); }
 .sf-badge--query { font-family: var(--font-mono); font-weight: 600; background: var(--bg-hover); color: var(--text); border-color: var(--border); }
 .sf-dialog-actions { display: flex; align-items: center; gap: 12px; }
 

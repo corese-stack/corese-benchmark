@@ -2,10 +2,10 @@
  * Corese Benchmark Dashboard - Main Orchestrator
  */
 
-import { loadBenchmarkReport } from "./api.js";
-import { engineManager } from "./engines.js?v=68";
-import { SparqlFeaturesView } from "./views/sparql-features.js";
-import { LoadingView } from "./views/loading.js?v=68";
+import { loadBenchmarkReport } from "./api.js?v=70";
+import { engineManager } from "./engines.js?v=70";
+import { SparqlFeaturesView } from "./views/sparql-features.js?v=70";
+import { LoadingView } from "./views/loading.js?v=70";
 import {
 	getCurrentView,
 	navigateToView,
@@ -13,7 +13,7 @@ import {
 	parseUrlLoading,
 	parseUrlSparql,
 	updateUrlEngines,
-} from "./router.js";
+} from "./router.js?v=70";
 
 class DashboardApp {
 	#abortController = null;
