@@ -1,88 +1,38 @@
 # Corese SPARQL Feature Benchmark v1
 
-15 requêtes SELECT multiligne, réparties sur les neuf fonctionnalités du plan.
-Le catalogue `catalogue.json` décrit les fichiers, données, variables projetées,
-fonctionnalités principales et secondaires, délais et modes de comparaison.
-Les fichiers de requête sont relatifs au catalogue ; les chemins de données sont
-relatifs à la racine du dépôt. Aucune requête ne nécessite d'inférence.
+15 multiline `SELECT` queries covering the 9 SPARQL 1.1 feature categories in `catalogue.json`.
+Query file paths are relative to the catalogue directory; dataset paths are relative to the repository root.
+All queries target Simple Entailment (`entailment: "none"`) under [W3C SPARQL 1.1](https://www.w3.org/TR/sparql11-query/), using standard RDF/RDFS/XSD IRIs and dataset namespaces (`ub`, `bsbm`, `foaf`, `dbp`) without `SERVICE`, engine extensions, `NOW()`, `RAND()`, or relative IRIs.
 
-Référence normative : [SPARQL 1.1, recommandation W3C](https://www.w3.org/TR/sparql11-query/).
-Les préfixes RDF/RDFS/XSD ont leurs IRI W3C officielles ; UB, BSBM, Bowlogna,
-FOAF et DBpedia utilisent les espaces de noms réellement présents dans les dumps.
-Aucun SERVICE distant, fonction Corese, NOW(), RAND() ou IRI relative.
+## Canonical Input Datasets
 
-## Chargement
-
-- LUBM : `input/lubm/unzip_small/lubm_small.nt` en graphe par défaut.
-- BSBM et topology : `input/bsbm/unzip_small/bsbm_small.nt` en graphe par défaut.
-- Bowlogna : `input/bowlogna/unzip/Department0.nt` en graphe par défaut.
-- DBpedia : `input/dbpedia/unzip/persondata_en.nt` en graphe par défaut.
-- Named graphs : créer le fichier N-Quads ci-dessous puis le charger en conservant
-  les contextes ; laisser le graphe par défaut vide.
-
-Depuis la racine du dépôt :
+- **LUBM** (`Q01`, `Q04`, `Q05`): `input/lubm/unzip/lubm_small.nt` in the default graph.
+- **BSBM & Topology** (`Q02`, `Q03`, `Q06`, `Q07`, `Q09`, `Q13`): `input/bsbm/unzip/bsbm_small.nt` in the default graph.
+- **BowlognaBench** (`Q10`, `Q11`, `Q12`): `input/bowlogna/unzip/Department0.nt` in the default graph.
+- **DBpedia 3.5.1** (`Q08`): `input/dbpedia/unzip/persondata_en.nt` in the default graph.
+- **Named Graphs** (`Q14`, `Q15`): N-Quads file generated from LUBM with contexts preserved and an empty default graph:
 
 ```bash
 python3 input/queries/v1/named-graphs/prepare_dataset.py \
-  input/lubm/unzip_small/lubm_small.nt /tmp/corese-feature-lubm.nq
+  input/lubm/unzip/lubm_small.nt /tmp/corese-feature-lubm.nq
 ```
 
-La destination doit être absente. Le script traite le fichier canonique N-Triples
-ligne par ligne ; il ne convertit pas du Turtle. Les prédicats `ub:takesCourse`
-et `ub:teacherOf` vont dans `urn:corese:benchmark:v1:courses`, les autres triplets
-dans `urn:corese:benchmark:v1:people`. Aucun triplet RDF n'est inventé. Q14 joint
-ces deux contextes ; Q15 vérifie leurs cardinalités. Les compteurs du script
-mesurent les lignes émises ; les doublons du fichier source disparaissent au
-chargement RDF. Ne pas charger plusieurs sérialisations du même jeu simultanément.
+`prepare_dataset.py` requires the destination file to be absent and reads canonical N-Triples line by line.
+Triples with predicates `ub:takesCourse` or `ub:teacherOf` are placed into `urn:corese:benchmark:v1:courses`; all other triples go into `urn:corese:benchmark:v1:people`.
+Q14 joins across both named graphs and Q15 checks their triple and distinct subject cardinalities.
 
-Les échelles medium/large peuvent remplacer small en gardant le même profil de
-chargement. Les constantes sélectives de Q01/Q02 sont vérifiées sur les données
-locales ; une autre génération peut nécessiter de nouveaux paramètres documentés.
+## Query Design Notes
 
-## Choix sémantiques
+- **BGP patterns** (`Q01`, `Q02`, `Q04`, `Q05`): selective stars (`Q01`, `Q02`), chain join (`Q04`), and student/advisor/course triangle (`Q05`).
+- **Negation equivalence** (`Q03`, `Q09`): `MINUS` and `FILTER NOT EXISTS` sharing the same join variable `?product` and producing equal multisets.
+- **Property paths** (`Q06`, `Q07`): strict transitive closure over `rdfs:subClassOf` (`Q06`) and bidirectional alternation (`Q07`).
+- **Optional joins** (`Q08`): `foaf:Person`, `foaf:name`, `dbp:birth`, `dbp:death`, and `dbp:birthPlace` over DBpedia, with death date nested as optional inside birth place.
+- **Aggregates & subqueries** (`Q10`, `Q11`): `COUNT`/`SUM` with `HAVING` (`Q10`) and an uncorrelated aggregated subquery joined on `?unit` (`Q11`).
+- **Typed filters & casts** (`Q12`, `Q03`, `Q09`, `Q13`): Bowlogna dates (`xsd:string` `YYYY-MM-DD`) normalized via `CONCAT` and cast to `xsd:dateTime` (`Q12`), and BSBM `bsbm:USD` prices cast via `xsd:decimal(STR(?rawPrice))`.
+- **Solution modifiers** (`Q13`): `DISTINCT`, deterministic `ORDER BY`, `LIMIT 20 OFFSET 20`; all other queries return full result multisets.
 
-- Q01/Q02 : étoiles sélectives ; Q04 : chaîne ; Q05 : triangle étudiant/directeur/cours.
-- Q03/Q09 : paire MINUS / FILTER NOT EXISTS avec la même seule variable partagée,
-  `?product`. Leurs résultats doivent être égaux comme multiensembles.
-- Q06 : fermeture transitive réelle des `rdfs:subClassOf` BSBM ; Q07 : inversion et
-  alternative sur cette hiérarchie avec revisites possibles.
-- Q08 : les données DBpedia 3.5.1 emploient `foaf:Person`, `foaf:name`, `dbp:birth`,
-  `dbp:death`, `dbp:birthPlace`. Le décès est optionnel à l'intérieur du bloc naissance.
-- Q10 : agrégats entiers et HAVING ; Q11 : sous-requête agrégée indépendante jointe
-  par sa variable projetée `?unit` au bloc externe. Pas de corrélation implicite.
-- Q12 : les dates Bowlogna sont des `xsd:string` au format YYYY-MM-DD. CONCAT ajoute
-  minuit UTC avant le cast `xsd:dateTime`, les bornes, YEAR et MONTH.
-- Q03/Q09/Q13 : le type de prix BSBM est `bsbm:USD`, pas `xsd:decimal`.
-  `xsd:decimal(STR(?rawPrice))` permet des comparaisons et un tri numériques standards.
-- Q13 : DISTINCT, ORDER BY total sur les variables projetées, LIMIT 20 OFFSET 20.
-  Les autres requêtes n'ont pas de LIMIT arbitraire : leur multiensemble est complet.
+## Validation Contract
 
-Chaque requête a une fonctionnalité principale ; les opérateurs nécessaires pour
-exprimer le cas réel restent documentés comme fonctionnalités secondaires.
-Les modes exacts conservent doublons et variables non liées. Le banc doit qualifier
-les résultats contenant des blank nodes comme INCONCLUSIVE s'il ne sait pas les
-comparer par isomorphisme. Les projections actuelles portent sur IRI et littéraux.
-
-## Validation effectuée
-
-Les 15 fichiers passent les parseurs de Jena 6.2.0 en mode SPARQL 1.1, RDF4J 5.3.2
-et la compilation Corese 4.6.5. Les 15 requêtes ont été exécutées avec Jena, sans
-inférence, sur les dumps locaux : toutes produisent des résultats non vides.
-Q03 et Q09 produisent exactement le même multiensemble (908 produits).
-`validation/results.json` contient les cardinalités et les SHA-256 des données.
-Ce contrôle ne constitue pas une mesure de performance, ni une validation
-inter-moteurs de l'exécution. Les versions ci-dessus concernent les dépendances
-utilisées lors du contrôle.
-
-Le validateur Java ayant servi au contrôle est fourni. Avec les dépendances runtime
-Corese 4.6.5, Jena 6.2.0 et RDF4J 5.3.2 dans `BENCHMARK_CLASSPATH` :
-
-```bash
-java -Xmx5g -cp "$BENCHMARK_CLASSPATH" \
-  input/queries/v1/validation/ValidateFeatureQueries.java \
-  input/queries/v1 "$PWD" /tmp/corese-feature-lubm.nq
-```
-
-Le catalogue et les modes de validation constituent le contrat pour le futur
-chargeur. Le harness historique, fondé sur les fichiers de requêtes par ligne,
-n'est pas modifié par ces lots de création du corpus.
+The benchmark harness (`SparqlResultHasher`) computes canonical SHA-256 multiset hashes preserving duplicates, datatypes, language tags, and unbound variables.
+Results containing blank nodes are flagged as `INCONCLUSIVE` rather than compared by label; all v1 projections return IRIs or literals.
+The static site mirror under `site/data/sparql/v1/` is synchronized from this directory via `site/scripts/export-sparql-catalogue.py`.
