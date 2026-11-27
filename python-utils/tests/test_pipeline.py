@@ -23,8 +23,9 @@ EXPECTED = {"lubm": {"Q01", "Q04"}, "bsbm": {"Q02"}}
 
 
 def report():
-    loading = [{"engine": ENGINE, "dataset": ds, "file": f"{ds}_medium.nt", "triples": 10,
-                "loadingTimeMs": 5, "status": "SUCCESS", "errorMessage": ""} for ds in EXPECTED]
+    loading = [{"engine": ENGINE, "dataset": ds, "file": f"{ds}_medium.{ext}", "triples": 10,
+                "loadingTimeMs": 5, "status": "SUCCESS", "errorMessage": ""} for ds in EXPECTED
+                for ext in (baseline.MULTI_FORMAT_EXTENSIONS if ds == "lubm" else ("nt",))]
     queries = [{"engine": ENGINE, "dataset": ds, "queryId": qid, "status": "PASS", "medianMs": 1}
                for ds, ids in EXPECTED.items() for qid in sorted(ids)]
     return {"metadata": {}, "runs": loading, "queryRuns": queries}
@@ -49,6 +50,23 @@ class BaselineCoverageTest(unittest.TestCase):
         self.assertEqual(plan().fresh_engines, [ENGINE])
         data["queryRuns"] = [{"engine": ENGINE, "dataset": "lubm", "queryId": "query_1"}]
         self.assertEqual(plan().fresh_engines, [ENGINE])
+
+    def test_missing_format_requires_fresh_run(self):
+        for extension in baseline.MULTI_FORMAT_EXTENSIONS:
+            with self.subTest(extension=extension):
+                data = report()
+                data["runs"] = [row for row in data["runs"]
+                                if row["file"] != f"lubm_medium.{extension}"]
+                plan = baseline.plan_engines([ENGINE], list(EXPECTED), data, expected_queries=EXPECTED)
+                self.assertEqual(plan.fresh_engines, [ENGINE])
+
+    def test_non_pass_query_requires_fresh_run(self):
+        for status in ("MISMATCH", "INCONCLUSIVE", "TIMEOUT", "ERROR", None):
+            with self.subTest(status=status):
+                data = report()
+                data["queryRuns"][0]["status"] = status
+                plan = baseline.plan_engines([ENGINE], list(EXPECTED), data, expected_queries=EXPECTED)
+                self.assertEqual(plan.fresh_engines, [ENGINE])
 
     def test_other_engine_cannot_supply_coverage(self):
         data = report()
@@ -125,6 +143,53 @@ class WorkflowCacheTest(unittest.TestCase):
             self.assertFalse(checkpoint.exists())
             self.assertEqual(json.loads(output.read_text())["queryRuns"], report()["queryRuns"])
 
+    def test_merge_cross_validates_fresh_outlier_and_preserves_java_verdict(self):
+        cached = [{"engine": engine, "dataset": "lubm", "queryId": "Q01",
+                   "status": "PASS", "rowCount": 10, "resultHash": "same"}
+                  for engine in (ENGINE, "corese.4.6.5")]
+        fresh = [dict(cached[0], engine="corese.next", resultHash="different"),
+                 dict(cached[0], engine="rdf4j.6.1.0", status="INCONCLUSIVE")]
+        with tempfile.TemporaryDirectory() as directory:
+            paths = [Path(directory) / name for name in ("cached.json", "fresh.json")]
+            for path, rows in zip(paths, (cached, fresh)):
+                path.write_text(json.dumps({"metadata": {}, "queryRuns": rows}))
+            output = Path(directory) / "merged.json"
+            workflow_reports.merge_json_files([str(path) for path in paths], str(output))
+            rows = json.loads(output.read_text())["queryRuns"]
+        self.assertEqual([row["status"] for row in rows],
+                         ["PASS", "PASS", "MISMATCH", "INCONCLUSIVE"])
+
+    def test_query_comparison_consensus_and_ties(self):
+        cases = [
+            ([(10, "a", False), (10, "b", False)], ["MISMATCH", "MISMATCH"]),
+            ([(10, "a", True), (10, "b", False)], ["INCONCLUSIVE", "INCONCLUSIVE"]),
+            ([(10, "a", True), (11, "a", False)], ["MISMATCH", "MISMATCH"]),
+            ([(10, "a", True), (10, "a", False), (10, "b", False)],
+             ["PASS", "PASS", "INCONCLUSIVE"]),
+            ([(10, "a", True), (10, "a", False), (11, "b", True)],
+             ["PASS", "PASS", "MISMATCH"]),
+            ([(10, "a", False)], ["PASS"]),
+        ]
+        for observations, expected in cases:
+            with self.subTest(observations=observations):
+                rows = [dict(dataset="lubm", queryId="Q01", status="PASS",
+                             rowCount=count, resultHash=hash_value, hasBlankNodes=blank)
+                        for count, hash_value, blank in observations]
+                workflow_reports.cross_validate_merged_queries(rows)
+                self.assertEqual([row["status"] for row in rows], expected)
+
+    def test_query_comparison_ignores_incomparable_and_other_groups(self):
+        rows = [dict(dataset="lubm", queryId="Q01", status="PASS", rowCount=10, resultHash="a")]
+        rows += [dict(rows[0], **changes) for changes in (
+            {"rowCount": -1}, {"rowCount": "10"}, {"resultHash": ""},
+            {"status": "INCONCLUSIVE", "resultHash": "b"},
+            {"dataset": "bsbm", "resultHash": "b"},
+            {"queryId": "Q02", "resultHash": "b"},
+        )]
+        original = copy.deepcopy(rows)
+        workflow_reports.cross_validate_merged_queries(rows)
+        self.assertEqual(rows, original)
+
     def test_merge_preserves_nested_dataset_sizes(self):
         with tempfile.TemporaryDirectory() as directory:
             first, second = report(), report()
@@ -177,11 +242,11 @@ class SyncReportsTest(unittest.TestCase):
                  patch.object(sync_reports, "load_expected_v1_queries", return_value=EXPECTED):
                 merged = sync_reports.merge_all_data(promote=True)
             self.assertNotIn("runs", merged)
-            self.assertEqual(len(merged["loadingRuns"]), 2)
+            self.assertEqual(len(merged["loadingRuns"]), 7)
             self.assertEqual(merged["metadata"]["datasetSizes"]["bsbm:bsbm_small.nt"], 12)
             frozen = json.loads((root / "export/baseline.json").read_text())
             self.assertNotIn("runs", frozen)
-            self.assertEqual(len(frozen["loadingRuns"]), 2)
+            self.assertEqual(len(frozen["loadingRuns"]), 7)
 
     def test_promote_baseline_allows_documented_terminal_loading_failures(self):
         data = report()
@@ -259,18 +324,19 @@ class SyncReportsTest(unittest.TestCase):
                 {"engine": ENGINE, "dataset": "bsbm", "queryId": "Q02", "status": "PASS", "medianMs": 1},
             ],
         }
+        medium_oom["runs"] = report()["runs"][:-1] + medium_oom["runs"][1:]
         plan = baseline.plan_engines([ENGINE], list(EXPECTED), medium_oom, expected_queries=EXPECTED)
         self.assertEqual(plan.cached_engines, [ENGINE])
         with tempfile.TemporaryDirectory() as directory:
             dest = str(Path(directory) / "baseline.json")
             sync_reports.promote_baseline(medium_oom, EXPECTED, dest)
             saved = baseline.load_baseline(dest)
-            self.assertEqual(len(saved["loadingRuns"]), 2)
-            medium_oom["runs"][1]["status"] = "ERROR"
+            self.assertEqual(len(saved["loadingRuns"]), 7)
+            medium_oom["runs"][-1]["status"] = "ERROR"
             with self.assertRaises(ValueError):
                 sync_reports.promote_baseline(medium_oom, EXPECTED, dest)
             mixed = copy.deepcopy(medium_oom)
-            mixed["runs"][1]["status"] = "SUCCESS"
+            mixed["runs"][-1]["status"] = "SUCCESS"
             mixed["runs"].append({"engine": ENGINE, "dataset": "bsbm", "file": "bsbm_medium.ttl", "status": "ERROR"})
             self.assertEqual(
                 baseline.plan_engines([ENGINE], list(EXPECTED), mixed, expected_queries=EXPECTED).fresh_engines,

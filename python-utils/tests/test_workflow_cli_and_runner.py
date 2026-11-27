@@ -67,10 +67,12 @@ class WorkflowCliTest(unittest.TestCase):
         for path in (root / "Makefile", root / ".github/workflows/ci.yml"):
             flags = set(re.findall(r'--[a-zA-Z][\w-]*', path.read_text()))
             # Only inspect workflow flags; remaining flags belong to node, Gradle, curl and conda.
-            external = {"--test", "--no-daemon", "--prune", "--shell", "--args", "--max-time", "--verbose"}
+            external = {"--test", "--no-daemon", "--prune", "--shell", "--args", "--max-time", "--verbose",
+                        "--all", "--tags", "--detach"}
             workflow_flags = flags - external
             values = {"--engines": "corese.local", "--datasets": "dbpedia",
-                      "--mode": "all", "--formats": "nt", "--reuse": "none", "--baseline": "base.json"}
+                      "--mode": "all", "--formats": "nt", "--reuse": "none", "--baseline": "base.json",
+                      "--corese-local-path": "libs/corese-core-local.jar"}
             for flag in workflow_flags:
                 args = [flag, values[flag]] if flag in values else [flag]
                 if flag != "--engines":

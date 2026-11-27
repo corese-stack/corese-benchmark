@@ -15,8 +15,14 @@ from datetime import datetime, timezone
 
 IMMUTABLE_ENGINES = (
     "corese.4.6.5", "corese.4.6.4", "jena.6.2.0", "jena.6.2.0.tdb2",
+    "jena.6.1.0", "jena.6.1.0.tdb2",
     "rdf4j.6.1.0", "rdf4j.6.1.0.native", "rdf4j.6.1.0.lmdb",
+    "rdf4j.5.3.2", "rdf4j.5.3.2.native", "rdf4j.5.3.2.lmdb",
 )
+MULTI_FORMAT_EXTENSIONS = ("nt", "nq", "ttl", "trig", "rdf", "jsonld")
+MULTI_FORMAT_CANONICAL_STEMS = {
+    "bowlogna": "Department0", "dbpedia": "persondata_en", "lubm": "lubm_medium",
+}
 CANONICAL_NAMED_GRAPHS_FILE = "corese-feature-lubm.nq"
 LEGACY_NAMED_GRAPHS_FILE = "named-graphs.nq"
 CANONICAL_SPARQL_FILES = {
@@ -143,10 +149,17 @@ def has_canonical_loading_coverage(runs: list[dict], engine: str, dataset: str) 
     matching = [r for r in runs if r.get("engine") == engine and r.get("dataset") == dataset]
     if any(r.get("status") == "ERROR" for r in matching):
         return False
-    if dataset in CANONICAL_SPARQL_FILES:
-        matching = [r for r in matching if is_canonical_dashboard_loading_run(r)]
+    if dataset in MULTI_FORMAT_CANONICAL_STEMS:
+        stem = MULTI_FORMAT_CANONICAL_STEMS[dataset]
+        valid_files = {r.get("file") for r in matching if valid_loading_run(r)}
+        return all(f"{stem}.{ext}" in valid_files for ext in MULTI_FORMAT_EXTENSIONS)
     if dataset == "bsbm":
-        return any(valid_loading_run(r) or r.get("status") in RESOURCE_LIMIT_FAILURES for r in matching)
+        return any(r.get("file") == "bsbm_medium.nt"
+                   and (valid_loading_run(r) or r.get("status") in RESOURCE_LIMIT_FAILURES)
+                   for r in matching)
+    if dataset == "named-graphs":
+        matching = [r for r in matching if r.get("file") in
+                    (CANONICAL_NAMED_GRAPHS_FILE, LEGACY_NAMED_GRAPHS_FILE)]
     return any(valid_loading_run(r) for r in matching)
 
 # SPARQL category patterns matching SparqlAnalyser.java
@@ -239,7 +252,7 @@ def plan_engines(
     for eng in requested_engines:
         if eng in IMMUTABLE_ENGINES and all(
             has_canonical_loading_coverage(baseline_runs, eng, ds)
-            and has_v1_query_coverage(baseline, eng, ds, expected_queries)
+            and has_v1_query_coverage(baseline, eng, ds, expected_queries, require_pass=True)
             for ds in requested_datasets
         ):
             cached.append(eng)

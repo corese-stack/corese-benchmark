@@ -13,15 +13,15 @@ on:
   workflow_dispatch:
     inputs:
       datasets:
-        description: 'Datasets (comma-separated: dbpedia,bowlogna,bsbm,lubm)'
+        description: 'Datasets (comma-separated: dbpedia,bowlogna,bsbm,lubm,named-graphs)'
         required: false
-        default: 'dbpedia,bowlogna,lubm,bsbm'
+        default: 'dbpedia,bowlogna,lubm,bsbm,named-graphs'
       engines:
         description: 'Comma-separated engines (e.g. corese.next,corese.4.6.5,jena.6.2.0)'
         required: false
-        default: 'corese.next,corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb'
+        default: 'corese.next,corese.4.6.5,corese.4.6.4,jena.6.2.0,jena.6.2.0.tdb2,jena.6.1.0,jena.6.1.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb,rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb'
       corese_commit:
-        description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = ignore.'
+        description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = feature/corese-next HEAD.'
         required: false
         default: ''
         type: string
@@ -64,8 +64,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DEFAULT_CORESE_NEXT_COMMIT: c96f23df4b408b892a91a24d889757de0f4d6c1f
-  BASE_ENGINES: corese.next,corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb
+  BASE_ENGINES: corese.next,corese.4.6.5,corese.4.6.4,jena.6.2.0,jena.6.2.0.tdb2,jena.6.1.0,jena.6.1.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb,rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb
   SMOKE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.6.1.0
   ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm,named-graphs
 
@@ -124,6 +123,7 @@ jobs:
       engines: ${{ steps.params.outputs.engines }}
       datasets: ${{ steps.params.outputs.datasets }}
       trigger: ${{ steps.params.outputs.trigger }}
+      publishable: ${{ steps.params.outputs.publishable }}
 
     steps:
       - name: Checkout
@@ -179,7 +179,9 @@ jobs:
               if [ -n "$PL_TAG" ]; then
                 [[ "$PL_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.]+)?$ ]] \
                   || fail "Invalid release_tag: '$PL_TAG'"
-                ENGINES="corese.next,corese.${PL_TAG#v},jena.6.2.0,rdf4j.6.1.0"
+                if ! [[ ",$BASE_ENGINES," == *,corese.${PL_TAG#v},* ]]; then
+                  ENGINES="$BASE_ENGINES,corese.${PL_TAG#v}"
+                fi
                 TRIGGER="$TRIGGER ($PL_TAG)"
               fi
               ;;
@@ -203,6 +205,15 @@ jobs:
           [ -n "$DATASETS" ] && [ -n "$ENGINES" ] \
             || fail "datasets and engines must not be empty"
 
+          PUBLISHABLE=false
+          if [[ "$MODE" == all && "$QUICK" == false && "$INFERENCE" == false && -z "$FORMATS" ]]; then
+            PUBLISHABLE=true
+            IFS=',' read -ra REQUIRED_DATASETS <<< "$ALL_DATASETS"
+            for dataset in "${REQUIRED_DATASETS[@]}"; do
+              [[ ",$DATASETS," == *,$dataset,* ]] || PUBLISHABLE=false
+            done
+          fi
+
           EXTRA=("--mode=$MODE" "--reuse=$REUSE")
           [ -z "$FORMATS" ] || EXTRA+=("--formats=$FORMATS")
           if [ -n "$COMMIT" ] && ! [[ ",$ENGINES," == *,corese.next,* ]]; then
@@ -213,6 +224,7 @@ jobs:
           [ "$QUICK" = "true" ]            && EXTRA+=("--quick")
 
           {
+            echo "publishable=$PUBLISHABLE"
             echo "engines=$ENGINES"
             echo "datasets=$DATASETS"
             echo "commit=$COMMIT"
@@ -232,7 +244,7 @@ jobs:
         run: |
           find out/ -name "*.json" -mtime +30 -delete 2>/dev/null || true
           rm -rf build/
-          rm -f libs/corese-core-local.jar
+          rm -f libs/*.jar
 
       - name: Locate conda
         run: |
@@ -248,22 +260,30 @@ jobs:
       - name: Build corese.next JAR
         if: contains(steps.params.outputs.engines, 'corese.next')
         env:
-          CORESE_COMMIT: ${{ steps.params.outputs.commit || env.DEFAULT_CORESE_NEXT_COMMIT }}
+          CORESE_COMMIT: ${{ steps.params.outputs.commit }}
         run: |
           CORESE_DIR="$RUNNER_TEMP/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then
             git clone https://github.com/corese-stack/corese-core.git "$CORESE_DIR"
           fi
           cd "$CORESE_DIR"
-          git fetch origin feature/corese-next
-          git checkout "$CORESE_COMMIT"
+          if [ -z "$CORESE_COMMIT" ]; then
+            git fetch origin feature/corese-next
+            git checkout -B feature/corese-next FETCH_HEAD
+          else
+            git fetch origin "$CORESE_COMMIT" || git fetch --all --tags
+            git checkout --detach "$CORESE_COMMIT"
+          fi
+          RESOLVED_SHA=$(git rev-parse HEAD)
+          echo "corese.next resolved SHA: $RESOLVED_SHA"
+          echo "- **corese.next SHA:** $RESOLVED_SHA" >> "$GITHUB_STEP_SUMMARY"
           chmod +x gradlew
           ./gradlew clean shadowJar --no-daemon -q
           JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
           [ -f "$JAR" ] || { echo "::error::corese-core shadowJar not found"; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/libs"
           cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
-          echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
+          echo "corese.next JAR built from $RESOLVED_SHA → libs/corese-core-local.jar"
 
       - name: Check for new library releases on Maven Central
         if: github.event_name == 'schedule'
@@ -280,12 +300,17 @@ jobs:
         run: |
           source "$CONDA_SH"
           conda activate benchmarkenv
+          CORESE_ARGS=()
+          if [[ ",$ENGINES," == *,corese.next,* ]]; then
+            CORESE_ARGS+=("--corese-local-path=$GITHUB_WORKSPACE/libs/corese-core-local.jar")
+          fi
           # EXTRA_ARGS contains validated safe flags; word splitting intended
           # shellcheck disable=SC2086
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \
             --baseline="site/data/baseline.json" \
+            "${CORESE_ARGS[@]}" \
             $EXTRA_ARGS
 
       - name: Check site/data output
@@ -304,6 +329,7 @@ jobs:
           retention-days: 30
 
       - name: Upload Pages artifact
+        if: steps.params.outputs.publishable == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
@@ -311,7 +337,7 @@ jobs:
   # ─── Deploy to GitHub Pages (main branch only) ───────────────────────────
   deploy-pages:
     needs: benchmark-run
-    if: ${{ needs.benchmark-run.result == 'success' && github.ref == 'refs/heads/main' }}
+    if: ${{ needs.benchmark-run.result == 'success' && github.ref == 'refs/heads/main' && needs.benchmark-run.outputs.publishable == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -357,4 +383,7 @@ jobs:
             return 1
           }
           check "$BASE/"
-          check "$BASE/data/baseline.json"
+          for report in baseline benchmark-report; do
+            check "$BASE/data/$report.json"
+            curl -fsSL --max-time 20 "$BASE/data/$report.json" | python3 -m json.tool > /dev/null
+          done
