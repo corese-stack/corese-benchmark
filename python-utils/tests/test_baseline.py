@@ -1,8 +1,17 @@
 """Unit tests for baseline management, engine planning, and report merging."""
 
+from __future__ import annotations
+
+import json
 import os
 import tempfile
 import unittest
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import baseline
 
 from baseline import (
     classify_sparql,
@@ -150,7 +159,7 @@ class TestBaseline(unittest.TestCase):
             ]
         }
         merged = merge_reports(self.sample_baseline, fresh, cached_engines=["corese.4.6.5", "jena.6.2.0"])
-        engines_in_runs = {r["engine"] for r in merged["runs"]}
+        engines_in_runs = {r["engine"] for r in merged["loadingRuns"]}
         self.assertEqual(engines_in_runs, {"corese.4.6.5", "jena.6.2.0", "corese.next"})
         self.assertEqual(merged["metadata"]["java"], "Java 21")
         # Ensure natural query sorting in queryRuns
@@ -181,6 +190,46 @@ class TestBaseline(unittest.TestCase):
         self.assertEqual(classify_sparql("SELECT ?x WHERE { ?x ?p ?o } GROUP BY ?x"), "GROUP_BY")
         self.assertEqual(classify_sparql("SELECT ?x WHERE { ?x ?p ?o . FILTER(NOW() > ?d) }"), "TEMPORAL")
         self.assertEqual(classify_sparql("SELECT ?x WHERE { { SELECT ?x WHERE { ?x ?p ?o } } }"), "SUBQUERY")
+
+
+class CanonicalReportTest(unittest.TestCase):
+    def test_canonical_bsbm_requires_exact_nt_file(self):
+        for filename in ("bsbm_small.nt", "bsbm_medium.ttl", "bsbm_medium.nt.backup"):
+            self.assertFalse(baseline.is_canonical_dashboard_loading_run(
+                dict(dataset="bsbm", file=filename)))
+        self.assertTrue(baseline.is_canonical_dashboard_loading_run(
+            dict(dataset="bsbm", file="bsbm_medium.nt")))
+
+    def test_sizes_pruning_and_complete_engines(self):
+        rows = [dict(dataset='bsbm', engine='jena.6.2.0', file='bsbm_small.nt', triples=n)
+                for n in (10, 14, -1, float('inf'), float('nan'), None)]
+        rows += [dict(dataset='bsbm', engine='jena.6.2.0', file='bsbm_medium.nt', triples=100),
+                 dict(dataset='named-graphs', engine='jena.6.2.0', file='named-graphs.nq', triples=20),
+                 dict(dataset='named-graphs', engine='jena.6.2.0', file='corese-feature-lubm.nq', triples=22),
+                 dict(dataset='bsbm', engine='rdf4j.5.3.1', file='bsbm_medium.nt', triples=100)]
+        report = {'metadata': {'datasetSizes': {'lubm:lubm_small.nt': 50}}, 'runs': rows,
+                  'queryRuns': [dict(dataset='bsbm', engine='jena.6.2.0', queryId='Q01')]}
+        pruned = baseline.prune_report_for_site(report, expected_queries={'bsbm': {'Q01'}},
+                                                require_complete_queries=True)
+        self.assertNotIn('runs', pruned)
+        self.assertEqual(len(pruned['loadingRuns']), 2)
+        self.assertEqual(pruned['loadingRuns'][1]['file'], 'corese-feature-lubm.nq')
+        self.assertEqual(pruned['loadingRuns'][1]['triples'], 22)
+        self.assertEqual(pruned['metadata']['datasetSizes']['bsbm:bsbm_small.nt'], 12)
+        self.assertEqual(pruned['metadata']['datasetSizes']['lubm:lubm_small.nt'], 50)
+        self.assertEqual(report['runs'][7]['file'], 'named-graphs.nq')
+
+    def test_legacy_named_graphs_and_baseline_roundtrip(self):
+        row = dict(dataset='named-graphs', engine='jena.6.2.0', file='named-graphs.nq', triples=12)
+        pruned = baseline.prune_report_for_site({'runs': [row]})
+        self.assertEqual(pruned['loadingRuns'][0]['file'], 'corese-feature-lubm.nq')
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'baseline.json')
+            baseline.save_baseline({'runs': [row]}, path)
+            with open(path) as stream:
+                saved = json.load(stream)
+            self.assertNotIn('runs', saved)
+            self.assertEqual(baseline.load_baseline(path)['loadingRuns'], [row])
 
 
 if __name__ == "__main__":

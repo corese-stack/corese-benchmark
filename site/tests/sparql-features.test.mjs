@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { featureTimings, aggregateFeatures, indexRuns, highlightSparql, statusOf, summarizeScope } from '../js/views/sparql-features.js';
-import { parseUrlSparql, updateUrlSparql, getCurrentView } from '../js/router.js';
+import { parseUrlLoading, parseUrlSparql, updateUrlSparql, getCurrentView } from '../js/router.js';
 import { loadBenchmarkReport } from '../js/api.js';
 import { DATASET_CONFIGS, resolveDatasetCardConfig, resolveDatasetTripleCount, formatDatasetSizeBadge } from '../js/components/protocol-tile.js';
 const q = (id, feature = 'BGP_JOIN', dataset = 'bsbm') => ({ id, dataset, primaryFeature: feature });
@@ -264,7 +264,7 @@ test('dataset card files follow the view without changing SPARQL configurations'
   assert.equal(config.shortFile, shortFile);
   assert.equal(config.fullFile, fullFile);
  }
- assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').shortFile, 'named-graphs.nq');
+ assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').shortFile, 'corese-feature-lubm.nq');
  assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').format, 'N-Quads');
 });
 
@@ -313,4 +313,53 @@ test('dataset size badges format measured triples and quads or show an em dash',
  for (const value of [null, undefined, -1, 0, NaN, Infinity, '100']) {
   assert.equal(formatDatasetSizeBadge(value, 'bsbm'), '—');
  }
+});
+
+test('loading report aliases fall back when only one run collection is present', async () => {
+ const { loadBenchmarkReport } = await import('../js/api.js');
+ const originalFetch = globalThis.fetch;
+ try {
+  for (const field of ['loadingRuns', 'runs']) {
+   globalThis.fetch = async () => new Response(JSON.stringify({ [field]: [null, {
+    engine: 'jena.6.2.0', dataset: 'lubm', triples: 100, loadingTimeMs: 10,
+    memoryDeltaMb: -1,
+   }] }));
+   const report = await loadBenchmarkReport();
+   assert.deepEqual(report.runs, report.loadingRuns);
+   assert.equal(report.loadingRuns.length, 1);
+   assert.equal(report.loadingRuns[0].status, 'SUCCESS');
+   assert.equal(report.loadingRuns[0].memoryDeltaMb, null);
+   assert.equal(report.enginesCatalog[0].id, 'jena');
+  }
+ } finally { globalThis.fetch = originalFetch; }
+});
+
+test('retainEngines clears stale engine pins and hovers while retaining query focus', async () => {
+ const { FocusStore } = await import('../js/focus-store.js');
+ const store = new FocusStore();
+ store.pin({ kind: 'cell', key: 'jena.6.2.0|["lubm","Q01"]' });
+ store.beginHover({ kind: 'engine', key: 'corese.next' });
+ store.retainEngines(['corese.next']);
+ assert.equal(store.state.pinned, null);
+ assert.equal(store.effectiveFocus.target.key, 'corese.next');
+	store.pin({ kind: 'query', key: '["lubm","Q01"]' });
+	store.retainEngines([]);
+	assert.equal(store.state.hover, null);
+	assert.equal(store.state.pinned.kind, 'query');
+});
+
+test('parseUrlLoading defaults to bowlogna and accepts named-graphs', () => {
+	assert.equal(parseUrlLoading('').dataset, 'bowlogna');
+	assert.equal(parseUrlLoading('?dataset=named-graphs').dataset, 'named-graphs');
+	assert.equal(parseUrlLoading('?dataset=unknown').dataset, 'bowlogna');
+});
+
+
+test('dataset sizes survive loading pruning and take precedence', () => {
+  const loadingRuns = [{ dataset: 'bsbm', file: 'bsbm_medium.nt', triples: 1700000 }];
+  assert.equal(resolveDatasetTripleCount('bsbm', {
+    metadata: { datasetSizes: { 'bsbm:bsbm_small.nt': 374911 } }, loadingRuns,
+  }), 374911);
+  assert.equal(resolveDatasetTripleCount('bsbm', { loadingRuns }), null);
+  assert.equal(resolveDatasetTripleCount('bsbm', { loadingRuns }, 'loading'), 1700000);
 });

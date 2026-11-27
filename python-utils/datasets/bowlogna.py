@@ -6,15 +6,12 @@ Reference: https://exascale.info/assets/pdf/BowlognaBenchSIMPDA2011.pdf
 Dataset hosted by DICE Research (HOBBIT project):
   https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip
 
-The zip contains Department0.nt … Department9.nt (~1.2 M triples each).
-
-Scale tiers (departments):
-  small  →  1 department   (~  1.2 M triples)
-  medium →  5 departments  (~  6   M triples)
-  large  → 10 departments  (~  12  M triples)
+Only Department0.nt is extracted.
 """
 
 from __future__ import annotations
+
+from datasets import create_file_view
 
 import os
 import shutil
@@ -24,56 +21,23 @@ import zipfile
 DUMP_URL = "https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip"
 DUMP_ZIP = "bowlogna-dump.zip"
 
-ALL_FILES = [f"Department{i}.nt" for i in range(10)]
-
-SCALES = {
-    "small":  ALL_FILES[:1],
-    "medium": ALL_FILES[:5],
-    "large":  ALL_FILES[:10],
-}
+CANONICAL_FILE = "Department0.nt"
 
 
-def prepare(input_dir: str, scales: list[str] | None = None) -> str:
-    """
-    Download and extract Bowlogna Department*.nt files for the requested scales.
-    Returns the directory containing the .nt files.
-    """
-    scales = scales or ["small", "medium", "large"]
-    output_dir = os.path.join(input_dir, "bowlogna", "unzip")
+def prepare(input_dir: str) -> str:
+    """Prepare only the canonical Bowlogna department."""
+    dataset_dir = os.path.join(input_dir, "bowlogna")
+    output_dir = os.path.join(dataset_dir, "unzip")
     os.makedirs(output_dir, exist_ok=True)
-
-    needed_files: set[str] = set()
-    for scale in scales:
-        if scale not in SCALES:
-            print(f"  Unknown scale '{scale}', skipping.")
-            continue
-        needed_files.update(SCALES[scale])
-
-    missing = [f for f in sorted(needed_files) if not os.path.exists(os.path.join(output_dir, f))]
-    if not missing:
-        print("  All Bowlogna files already present.")
-        return output_dir
-
-    # Download the full dump zip if any file is missing
-    zip_path = os.path.join(input_dir, "bowlogna", DUMP_ZIP)
-    if not os.path.exists(zip_path):
-        print("  Downloading bowlogna-dump.zip (~86 MB)...")
-        urllib.request.urlretrieve(DUMP_URL, zip_path)
-        print("  Download complete.")
-
-    print(f"  Extracting {len(missing)} file(s) from zip...")
-    with zipfile.ZipFile(zip_path, "r") as z:
-        zip_names = z.namelist()
-        for filename in missing:
-            # The zip may store files in a subdirectory
-            matches = [n for n in zip_names if n.endswith(filename)]
-            if not matches:
-                print(f"  WARNING: {filename} not found in zip archive.")
-                continue
-            entry = matches[0]
-            dest = os.path.join(output_dir, filename)
-            with z.open(entry) as src, open(dest, "wb") as dst:
-                shutil.copyfileobj(src, dst)
-            print(f"  Extracted: {filename}")
-
-    return output_dir
+    destination = os.path.join(output_dir, CANONICAL_FILE)
+    if not os.path.exists(destination):
+        zip_path = os.path.join(dataset_dir, DUMP_ZIP)
+        if not os.path.exists(zip_path):
+            urllib.request.urlretrieve(DUMP_URL, zip_path)
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            entry = next(name for name in archive.namelist()
+                         if name.rsplit("/", 1)[-1] == CANONICAL_FILE)
+            with archive.open(entry) as source, open(destination, "wb") as target:
+                shutil.copyfileobj(source, target)
+    return create_file_view(os.path.join(dataset_dir, "view_canonical"),
+                            output_dir, [CANONICAL_FILE])

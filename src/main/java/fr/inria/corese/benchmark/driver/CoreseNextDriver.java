@@ -4,13 +4,10 @@ import fr.inria.corese.benchmark.metrics.MetricsCollector;
 import fr.inria.corese.benchmark.validation.BindingTerm;
 import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import fr.inria.corese.core.next.data.api.io.format.RDFFormat;
-import fr.inria.corese.core.next.data.api.io.option.RDFParsingOptions;
-import fr.inria.corese.core.next.data.impl.io.parser.nquads.NQuadsParserOptions;
-import fr.inria.corese.core.next.data.impl.io.parser.ntriples.NTriplesParserOptions;
+import fr.inria.corese.core.next.data.api.term.Value;
 import fr.inria.corese.core.next.query.Repositories;
 import fr.inria.corese.core.next.query.api.repository.Repository;
 import fr.inria.corese.core.next.query.api.repository.RepositoryConnection;
-import fr.inria.corese.core.next.data.api.term.Value;
 import fr.inria.corese.core.next.query.api.result.BindingSet;
 import fr.inria.corese.core.next.query.api.result.GraphQueryResult;
 import fr.inria.corese.core.next.query.api.result.TupleQueryResult;
@@ -24,7 +21,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Benchmark driver for the Corese 5 API (corese-next).
@@ -83,17 +79,7 @@ public class CoreseNextDriver implements TripleStoreDriver {
             case RDFA     -> RDFFormat.RDFA;
         };
 
-        if (benchFormat == BenchmarkFormat.NTRIPLES || benchFormat == BenchmarkFormat.NQUADS) {
-            // Lenient mode: skip triples/quads with invalid IRIs (e.g. DBpedia) instead of failing.
-            // Uses connection.load() with options which writes directly to the store (no transaction
-            // snapshot overhead), giving the same throughput as individual connection.add() calls.
-            RDFParsingOptions opts = (benchFormat == BenchmarkFormat.NTRIPLES)
-                ? new NTriplesParserOptions.Builder().lenientIriValidation(true).build()
-                : new NQuadsParserOptions.Builder().lenientIriValidation(true).build();
-            connection.load(path, coreseFormat, opts);
-        } else {
-            connection.load(path, coreseFormat);
-        }
+        connection.load(path, coreseFormat);
     }
 
     /**
@@ -323,5 +309,4 @@ public class CoreseNextDriver implements TripleStoreDriver {
         if (upper.startsWith("CONSTRUCT") || upper.startsWith("DESCRIBE")) return QueryType.GRAPH;
         return QueryType.SELECT;
     }
-
 }

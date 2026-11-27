@@ -27,13 +27,13 @@ public final class DriverFactory {
      * <p>Engine name prefix determines the implementation:
      * <ul>
      *   <li>{@code corese.next} — {@link CoreseNextDriver} loaded via reflection</li>
-     *   <li>{@code corese.*}    — {@code CoreseDriver} with optional RDFS inference</li>
+     *   <li>{@code corese.*}    — {@code CoreseDriver} with optional OWL-RL inference</li>
      *   <li>{@code jena.*}      — {@link JenaDriver}</li>
      *   <li>{@code rdf4j.*}     — {@link RDF4JDriver}</li>
      * </ul>
      *
      * @param engineName engine identifier string
-     * @param inference  {@code true} to enable RDFS inference (only applies to Corese drivers)
+     * @param inference  {@code true} to enable OWL-RL inference (only applies to Corese drivers)
      * @return a ready-to-use {@link TripleStoreDriver} (not yet initialised)
      * @throws IllegalArgumentException if the engine name is not recognised or if
      *         {@code corese.next} is requested but the Corese 5 JAR is absent

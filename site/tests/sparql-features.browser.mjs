@@ -107,6 +107,14 @@ try {
  assert.equal(await page.evaluate(()=>window.focusStore.state.pinned.kind),'query');
  await page.keyboard.press('Escape');
  assert.equal(await page.evaluate(()=>window.focusStore.state.pinned),null);
+ const cellPin = view.locator('td[data-cell-key] .table-pin').first();
+ await cellPin.focus();
+ await page.keyboard.press('Enter');
+ assert.equal(await page.evaluate(()=>window.focusStore.state.pinned.kind),'cell');
+ assert.equal(await cellPin.getAttribute('aria-pressed'),'true');
+ await page.keyboard.press('Space');
+ assert.equal(await page.evaluate(()=>window.focusStore.state.pinned),null);
+ assert.equal(await cellPin.getAttribute('aria-pressed'),'false');
  await view.locator('[data-sf-jump-query]').first().click();
  await page.waitForSelector('.sf-query-item[open] code .sf-token-keyword');
  assert.ok((await view.locator('.sf-query-item[open] code').textContent()).includes('SELECT'));

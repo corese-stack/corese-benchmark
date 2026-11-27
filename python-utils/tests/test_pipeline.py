@@ -1,17 +1,21 @@
 """Regression tests for v1 caches and deterministic, sync_reports exports."""
-import ast
+from __future__ import annotations
+
 import copy
 import csv
 import json
 import os
-from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import baseline
 import sync_reports
+import workflow_reports
 
 
 ENGINE = "jena.6.2.0"
@@ -19,18 +23,11 @@ EXPECTED = {"lubm": {"Q01", "Q04"}, "bsbm": {"Q02"}}
 
 
 def report():
-    loading = [{"engine": ENGINE, "dataset": ds, "file": "data.nt", "triples": 10,
+    loading = [{"engine": ENGINE, "dataset": ds, "file": f"{ds}_medium.nt", "triples": 10,
                 "loadingTimeMs": 5, "status": "SUCCESS", "errorMessage": ""} for ds in EXPECTED]
     queries = [{"engine": ENGINE, "dataset": ds, "queryId": qid, "status": "PASS", "medianMs": 1}
                for ds, ids in EXPECTED.items() for qid in sorted(ids)]
-    return {"metadata": {}, "runs": loading, "loadingRuns": copy.deepcopy(loading), "queryRuns": queries}
-
-
-def workflow_functions(*names, **namespace):
-    source = ast.parse((Path(__file__).resolve().parents[1] / "workflow.py").read_text())
-    nodes = {n.name: n for n in ast.walk(source) if isinstance(n, ast.FunctionDef)}
-    exec(compile(ast.Module(body=[nodes[n] for n in names], type_ignores=[]), "workflow.py", "exec"), namespace)
-    return namespace
+    return {"metadata": {}, "runs": loading, "queryRuns": queries}
 
 
 class BaselineCoverageTest(unittest.TestCase):
@@ -81,21 +78,20 @@ class BaselineCoverageTest(unittest.TestCase):
 
     def test_export_synchronizes_loading_alias_and_query_rows(self):
         data = report()
-        data["loadingRuns"] = []
         data["runs"][0].update(status="ERROR", errorMessage="bad, input\nretry")
         with tempfile.TemporaryDirectory() as directory:
             baseline.export_site_data(data, directory)
             saved = json.loads((Path(directory) / "benchmark-report.json").read_text())
             js = (Path(directory) / "report-data.js").read_text()
             self.assertEqual(json.loads(js.removeprefix("window.BENCHMARK_REPORT = ").removesuffix(";\n")), saved)
-            self.assertEqual(saved["runs"], saved["loadingRuns"])
+            self.assertNotIn("runs", saved)
             self.assertEqual(saved["queryRuns"], data["queryRuns"])
             with open(Path(directory) / "benchmark-report.csv", newline="") as stream:
                 rows = list(csv.reader(stream))
             divider = rows.index([])
             loads = [dict(zip(rows[0], row)) for row in rows[1:divider]]
             queries = [dict(zip(rows[divider + 1], row)) for row in rows[divider + 2:]]
-            self.assertEqual(len(loads), len(saved["runs"]))
+            self.assertEqual(len(loads), len(saved["loadingRuns"]))
             self.assertEqual(loads[0]["status"], "ERROR")
             self.assertEqual(loads[0]["errorMessage"], "bad, input\nretry")
             self.assertEqual([q["queryId"] for q in queries], [q["queryId"] for q in saved["queryRuns"]])
@@ -109,51 +105,38 @@ class BaselineCoverageTest(unittest.TestCase):
 
 
 class WorkflowCacheTest(unittest.TestCase):
-    def test_cache_requires_all_catalogue_ids_for_requested_engine(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "jena_6_2_0_lubm.json"
-            ns = workflow_functions(
-                "get_cached", "_validate_run_list", "_validate_single_report_dict",
-                os=os, _json_early=json, cache_dir=directory, args=SimpleNamespace(benchmark_type="all"),
-                expected_queries=EXPECTED, has_v1_query_coverage=baseline.has_v1_query_coverage,
-                has_scale_loading_coverage=baseline.has_scale_loading_coverage, requested_scales=None,
-                valid_loading_run=baseline.valid_loading_run, QUERIES_FILES={"lubm": "catalogue.json"},
-            )
-            data = report()
-            for mode in ("all", "query"):
-                ns["args"].benchmark_type = mode
-                path.write_text(json.dumps(data))
-                self.assertEqual(ns["get_cached"](ENGINE, "lubm"), str(path))
-                for queries in ([], data["queryRuns"][:1], [
-                    {"engine": ENGINE, "dataset": "lubm", "queryId": "query_1"},
-                ]):
-                    path.write_text(json.dumps({**data, "queryRuns": queries}))
-                    self.assertIsNone(ns["get_cached"](ENGINE, "lubm"))
-            ns["args"].benchmark_type = "load"
-            self.assertEqual(ns["get_cached"](ENGINE, "lubm"), str(path))
-
     def test_checkpoints_survive_failed_output_validation(self):
-        ns = workflow_functions(
-            "merge_json_files", "_extract_report_entries", "_validate_run_list", "_validate_single_report_dict",
-            os=os, _json_early=json, _finalize_merged_report=lambda *args: None,
-        )
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / "checkpoint.json"
             output = Path(directory) / "merged.json"
             checkpoint.write_text(json.dumps(report()))
-            validate = ns["_validate_single_report_dict"]
+            validate = workflow_reports.validate_single_report_dict
+
             def reject_output(data, source_path=""):
                 if str(source_path) == str(output):
                     raise RuntimeError("invalid persisted output")
                 validate(data, source_path)
-            ns["_validate_single_report_dict"] = reject_output
-            with self.assertRaises(RuntimeError):
-                ns["merge_json_files"]([str(checkpoint)], str(output))
+
+            with patch.object(workflow_reports, "validate_single_report_dict", side_effect=reject_output):
+                with self.assertRaises(RuntimeError):
+                    workflow_reports.merge_json_files([str(checkpoint)], str(output))
             self.assertTrue(checkpoint.exists())
-            ns["_validate_single_report_dict"] = validate
-            ns["merge_json_files"]([str(checkpoint)], str(output))
+            workflow_reports.merge_json_files([str(checkpoint)], str(output))
             self.assertFalse(checkpoint.exists())
-            self.assertEqual(json.loads(output.read_text())["runs"], report()["runs"])
+            self.assertEqual(json.loads(output.read_text())["queryRuns"], report()["queryRuns"])
+
+    def test_merge_preserves_nested_dataset_sizes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first, second = report(), report()
+            first["metadata"] = {"datasetSizes": {"lubm:lubm_small.nt": 100573}}
+            second["metadata"] = {"datasetSizes": {"bsbm:bsbm_small.nt": 374911}}
+            p1, p2, out = Path(directory) / "1.json", Path(directory) / "2.json", Path(directory) / "out.json"
+            p1.write_text(json.dumps(first))
+            p2.write_text(json.dumps(second))
+            workflow_reports.merge_json_files([str(p1), str(p2)], str(out))
+            merged = json.loads(out.read_text())
+            self.assertEqual(merged["metadata"]["datasetSizes"],
+                             {"lubm:lubm_small.nt": 100573, "bsbm:bsbm_small.nt": 374911})
 
 
 class SyncReportsTest(unittest.TestCase):
@@ -180,6 +163,26 @@ class SyncReportsTest(unittest.TestCase):
             self.assertEqual(next(q for q in first["queryRuns"] if q["queryId"] == "Q01")["medianMs"], 7)
             self.assertTrue((root / "export" / "benchmark-report.csv").exists())
 
+    def test_sync_prunes_before_export_and_promotes_canonical_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = report()
+            data["runs"] += [
+                {"engine": "rdf4j.5.3.1", "dataset": "bsbm", "file": "bsbm_medium.nt", "triples": 10},
+                {"engine": ENGINE, "dataset": "bsbm", "file": "bsbm_small.nt", "triples": 12},
+            ]
+            (root / "input.json").write_text(json.dumps(data))
+            with patch.multiple(sync_reports, OUT_JSON_DIR=directory, TMP_RUNS_DIR=str(root / "tmp"),
+                                NIGHT_RUNS_DIR=str(root / "night"), SITE_DATA_DIR=str(root / "export")), \
+                 patch.object(sync_reports, "load_expected_v1_queries", return_value=EXPECTED):
+                merged = sync_reports.merge_all_data(promote=True)
+            self.assertNotIn("runs", merged)
+            self.assertEqual(len(merged["loadingRuns"]), 2)
+            self.assertEqual(merged["metadata"]["datasetSizes"]["bsbm:bsbm_small.nt"], 12)
+            frozen = json.loads((root / "export/baseline.json").read_text())
+            self.assertNotIn("runs", frozen)
+            self.assertEqual(len(frozen["loadingRuns"]), 2)
+
     def test_promote_baseline_allows_documented_terminal_loading_failures(self):
         data = report()
         data["runs"].append({
@@ -190,8 +193,8 @@ class SyncReportsTest(unittest.TestCase):
             dest = Path(directory) / "baseline.json"
             sync_reports.promote_baseline(data, EXPECTED, str(dest))
             saved = json.loads(dest.read_text())
-            self.assertEqual(len(saved["runs"]), len(data["runs"]))
-            self.assertEqual({r.get("status") for r in saved["runs"]}, {"SUCCESS", "OOM"})
+            self.assertEqual(len(saved["loadingRuns"]), len(data["runs"]))
+            self.assertEqual({r.get("status") for r in saved["loadingRuns"]}, {"SUCCESS", "OOM"})
 
     def test_timestamp_fallback_uses_filename(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -215,18 +218,14 @@ class SyncReportsTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sync_reports.promote_baseline(data, EXPECTED, destination)
 
-    def test_scale_aware_coverage_and_baseline_permissions(self):
+    def test_canonical_coverage_and_baseline_permissions(self):
         small_only = {
             "metadata": {},
             "runs": [{"engine": ENGINE, "dataset": "bsbm", "file": "bsbm_small.nt", "triples": 10, "loadingTimeMs": 5, "status": "SUCCESS"}],
             "queryRuns": [{"engine": ENGINE, "dataset": "bsbm", "queryId": "Q02", "status": "PASS", "medianMs": 1}],
         }
         self.assertEqual(
-            baseline.plan_engines([ENGINE], ["bsbm"], small_only, expected_queries={"bsbm": {"Q02"}}, requested_scales=["small"]).cached_engines,
-            [ENGINE],
-        )
-        self.assertEqual(
-            baseline.plan_engines([ENGINE], ["bsbm"], small_only, expected_queries={"bsbm": {"Q02"}}, requested_scales=["small", "medium"]).fresh_engines,
+            baseline.plan_engines([ENGINE], ["bsbm"], small_only, expected_queries={"bsbm": {"Q02"}}).fresh_engines,
             [ENGINE],
         )
         small_plus_oom = copy.deepcopy(small_only)
@@ -235,17 +234,48 @@ class SyncReportsTest(unittest.TestCase):
             "triples": -1, "loadingTimeMs": -1, "status": "OOM", "errorMessage": "Heap limit",
         })
         self.assertEqual(
-            baseline.plan_engines([ENGINE], ["bsbm"], small_plus_oom, expected_queries={"bsbm": {"Q02"}}, requested_scales=["small", "medium"]).cached_engines,
+            baseline.plan_engines([ENGINE], ["bsbm"], small_plus_oom, expected_queries={"bsbm": {"Q02"}}).cached_engines,
             [ENGINE],
         )
         with tempfile.TemporaryDirectory() as directory:
             dest = Path(directory) / "baseline.json"
-            sync_reports.promote_baseline(small_only, {"bsbm": {"Q02"}}, str(dest), required_scales=("small",))
+            sync_reports.promote_baseline(small_plus_oom, {"bsbm": {"Q02"}}, str(dest))
             mode = os.stat(dest).st_mode
             self.assertTrue(bool(mode & 0o400))
             self.assertFalse(mode & 0o002)
             with self.assertRaises(ValueError):
-                sync_reports.promote_baseline(small_only, {"bsbm": {"Q02"}}, str(dest), required_scales=("small", "medium"))
+                sync_reports.promote_baseline(small_only, {"bsbm": {"Q02"}}, str(dest))
+
+    def test_canonical_oom_and_timeout_promote_but_error_is_rejected(self):
+        medium_oom = {
+            "metadata": {},
+            "runs": [
+                {"engine": ENGINE, "dataset": "lubm", "file": "lubm_medium.nt", "triples": 10, "loadingTimeMs": 5, "status": "SUCCESS"},
+                {"engine": ENGINE, "dataset": "bsbm", "file": "bsbm_medium.nt", "triples": -1, "loadingTimeMs": -1, "status": "OOM", "errorMessage": "Heap"},
+            ],
+            "queryRuns": [
+                {"engine": ENGINE, "dataset": "lubm", "queryId": "Q01", "status": "PASS", "medianMs": 1},
+                {"engine": ENGINE, "dataset": "lubm", "queryId": "Q04", "status": "PASS", "medianMs": 1},
+                {"engine": ENGINE, "dataset": "bsbm", "queryId": "Q02", "status": "PASS", "medianMs": 1},
+            ],
+        }
+        plan = baseline.plan_engines([ENGINE], list(EXPECTED), medium_oom, expected_queries=EXPECTED)
+        self.assertEqual(plan.cached_engines, [ENGINE])
+        with tempfile.TemporaryDirectory() as directory:
+            dest = str(Path(directory) / "baseline.json")
+            sync_reports.promote_baseline(medium_oom, EXPECTED, dest)
+            saved = baseline.load_baseline(dest)
+            self.assertEqual(len(saved["loadingRuns"]), 2)
+            medium_oom["runs"][1]["status"] = "ERROR"
+            with self.assertRaises(ValueError):
+                sync_reports.promote_baseline(medium_oom, EXPECTED, dest)
+            mixed = copy.deepcopy(medium_oom)
+            mixed["runs"][1]["status"] = "SUCCESS"
+            mixed["runs"].append({"engine": ENGINE, "dataset": "bsbm", "file": "bsbm_medium.ttl", "status": "ERROR"})
+            self.assertEqual(
+                baseline.plan_engines([ENGINE], list(EXPECTED), mixed, expected_queries=EXPECTED).fresh_engines,
+                [ENGINE],
+            )
 
 
 if __name__ == "__main__":

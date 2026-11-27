@@ -12,6 +12,49 @@ import static org.junit.jupiter.api.Assertions.*;
 class MainQueryInputTest {
     @TempDir Path directory;
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void cliFiltersFormatsInBothProcessModes(boolean isolated) throws Exception {
+        String engine = "jena." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedJenaVersion();
+        Path data = Files.createDirectory(directory.resolve("formats"));
+        Files.writeString(data.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Files.writeString(data.resolve("data.ttl"), "<urn:s> <urn:p> <urn:o> .");
+        Path output = directory.resolve("formats.json");
+        var args = new java.util.ArrayList<>(List.of(data.toString(), output.toString(), engine,
+                "test", "--quick", "--mode", "load"));
+        if (!isolated) args.add("--no-isolate");
+        args.addAll(isolated ? List.of("--formats=ttl") : List.of("--formats", "ttl"));
+        Main.main(args.toArray(String[]::new));
+        var runs = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile()).path("loadingRuns");
+        assertEquals(1, runs.size());
+        assertEquals("data.ttl", runs.get(0).path("file").asText());
+    }
+
+    @Test
+    void cliAllLoadsTurtleAndQueriesCanonicalNtriples() throws Exception {
+        String engine = "jena." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedJenaVersion();
+        Path data = Files.createDirectory(directory.resolve("all-formats"));
+        Files.writeString(data.resolve("bsbm_small.nt"), "<urn:s> <urn:p> <urn:o> .\n<urn:s2> <urn:p> <urn:o> .");
+        Files.writeString(data.resolve("bsbm_small.ttl"), "<urn:s> <urn:p> <urn:o> .");
+        Path query = directory.resolve("all.rq");
+        Files.writeString(query, "SELECT * WHERE { ?s ?p ?o }");
+        Path output = directory.resolve("all.json");
+        Main.main(new String[]{data.toString(), output.toString(), engine, "bsbm", query.toString(),
+                "--quick", "--no-isolate", "--mode", "all", "--formats", "ttl"});
+        var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
+        assertEquals(1, report.path("loadingRuns").size());
+        assertEquals("bsbm_small.ttl", report.path("loadingRuns").get(0).path("file").asText());
+        assertEquals(1, report.path("queryRuns").size());
+        assertEquals(2, report.path("queryRuns").get(0).path("rowCount").asLong());
+        assertEquals("PASS", report.path("queryRuns").get(0).path("status").asText());
+    }
+
+    @Test
+    void cliRejectsInvalidFormatsBeforeRunning() {
+        assertThrows(IllegalArgumentException.class, () -> Main.main(new String[]{
+                "missing", "unused.json", "unused", "test", "--formats", "nt,foo"}));
+    }
+
     @Test
     void filtersRealCatalogueWithoutLosingMetadataOrMultilineText() throws Exception {
         String path = "input/queries/v1/catalogue.json";

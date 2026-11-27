@@ -4,7 +4,7 @@
  * Guarantees 100% bijective URL serialisation and catalog lookup.
  */
 
-export const KNOWN_STORAGES = [
+const KNOWN_STORAGES = [
 	"in-memory",
 	"tdb2",
 	"tdb1",
@@ -13,7 +13,7 @@ export const KNOWN_STORAGES = [
 	"persistent",
 ];
 
-export const BRANCH_VERSIONS = ["next", "dev", "develop"];
+const BRANCH_VERSIONS = new Set(["next", "dev", "develop"]);
 
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3,8}$/;
 const FUNC_COLOR_REGEX = /^(?:rgb|rgba|hsl|hsla|oklch)\([^()<>{}"';]+\)$/;
@@ -41,7 +41,7 @@ export function sanitizeColor(colorStr, fallback = null) {
  */
 export function isBranchVersion(versionId) {
 	if (!versionId) return false;
-	return BRANCH_VERSIONS.includes(versionId.toLowerCase());
+	return BRANCH_VERSIONS.has(versionId.toLowerCase());
 }
 
 /**

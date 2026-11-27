@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""
-sync_reports.py — Synchronisation continue et sans régression des rapports Corese Benchmark.
-- Télécharge les derniers runs terminés depuis GitHub Actions (runner SED).
-- Filtre et valide scientifiquement les données (PASS, rowCount, timings cohérents).
-- Fusionne les runs de chargement et de requêtes SPARQL sans jamais écraser l'historique existant.
-- Met à jour site/data/benchmark-report.json et site/data/report-data.js.
-- Déclenche les prochains batches manquants en file d'attente CI.
-"""
+"""Synchronize GitHub Actions benchmark artifacts and merge local reports into site/data/."""
+from __future__ import annotations
+
 import subprocess
 import json
 import glob
@@ -17,9 +12,11 @@ from datetime import datetime, timezone
 
 from baseline import (
     IMMUTABLE_ENGINES,
+    loading_runs,
+    prune_report_for_site,
     TERMINAL_LOADING_FAILURES,
     export_site_data,
-    has_scale_loading_coverage,
+    has_canonical_loading_coverage,
     has_v1_query_coverage,
     load_expected_v1_queries,
     save_baseline,
@@ -57,7 +54,6 @@ def _download_run_artifact(run):
         return target_dir
     print(f"[sync] Artifact not available for {rid}")
     return None
-
 
 def fetch_latest_artifacts():
     os.makedirs(TMP_RUNS_DIR, exist_ok=True)
@@ -108,33 +104,30 @@ def report_sort_key(path):
         pass
     return generated, os.path.basename(path), path
 
-
-def promote_baseline(report, expected_queries, destination, required_scales=None):
+def promote_baseline(report, expected_queries, destination):
     """Freeze only complete immutable engines with valid v1 queries and complete dataset loading runs."""
     eligible = set()
     for engine in IMMUTABLE_ENGINES:
-        loading = [r for r in report["runs"] if r.get("engine") == engine]
+        loading = [r for r in loading_runs(report) if r.get("engine") == engine]
         if not loading or not all(
             valid_loading_run(r) or r.get("status") in TERMINAL_LOADING_FAILURES for r in loading
         ):
             continue
         if all(
-            has_scale_loading_coverage(loading, engine, ds, required_scales)
+            has_canonical_loading_coverage(loading, engine, ds)
             and has_v1_query_coverage(
                 report, engine, ds, expected_queries, require_pass=True,
             )
             for ds in expected_queries
         ):
             eligible.add(engine)
-    loading = [r for r in report["runs"] if r.get("engine") in eligible]
+    loading = [r for r in loading_runs(report) if r.get("engine") in eligible]
     frozen = {
         "metadata": dict(report.get("metadata", {})),
-        "runs": loading,
         "loadingRuns": list(loading),
         "queryRuns": [q for q in report["queryRuns"] if q.get("engine") in eligible],
     }
     save_baseline(frozen, destination)
-
 
 def merge_all_data(*, promote=False):
     files = glob.glob(os.path.join(OUT_JSON_DIR, JSON_GLOB))
@@ -162,17 +155,15 @@ def merge_all_data(*, promote=False):
         "queryRuns": [merged_queries[k] for k in sorted(merged_queries)]
     }
     
-    report["loadingRuns"] = list(report["runs"])
+    report = prune_report_for_site(report, expected_queries=expected_queries, require_complete_queries=True)
     export_site_data(report, SITE_DATA_DIR)
     if promote:
         promote_baseline(
             report,
             expected_queries,
             os.path.join(SITE_DATA_DIR, "baseline.json"),
-            required_scales=("small", "medium"),
         )
     return report
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

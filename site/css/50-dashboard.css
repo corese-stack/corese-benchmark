@@ -1,43 +1,11 @@
 /* ==========================================================================
-   KPI Cards & Dashboard Sections
+   Dashboard Layout & Sections
    ========================================================================== */
 
-.kpi-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 16px;
-	margin-bottom: 32px;
-}
-
-.kpi-card {
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	padding: 20px 24px;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.kpi-card__label {
-	font-size: 12px;
-	font-weight: 500;
-	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-}
-
-.kpi-card__value {
-	font-size: 28px;
-	font-weight: 700;
-	font-family: var(--font-brand);
-	color: var(--text);
-	line-height: 1.2;
-}
-
-.kpi-card__sub {
-	font-size: 12px;
-	color: var(--text-muted);
+.dashboard-main {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 32px 24px 64px 24px;
 }
 
 .dashboard-section {
@@ -98,7 +66,7 @@
 }
 
 /* ==========================================================================
-   Data Tables
+   Data Tables & Helpers
    ========================================================================== */
 
 .data-table {
@@ -127,67 +95,8 @@
 	white-space: nowrap;
 }
 
-.academic-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: 12px;
-	text-align: left;
-}
-
-.academic-table th {
-	background-color: var(--bg-page);
-	color: var(--text-muted);
-	font-weight: 600;
-	text-transform: uppercase;
-	font-size: 11px;
-	letter-spacing: 0.3px;
-	padding: 10px 14px;
-	border-bottom: 1px solid var(--border-color);
-	white-space: nowrap;
-}
-
-.academic-table td {
-	padding: 10px 14px;
-	border-bottom: 1px solid var(--border-color);
-	color: var(--text-main);
-}
-
-.academic-table tr:last-child td {
-	border-bottom: none;
-}
-
-.academic-table .num-col {
-	text-align: right;
-}
-
-.academic-table .action-col {
-	text-align: center;
-	width: 70px;
-}
-
-.academic-table .status-col {
-	text-align: center;
-	width: 90px;
-}
-
 .data-table tr:hover td {
 	background: var(--bg-hover);
-}
-
-.academic-table tr.table-data-row:hover td {
-	background-color: var(--bg-surface-hover);
-}
-
-.cell-primary {
-	display: block;
-	font-weight: 600;
-	color: var(--text);
-}
-
-.cell-sub {
-	display: block;
-	font-size: 11px;
-	color: var(--text-muted);
 }
 
 .font-medium {
@@ -226,86 +135,12 @@
 	white-space: nowrap;
 }
 
-/* ==========================================================================
-   Horizontal Bar Chart Styling
-   ========================================================================== */
-
-.chart-wrapper {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.chart-bars {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.chart-bar-row {
-	display: grid;
-	grid-template-columns: 240px 1fr;
-	align-items: center;
-	gap: 16px;
-}
-
-.chart-bar-label {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	overflow: hidden;
-}
-
-.chart-bar-label-main {
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.chart-bar-label-sub {
-	font-size: 11px;
-	color: var(--text-muted);
-}
-
-.chart-bar-track {
-	position: relative;
-	height: 28px;
-	background: var(--bg-hover);
-	border-radius: 4px;
-	overflow: hidden;
-	display: flex;
-	align-items: center;
-}
-
-.chart-bar-fill {
-	height: 100%;
-	border-radius: 4px 0 0 4px;
-	transition: width 0.3s ease;
-}
-
-.chart-bar-value {
-	position: absolute;
-	left: 12px;
-	font-size: 12px;
-	font-weight: 600;
-	font-family: var(--font-mono);
-	color: var(--text);
-	mix-blend-mode: difference;
-}
-
 .chart-empty {
 	text-align: center;
 	font-size: 13px;
 	color: var(--text-muted);
 	padding: 32px;
 }
-
-/* ==========================================================================
-   View Controls & Filters
-   ========================================================================== */
 
 .view-controls {
 	display: flex;
@@ -315,75 +150,3 @@
 	gap: 12px;
 	margin-bottom: 20px;
 }
-
-.control-group {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-
-.control-label {
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--text-muted);
-	text-transform: uppercase;
-}
-
-.control-meta {
-	font-size: 12px;
-	color: var(--text-muted);
-}
-
-.pill-group {
-	display: inline-flex;
-	gap: 4px;
-	background: var(--bg-hover);
-	padding: 3px;
-	border-radius: 6px;
-	border: 1px solid var(--border);
-}
-
-.pill-btn {
-	height: 26px;
-	padding: 0 10px;
-	background: transparent;
-	border: 0;
-	border-radius: 4px;
-	color: var(--text-muted);
-	font-family: inherit;
-	font-size: 12px;
-	font-weight: 500;
-	cursor: pointer;
-	transition:
-		background-color 0.12s ease,
-		color 0.12s ease,
-		box-shadow 0.12s ease;
-}
-
-.pill-btn:hover {
-	color: var(--text);
-}
-
-.pill-btn.is-active {
-	background: var(--bg);
-	color: var(--text);
-	font-weight: 600;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-}
-
-.select-input {
-	height: 32px;
-	padding: 0 12px;
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	color: var(--text);
-	font-family: inherit;
-	font-size: 13px;
-	outline: none;
-}
-
-.select-input:focus {
-	border-color: var(--focus);
-}
-

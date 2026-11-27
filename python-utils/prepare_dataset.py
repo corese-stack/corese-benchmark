@@ -3,14 +3,17 @@
 CLI entry point to prepare benchmark datasets for the Corese Benchmark Suite.
 
 Usage:
-    python3 python-utils/prepare_dataset.py <dataset> [scale] [--input-dir <dir>]
+    python3 python-utils/prepare_dataset.py <dataset> [--input-dir <dir>]
 
 Datasets:
-    bsbm      Berlin SPARQL Benchmark (scales: small, medium, large)
-    lubm      Lehigh University Benchmark (scales: small, medium, large)
+    bsbm      Berlin SPARQL Benchmark (medium loading input and small query input)
+    lubm      Lehigh University Benchmark (medium loading input and small query input)
     dbpedia   DBpedia 3.5.1 English components sample
-    bowlogna  BowlognaBench (scales: small, medium, large)
+    bowlogna  BowlognaBench (medium loading input and small query input)
+    named-graphs  Named graph partitions from LUBM small
 """
+
+from __future__ import annotations
 
 import argparse
 import os
@@ -21,13 +24,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from datasets import bsbm, lubm, dbpedia, bowlogna
+from datasets import bsbm, lubm, dbpedia, bowlogna, named_graphs
 
 DATASET_HANDLERS = {
     "bsbm": bsbm,
     "lubm": lubm,
     "dbpedia": dbpedia,
     "bowlogna": bowlogna,
+    "named-graphs": named_graphs,
 }
 
 
@@ -41,12 +45,6 @@ def main():
         help="Name of the dataset to prepare.",
     )
     parser.add_argument(
-        "scale",
-        nargs="?",
-        default=None,
-        help="Scale tier (small, medium, large). Ignored for datasets without scale tiers.",
-    )
-    parser.add_argument(
         "--input-dir",
         default=os.path.abspath("input"),
         help="Target input directory (default: ./input).",
@@ -57,11 +55,7 @@ def main():
     handler = DATASET_HANDLERS[args.dataset]
 
     print(f"Preparing dataset '{args.dataset}' into {input_dir}...")
-    if args.dataset == "dbpedia":
-        out_dir = handler.prepare(input_dir)
-    else:
-        scales = [args.scale] if args.scale else ["small"]
-        out_dir = handler.prepare(input_dir, scales=scales)
+    out_dir = handler.prepare(input_dir)
 
     print(f"Dataset ready at: {out_dir}")
 

@@ -3,8 +3,11 @@ package fr.inria.corese.benchmark.driver;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Supported RDF serialization formats in the benchmark harness.
@@ -32,6 +35,33 @@ public enum BenchmarkFormat {
 
     public boolean supportsNamedGraphs() {
         return supportsNamedGraphs;
+    }
+
+    /** Resolves a canonical dataset extension or standard serialization alias. */
+    public static BenchmarkFormat fromToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Dataset format must not be empty");
+        }
+        String normalized = token.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith(".")) normalized = normalized.substring(1);
+        return switch (normalized) {
+            case "nt", "ntriples" -> NTRIPLES;
+            case "nq", "nquads" -> NQUADS;
+            case "ttl", "turtle" -> TURTLE;
+            case "trig" -> TRIG;
+            case "rdf", "rdfxml", "rdf/xml" -> RDFXML;
+            case "jsonld", "json-ld" -> JSONLD;
+            default -> throw new IllegalArgumentException("Unknown dataset format '" + token
+                    + "'; expected nt, nq, ttl, trig, rdf or jsonld");
+        };
+    }
+
+    /** Parses a CSV filter; an empty filter selects all canonical dataset formats. */
+    public static Set<BenchmarkFormat> parseFormatList(String csv) {
+        if (csv == null || csv.isBlank()) return Set.of();
+        EnumSet<BenchmarkFormat> formats = EnumSet.noneOf(BenchmarkFormat.class);
+        for (String token : csv.split(",", -1)) formats.add(fromToken(token));
+        return Collections.unmodifiableSet(formats);
     }
 
     /**

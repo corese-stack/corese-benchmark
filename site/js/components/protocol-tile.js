@@ -8,7 +8,6 @@
  *   - Section 4: Target Execution Environment & Hardware (CPU, RAM, OS, JVM, commit link)
  */
 
-import { DATASET_METADATA } from "../datasets.js";
 import { escapeHtml } from "../engine-id.js";
 
 const esc = (s) => escapeHtml(String(s ?? ""));
@@ -17,24 +16,24 @@ export const DATASET_CONFIGS = Object.freeze({
 	lubm: {
 		id: "lubm",
 		name: "LUBM",
-		fullName: DATASET_METADATA.lubm?.fullName || "Lehigh University Benchmark",
+		fullName: "Lehigh University Benchmark",
 		shortFile: "lubm_small.nt",
 		fullFile: "input/lubm/unzip_small/lubm_small.nt",
 		format: "N-Triples",
 		graph: "Default graph",
-		upstreamUrl: DATASET_METADATA.lubm?.artifact?.url || "https://swat.cse.lehigh.edu/projects/lubm/",
-		downloadUrl: DATASET_METADATA.lubm?.artifact?.downloadUrl || "https://swat.cse.lehigh.edu/projects/lubm/uba1.7.zip",
+		upstreamUrl: "https://swat.cse.lehigh.edu/projects/lubm/",
+		downloadUrl: "https://swat.cse.lehigh.edu/projects/lubm/uba1.7.zip",
 	},
 	bsbm: {
 		id: "bsbm",
 		name: "BSBM",
-		fullName: DATASET_METADATA.bsbm?.fullName || "Berlin SPARQL Benchmark",
+		fullName: "Berlin SPARQL Benchmark",
 		shortFile: "bsbm_small.nt",
 		fullFile: "input/bsbm/unzip_small/bsbm_small.nt",
 		format: "N-Triples",
 		graph: "Default graph",
-		upstreamUrl: DATASET_METADATA.bsbm?.artifact?.url || "https://wbsg.informatik.uni-mannheim.de/bizer/berlinsparqlbenchmark/",
-		downloadUrl: DATASET_METADATA.bsbm?.artifact?.downloadUrl || "https://sourceforge.net/projects/bsbmtools/files/latest/download",
+		upstreamUrl: "https://wbsg.informatik.uni-mannheim.de/bizer/berlinsparqlbenchmark/",
+		downloadUrl: "https://sourceforge.net/projects/bsbmtools/files/latest/download",
 	},
 	dbpedia: {
 		id: "dbpedia",
@@ -50,13 +49,13 @@ export const DATASET_CONFIGS = Object.freeze({
 	bowlogna: {
 		id: "bowlogna",
 		name: "BowlognaBench",
-		fullName: DATASET_METADATA.bowlogna?.fullName || "BowlognaBench",
+		fullName: "BowlognaBench",
 		shortFile: "Department0.nt",
 		fullFile: "input/bowlogna/unzip/Department0.nt",
 		format: "N-Triples",
 		graph: "Default graph",
-		upstreamUrl: DATASET_METADATA.bowlogna?.artifact?.url || "https://exascale.info/assets/pdf/BowlognaBenchSIMPDA2011.pdf",
-		downloadUrl: DATASET_METADATA.bowlogna?.artifact?.downloadUrl || "https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip",
+		upstreamUrl: "https://exascale.info/assets/pdf/BowlognaBenchSIMPDA2011.pdf",
+		downloadUrl: "https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip",
 	},
 	"named-graphs": {
 		id: "named-graphs",
@@ -66,7 +65,7 @@ export const DATASET_CONFIGS = Object.freeze({
 		fullFile: "input/queries/v1/named-graphs/prepare_dataset.py",
 		format: "N-Quads",
 		graph: "2 Named graphs",
-		upstreamUrl: DATASET_METADATA.lubm?.artifact?.url || "https://swat.cse.lehigh.edu/projects/lubm/",
+		upstreamUrl: "https://swat.cse.lehigh.edu/projects/lubm/",
 		scriptPath: "input/queries/v1/named-graphs/prepare_dataset.py",
 	},
 });
@@ -74,7 +73,7 @@ export const DATASET_CONFIGS = Object.freeze({
 const LOADING_DATASET_FILES = Object.freeze({
 	bsbm: { shortFile: "bsbm_medium.nt", fullFile: "input/bsbm/view_small_medium/bsbm_medium.nt" },
 	lubm: { shortFile: "lubm_medium.nt", fullFile: "input/lubm/unzip_medium/lubm_medium.nt" },
-	"named-graphs": { shortFile: "named-graphs.nq", format: "N-Quads" },
+	"named-graphs": { shortFile: "corese-feature-lubm.nq", format: "N-Quads" },
 	dbpedia: { shortFile: "persondata_en.nt", fullFile: "input/dbpedia/unzip/persondata_en.nt" },
 	bowlogna: { shortFile: "Department0.nt", fullFile: "input/bowlogna/unzip/Department0.nt" },
 });
@@ -101,6 +100,10 @@ export function resolveDatasetTripleCount(dataset, reportData, mode = "sparql") 
 	const files = dataset === "named-graphs"
 		? ["named-graphs.nq", "corese-feature-lubm.nq", "lubm_named.nq"]
 		: [info.shortFile];
+	for (const file of files) {
+		const measured = reportData?.metadata?.datasetSizes?.[`${dataset}:${file}`];
+		if (isPositiveTripleCount(measured)) return measured;
+	}
 	const runs = reportData?.loadingRuns || reportData?.runs || [];
 	const counts = runs.filter((run) => run.dataset === dataset
 		&& files.includes(run.file) && isPositiveTripleCount(run.triples))
@@ -303,10 +306,10 @@ export function createProtocolTile({
 		? "None (Simple Entailment / SPARQL 1.1 Direct Evaluation)"
 		: "Not reported";
 
-	const activeDataset = (state.dataset || "bsbm").toLowerCase();
+	const activeDataset = (state.dataset || "bowlogna").toLowerCase();
 	const runCmd = mode === "sparql"
-		? "python3 python-utils/workflow.py --datasets lubm,bsbm,dbpedia,bowlogna --benchmark-type query"
-		: `python3 python-utils/workflow.py --dataset ${activeDataset} --benchmark-type load`;
+		? "python3 python-utils/workflow.py --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.6.1.0 --datasets lubm,bsbm,dbpedia,bowlogna,named-graphs --mode query"
+		: `python3 python-utils/workflow.py --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.6.1.0 --datasets ${activeDataset} --mode load`;
 
 	const rawCommit = meta.gitCommit || "";
 	const shortCommit = rawCommit.length >= 7 ? rawCommit.slice(0, 7) : rawCommit;

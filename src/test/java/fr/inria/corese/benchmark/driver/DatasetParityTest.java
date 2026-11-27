@@ -18,15 +18,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DatasetParityTest {
 
     @Test
-    @DisplayName("BSBM small dataset must exist in all formats and have identical triple/quad counts and isomorphic graphs")
-    void testBsbmSmallParity() {
-        verifyDatasetParity(Path.of("input/bsbm/unzip"), "bsbm_small");
+    @DisplayName("DBpedia canonical dataset must exist in all formats with isomorphic graphs")
+    void testDbpediaParity() {
+        verifyDatasetParity(Path.of("input/dbpedia/unzip"), "persondata_en");
     }
 
     @Test
-    @DisplayName("LUBM small dataset must exist in all formats and have identical triple/quad counts and isomorphic graphs")
-    void testLubmSmallParity() {
-        verifyDatasetParity(Path.of("input/lubm/unzip"), "lubm_small");
+    @DisplayName("Bowlogna canonical dataset must exist in all formats with isomorphic graphs")
+    void testBowlognaParity() {
+        verifyDatasetParity(Path.of("input/bowlogna/unzip"), "Department0");
+    }
+
+    @Test
+    @DisplayName("LUBM medium dataset must exist in all formats with isomorphic graphs")
+    void testLubmMediumParity() {
+        verifyDatasetParity(Path.of("input/lubm/unzip"), "lubm_medium");
     }
 
     private void verifyDatasetParity(Path basePath, String baseName) {

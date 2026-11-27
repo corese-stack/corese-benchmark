@@ -284,3 +284,9 @@ tr[data-sf-query].is-jump-highlighted {
  .sf-dataset-card { flex: 1 1 100%; }
  .sf-dataset-card-facts { grid-template-columns: 65px 1fr; }
 }
+
+.sf-view .data-table .table-pin {
+ padding: 0;
+ text-align: right;
+ font-variant-numeric: tabular-nums;
+}

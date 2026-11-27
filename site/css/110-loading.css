@@ -189,20 +189,19 @@
 	background: var(--bg-surface);
 }
 
-.protocol-col {
-	flex: 1 1 340px;
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-}
-
 .protocol-section-title {
 	margin: 0 0 0.625rem;
 	font-size: 0.875rem;
 	font-weight: 650;
 	line-height: 1.4;
 	color: var(--text-main);
+}
+
+.dataset-card__note {
+	margin: 0 0 0.5rem;
+	color: var(--text-muted);
+	font-size: 0.8125rem;
+	line-height: 1.5;
 }
 
 .protocol-facts {
@@ -284,94 +283,6 @@
 	color: var(--accent);
 	text-decoration-thickness: 2px;
 }
-
-/* Dataset Workload Bar */
-.dataset-workload-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	flex-wrap: wrap;
-	gap: 12px;
-	padding: 8px 14px;
-	margin-bottom: 12px;
-	background: var(--bg-hover);
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	font-size: 12px;
-	color: var(--text-muted);
-}
-
-.dataset-workload-info {
-	display: inline-flex;
-	align-items: center;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.dataset-workload-tag {
-	font-weight: 700;
-	color: var(--text);
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.dataset-workload-parity {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	font-size: 11px;
-	color: #2ea043;
-	font-weight: 600;
-}
-.table-header-flex {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 12px;
-	margin-bottom: 12px;
-}
-
-.table-header-actions {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-
-.badge-engine-count {
-	display: inline-flex;
-	align-items: center;
-	padding: 2px 10px;
-	border-radius: 999px;
-	font-size: 12px;
-	font-weight: 500;
-	background: var(--bg-hover);
-	border: 1px solid var(--border);
-	color: var(--text-muted);
-}
-
-.badge-engine-count.is-partial {
-	border-color: var(--focus);
-	color: var(--focus);
-	background: color-mix(in srgb, var(--focus) 10%, var(--bg));
-}
-
-.btn-link-action {
-	background: none;
-	border: none;
-	color: var(--focus);
-	font-size: 12px;
-	font-weight: 600;
-	cursor: pointer;
-	padding: 0;
-	text-decoration: underline;
-}
-
-.btn-link-action:hover {
-	color: var(--accent);
-}
-
 
 /* Shared semantic pills: labels and symbols convey meaning without color. */
 .status-badge, .sf-badge {

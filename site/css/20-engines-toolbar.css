@@ -153,3 +153,36 @@
 	margin: 0;
 }
 
+
+.engine-chip.is-dragging {
+	cursor: grabbing;
+	z-index: 1000;
+	will-change: transform;
+	box-shadow:
+		0 4px 10px rgba(0, 0, 0, 0.16),
+		0 1px 2px rgba(0, 0, 0, 0.08);
+	border-color: var(--focus);
+	background: var(--bg);
+	transition: none;
+}
+
+.engine-chip.is-settling {
+	z-index: 999;
+	cursor: grabbing;
+	will-change: transform;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	transition: transform var(--chip-settle-duration)
+		cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.engine-chip,
+	.engine-chip.is-settling {
+		transition: none;
+		animation: none;
+	}
+	.engine-chip--ghost {
+		display: none;
+	}
+}
+

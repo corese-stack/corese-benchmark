@@ -8,7 +8,7 @@ import { createProtocolTile, populateDatasetCards, attachDetailsAnimation, DATAS
 
 export { DATASET_CONFIGS, highlightSparql };
 
-export const FEATURES = Object.freeze({
+const FEATURES = Object.freeze({
  BGP_JOIN: "BGP joins", PROPERTY_PATH: "Property paths",
  OPTIONAL_LEFT_JOIN: "Optional joins", NEGATION: "Negation",
  AGGREGATION_ANALYTICS: "Aggregation", SUBQUERY: "Subqueries",
@@ -163,6 +163,8 @@ export class SparqlFeaturesView {
   if (this.#state.pin) {
    focusStore.pin(this.#state.pin);
   }
+  focusStore.retainEngines(this.#engineKeys());
+  this.#state.pin = focusStore.state.pinned;
   // FocusStore is an EventTarget; AbortSignal owns the subscription lifecycle.
   focusStore.addEventListener("focus-changed", () => {
    const currentPinned = focusStore.state.pinned;
@@ -330,11 +332,14 @@ export class SparqlFeaturesView {
   } else if (focusStore.state.pinned) {
    focusStore.unpin();
   }
+  focusStore.retainEngines(this.#engineKeys());
+  this.#state.pin = focusStore.state.pinned;
   this.#refresh();
  }
 
  updateActiveEngines(engines) {
   this.#engines = engines || [];
+  focusStore.retainEngines(this.#engineKeys());
   this.#refresh();
  }
 
@@ -535,6 +540,7 @@ export class SparqlFeaturesView {
     row.querySelectorAll("td[data-engine-key]").forEach((cell) => {
      const cellEngine = cell.dataset.engineKey;
      const cellPresentation = presentationFor(target, { kind: "cell", engine: cellEngine, queryKey }, context);
+     cell.querySelector(".table-pin")?.setAttribute("aria-pressed", String(raw.pinned?.kind === "cell" && raw.pinned.key === cell.dataset.cellKey));
      cell.classList.toggle("is-cell-selected", cellPresentation === "selected");
      cell.classList.toggle("is-cell-related", cellPresentation === "related");
      cell.classList.toggle("is-column-highlighted", target?.kind === "engine" && cellEngine === targetEngine);
@@ -727,9 +733,9 @@ export class SparqlFeaturesView {
    const cellTooltip = `${errorPrefix}${esc(engine)}: ${num(run?.medianMs)} ms (TTFR: ${num(run?.medianTtfrMs)} ms) · Status: ${esc(status)}`;
    const cellKey = `${engine}|${qKey}`;
    if (status === "PASS") {
-    return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right; font-variant-numeric: tabular-nums;" title="${cellTooltip}">${num(run?.medianMs)} ms</td>`;
+    return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right; font-variant-numeric: tabular-nums;" title="${cellTooltip}"><button type="button" class="table-pin" aria-pressed="false" aria-label="Pin ${esc(query.id)} for ${esc(engine)}">${num(run?.medianMs)} ms</button></td>`;
    }
-   return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right;" title="${cellTooltip}">${badge(status)}</td>`;
+   return `<td data-engine-key="${esc(engine)}" data-cell-key="${esc(cellKey)}" style="text-align: right;" title="${cellTooltip}"><button type="button" class="table-pin" aria-pressed="false" aria-label="Pin ${esc(query.id)} for ${esc(engine)}">${badge(status)}</button></td>`;
  }
 
  async #fetchQuerySource(file, signal) {

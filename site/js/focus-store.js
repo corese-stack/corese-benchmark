@@ -7,7 +7,7 @@
  * While any target is pinned, hovering never breaks or mutates the effective focus.
  */
 
-export function sameTarget(a, b) {
+function sameTarget(a, b) {
 	if (a === b) return true;
 	if (!a || !b) return false;
 	return a.kind === b.kind && a.key === b.key;
@@ -261,8 +261,19 @@ export class FocusStore extends EventTarget {
 	}
 
 	/**
-	 * Unpin target.
+	 * Clear focus targets belonging to engines outside the current selection.
 	 */
+	retainEngines(engines) {
+		const allowed = new Set(engines);
+		const retained = (target) => !engineKeyOf(target) || allowed.has(engineKeyOf(target));
+		const pinned = retained(this.#state.pinned) ? this.#state.pinned : null;
+		const hover = retained(this.#state.hover?.target) ? this.#state.hover : null;
+		if (pinned === this.#state.pinned && hover === this.#state.hover) return;
+		this.#state = { pinned, hover };
+		this.#notify();
+	}
+
+	/** Unpin target. */
 	unpin() {
 		if (!this.#state.pinned) return;
 		this.#state = { ...this.#state, pinned: null };

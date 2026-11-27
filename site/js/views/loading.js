@@ -57,7 +57,7 @@ export class LoadingView {
 	#legendHover = hoverSource();
 	#tableHover = hoverSource();
 	#state = {
-		dataset: "bsbm",
+		dataset: "bowlogna",
 		formats: new Set(ALL_FORMATS),
 		telemetryFormat: null,
 		section: null,
@@ -77,6 +77,7 @@ export class LoadingView {
 
 	updateActiveEngines(engines) {
 		this.#activeEngines = engines || [];
+		focusStore.retainEngines(this.#activeEngines.map(formatEngineId));
 		this.render();
 	}
 
@@ -85,7 +86,7 @@ export class LoadingView {
 			this.#activeEngines = engines;
 		}
 		if (newState) {
-			this.#state.dataset = newState.dataset || "bsbm";
+			this.#state.dataset = newState.dataset || "bowlogna";
 			this.#state.formats = newState.formats || new Set(ALL_FORMATS);
 			this.#state.telemetryFormat = newState.telemetryFormat || null;
 			this.#state.section = newState.section || null;
@@ -96,6 +97,8 @@ export class LoadingView {
 				focusStore.unpin();
 			}
 		}
+		focusStore.retainEngines(this.#activeEngines.map(formatEngineId));
+		this.#state.pin = focusStore.state.pinned;
 		this.render();
 	}
 
@@ -543,7 +546,7 @@ export class LoadingView {
 		// Dynamic discovery of available datasets from report runs
 		const allRuns = this.#data?.loadingRuns || [];
 		const discoveredDatasets = [...new Set(allRuns.map((r) => r.dataset?.toLowerCase()).filter(Boolean))];
-		const availableDatasets = discoveredDatasets.length > 0 ? discoveredDatasets : ["bsbm", "lubm", "dbpedia", "bowlogna"];
+		const availableDatasets = discoveredDatasets.length > 0 ? discoveredDatasets : ["bowlogna", "bsbm", "lubm", "dbpedia"];
 
 		// Ensure current dataset is valid
 		if (!availableDatasets.includes(this.#state.dataset.toLowerCase())) {

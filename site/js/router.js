@@ -101,10 +101,11 @@ export function updateUrlEngines(selectedEngines = [], push = false) {
 	commitUrlParams(params, push);
 }
 
-const VALID_DATASETS = new Set(["bsbm", "bowlogna", "dbpedia", "lubm"]);
+const DEFAULT_DATASET = "bowlogna";
+const VALID_DATASETS = new Set(["bowlogna", "bsbm", "dbpedia", "lubm", "named-graphs"]);
 const DEFAULT_ALL_FORMATS = ["nt", "ttl", "nq", "trig", "rdf", "jsonld", "html"];
 const VALID_FORMATS_SET = new Set(DEFAULT_ALL_FORMATS);
-export const VALID_LOADING_SECTIONS = new Set([
+const VALID_LOADING_SECTIONS = new Set([
 	"dataset",
 	"protocol",
 	"throughput",
@@ -117,7 +118,7 @@ export function parseUrlLoading(searchStr) {
 	const params = new URLSearchParams(searchStr || "");
 
 	const rawDataset = (params.get("dataset") || "").trim().toLowerCase();
-	const dataset = VALID_DATASETS.has(rawDataset) ? rawDataset : "bsbm";
+	const dataset = VALID_DATASETS.has(rawDataset) ? rawDataset : DEFAULT_DATASET;
 
 	let formats = new Set(DEFAULT_ALL_FORMATS);
 	if (params.has("formats")) {
@@ -161,7 +162,7 @@ export function updateUrlLoading(state, { history = "replace" } = {}) {
 
 	const params = new URLSearchParams(window.location.search);
 
-	applyParam(params, "dataset", state.dataset, "bsbm");
+	applyParam(params, "dataset", state.dataset, DEFAULT_DATASET);
 
 	const hasCustomFormats = state.formats && state.formats.size < DEFAULT_ALL_FORMATS.length;
 	const serializedFormats = hasCustomFormats
@@ -180,7 +181,7 @@ export function updateUrlLoading(state, { history = "replace" } = {}) {
 	commitUrlParams(params, history === "push");
 }
 
-export const VALID_VIEWS = ["loading", "sparql"];
+const VALID_VIEWS = new Set(["loading", "sparql"]);
 
 /**
  * Extracts and validates the current active view from location.hash.
@@ -194,7 +195,7 @@ export function getCurrentView() {
 		.toLowerCase();
 	if (rawHash === "sparql-features") return "sparql";
 	if (rawHash === "overview") return "loading";
-	return VALID_VIEWS.includes(rawHash) ? rawHash : "loading";
+	return VALID_VIEWS.has(rawHash) ? rawHash : "loading";
 }
 
 /**
@@ -202,7 +203,7 @@ export function getCurrentView() {
  */
 export function navigateToView(viewId) {
 	if (typeof window === "undefined") return;
-	const targetView = VALID_VIEWS.includes(viewId) ? viewId : "loading";
+	const targetView = VALID_VIEWS.has(viewId) ? viewId : "loading";
 	window.location.hash = targetView;
 }
 

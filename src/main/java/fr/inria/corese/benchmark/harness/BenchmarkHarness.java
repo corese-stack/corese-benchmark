@@ -16,9 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -58,18 +59,21 @@ public class BenchmarkHarness {
     private final MetricsCollector metrics;
     private final String datasetName;
     private final BenchmarkProtocol protocol;
-    private final Set<String> formats;
+
+    private final Set<BenchmarkFormat> allowedFormats;
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, BenchmarkProtocol protocol) {
-        this(driver, datasetName, protocol, Collections.emptySet());
+        this(driver, datasetName, protocol, EnumSet.noneOf(BenchmarkFormat.class));
     }
 
-    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, BenchmarkProtocol protocol, Set<String> formats) {
+    /** Creates a harness with an optional loading filter; catalogue targets remain independent. */
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, BenchmarkProtocol protocol,
+                            Set<BenchmarkFormat> allowedFormats) {
+        this.allowedFormats = Set.copyOf(allowedFormats);
         this.driver = driver;
         this.datasetName = datasetName;
         this.protocol = protocol != null ? protocol : BenchmarkProtocol.defaultProtocol();
         this.metrics = new MetricsCollector();
-        this.formats = formats != null ? formats : Collections.emptySet();
     }
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
@@ -108,10 +112,12 @@ public class BenchmarkHarness {
                     String repStr = Arrays.stream(result.repetitionsMs())
                             .mapToObj(String::valueOf)
                             .collect(Collectors.joining(", ", "[", "]"));
-                    log.info("  [{}/{}] {}", fi + 1, files.length,
-                            String.format(Locale.US, "%-45s | %6d ms %s | %,9d triples | %8.1f MB | %,.0f triples/s",
-                                    file.getName(), result.loadingTimeMs(), repStr,
-                                    result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                    if (log.isInfoEnabled()) {
+                        log.info("  [{}/{}] {}", fi + 1, files.length,
+                                String.format(Locale.US, "%-45s | %6d ms %s | %,9d triples | %8.1f MB | %,.0f triples/s",
+                                        file.getName(), result.loadingTimeMs(), repStr,
+                                        result.triples(), result.memoryDeltaMb(), result.throughputTriplesPerSec()));
+                    }
                 } catch (java.util.concurrent.TimeoutException e) {
                     results.add(failedFile(file, FileStatus.TIMEOUT, e));
                     log.error("  [{}/{}] {} — LOAD TIMEOUT ({}ms, engine={}, dataset={}), skipping file",
@@ -227,31 +233,7 @@ public class BenchmarkHarness {
 
             // Phase 1: Pure Timed Query Executions (Warmup + Repetitions for all queries)
             // No cryptographic hashing or string conversions, preventing cache distortion across queries.
-            List<QueryTimedRun> timedRuns = new ArrayList<>();
-            boolean jvmContaminated = false;
-            String leakSource = null;
-
-            for (QuerySpec query : queries) {
-                String sparql = query.sparql();
-                if (!sparql.isEmpty()) {
-                    String queryId = query.queryId();
-                    String category = query.category();
-
-                    if (jvmContaminated) {
-                        log.warn("  Skipping {} due to unrecovered thread leak in {}", queryId, leakSource);
-                        timedRuns.add(buildContaminatedSkippedRun(sparql, queryId, category, leakSource));
-                    } else {
-                        QueryTimedRun run = measureSingleQuery(sparql, queryId, category, query.timeoutS());
-                        timedRuns.add(run);
-
-                        if (hasActiveThreadLeak(run)) {
-                            jvmContaminated = true;
-                            leakSource = queryId;
-                            log.error("ABORTING remaining queries in JVM: thread leak detected in {}. Further queries would be contaminated.", queryId);
-                        }
-                    }
-                }
-            }
+            List<QueryTimedRun> timedRuns = executeTimedQueries(queries);
 
             // Phase 2: Deferred Validation Phase (Semantic Hash Fingerprinting)
             // Executed strictly after all performance-timed runs are complete.
@@ -265,6 +247,34 @@ public class BenchmarkHarness {
         return results;
     }
 
+    private List<QueryTimedRun> executeTimedQueries(List<QuerySpec> queries) {
+        List<QueryTimedRun> timedRuns = new ArrayList<>();
+        boolean jvmContaminated = false;
+        String leakSource = null;
+
+        for (QuerySpec query : queries) {
+            String sparql = query.sparql();
+            if (!sparql.isEmpty()) {
+                String queryId = query.queryId();
+                String category = query.category();
+
+                if (jvmContaminated) {
+                    log.warn("  Skipping {} due to unrecovered thread leak in {}", queryId, leakSource);
+                    timedRuns.add(buildContaminatedSkippedRun(sparql, queryId, category, leakSource));
+                } else {
+                    QueryTimedRun run = measureSingleQuery(sparql, queryId, category, query.timeoutS());
+                    timedRuns.add(run);
+                    if (hasActiveThreadLeak(run)) {
+                        jvmContaminated = true;
+                        leakSource = queryId;
+                        log.error("ABORTING remaining queries in JVM: thread leak detected in {}. Further queries would be contaminated.", queryId);
+                    }
+                }
+            }
+        }
+        return timedRuns;
+    }
+
     private void warmupQueries(List<QuerySpec> queries) {
         log.info("  Warming up {} queries (1 run discarded)...", queries.size());
         for (QuerySpec query : queries) {
@@ -272,6 +282,8 @@ public class BenchmarkHarness {
         }
     }
 
+    // ExecutorService.close() waits indefinitely if a timed-out triple-store worker ignores interruption.
+    @SuppressWarnings("java:S2095")
     private void runSingleWarmup(String warmupSparql, String warmupId, long qTimeoutS) {
         ExecutorService warmupExec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "warmup-" + warmupId);
@@ -287,10 +299,10 @@ public class BenchmarkHarness {
             } else if (count > 0) {
                 log.debug("  {} warmup: {} result(s)", warmupId, count);
             }
-        } catch (TimeoutException e) {
+        } catch (TimeoutException _) {
             wf.cancel(true);
             log.warn("  {} warmup timed out after {}s — skipping", warmupId, qTimeoutS);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             log.warn("  {} warmup interrupted", warmupId);
         } catch (Exception e) {
@@ -302,7 +314,7 @@ public class BenchmarkHarness {
                 if (!warmupExec.awaitTermination(200, TimeUnit.MILLISECONDS)) {
                     log.warn("  {} warmup worker thread still active after shutdown", warmupId);
                 }
-            } catch (InterruptedException ie) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -445,6 +457,8 @@ public class BenchmarkHarness {
         }
     }
 
+    // ExecutorService.close() waits indefinitely if a timed-out worker ignores interruption.
+    @SuppressWarnings("java:S2095")
     private TripleStoreDriver.ValidationResult validateWithTimeout(String sparql, String queryId, long qTimeoutS) throws Exception {
         ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "validation-" + queryId);
@@ -463,7 +477,7 @@ public class BenchmarkHarness {
                 if (!exec.awaitTermination(500, TimeUnit.MILLISECONDS)) {
                     log.error("THREAD LEAK: validation worker thread for {} did not terminate within 500ms!", queryId);
                 }
-            } catch (InterruptedException ie) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -512,13 +526,17 @@ public class BenchmarkHarness {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof RepetitionBuffers b)) return false;
-            return Arrays.equals(times, b.times)
-                && Arrays.equals(ttfrTimes, b.ttfrTimes)
-                && Arrays.equals(heapDeltas, b.heapDeltas)
-                && Arrays.equals(rowCounts, b.rowCounts)
-                && Arrays.equals(statuses, b.statuses)
-                && Arrays.equals(errorCauses, b.errorCauses);
+            if (!(o instanceof RepetitionBuffers(
+                    var otherTimes, var otherTtfr, var otherHeap,
+                    var otherRows, var otherStatuses, var otherErrors))) {
+                return false;
+            }
+            return Arrays.equals(times, otherTimes)
+                && Arrays.equals(ttfrTimes, otherTtfr)
+                && Arrays.equals(heapDeltas, otherHeap)
+                && Arrays.equals(rowCounts, otherRows)
+                && Arrays.equals(statuses, otherStatuses)
+                && Arrays.equals(errorCauses, otherErrors);
         }
 
         @Override
@@ -538,6 +556,8 @@ public class BenchmarkHarness {
         }
     }
 
+    // ExecutorService.close() waits indefinitely if a timed-out worker ignores interruption.
+    @SuppressWarnings("java:S2095")
     private void executeSingleRepetition(
         String sparql, String queryId, int rep, RepetitionBuffers buffers, long qTimeoutS
     ) {
@@ -546,9 +566,8 @@ public class BenchmarkHarness {
             t.setDaemon(true);
             return t;
         });
-        Future<QueryMetrics> future = null;
+        Future<QueryMetrics> future = executor.submit(() -> driver.queryWithMetrics(sparql));
         try {
-            future = executor.submit(() -> driver.queryWithMetrics(sparql));
             QueryMetrics m = future.get(qTimeoutS, TimeUnit.SECONDS);
             buffers.times()[rep]       = m.totalMs();
             buffers.ttfrTimes()[rep]   = m.ttfrMs();
@@ -556,13 +575,13 @@ public class BenchmarkHarness {
             buffers.rowCounts()[rep]   = m.resultCount();
             buffers.statuses()[rep]    = STATUS_PASS;
             buffers.errorCauses()[rep] = null;
-        } catch (TimeoutException e) {
-            if (future != null) future.cancel(true);
+        } catch (TimeoutException _) {
+            future.cancel(true);
             executor.shutdownNow();
             handleTimeout(queryId, rep, qTimeoutS, executor, buffers);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-            if (future != null) future.cancel(true);
+            future.cancel(true);
             executor.shutdownNow();
             log.warn("  {} rep {} interrupted", queryId, rep + 1);
             buffers.times()[rep]       = -1.0;
@@ -571,7 +590,7 @@ public class BenchmarkHarness {
             buffers.statuses()[rep]    = STATUS_TIMEOUT;
             buffers.errorCauses()[rep] = "Interrupted execution";
         } catch (ExecutionException e) {
-            if (future != null) future.cancel(true);
+            future.cancel(true);
             executor.shutdownNow();
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             log.warn("  {} rep {} failed: {}", queryId, rep + 1, cause.getMessage());
@@ -594,7 +613,7 @@ public class BenchmarkHarness {
             if (!terminated) {
                 log.error("THREAD LEAK: worker thread for {} rep {} did not terminate within 500ms after timeout!", queryId, rep + 1);
             }
-        } catch (InterruptedException ie) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
         log.warn("  {} rep {} timed out after {}s", queryId, rep + 1, qTimeoutS);
@@ -613,7 +632,7 @@ public class BenchmarkHarness {
      * Falls back to standard file discovery if no specific targets are declared.
      */
     private File[] resolveCatalogueFiles(String datasetDir) {
-        File[] discovered = discoverFiles(datasetDir);
+        File[] discovered = discoverFiles(datasetDir, Set.of());
         List<String> targets = datasetName != null
                 ? CATALOGUE_DATASET_TARGETS.get(datasetName.toLowerCase(Locale.ROOT))
                 : null;
@@ -623,6 +642,13 @@ public class BenchmarkHarness {
         File[] filtered = Arrays.stream(discovered)
                 .filter(file -> targets.stream().anyMatch(target -> file.getName().equalsIgnoreCase(target)))
                 .toArray(File[]::new);
+        if (filtered.length == 0) {
+            Path parent = Path.of(datasetDir).toAbsolutePath().getParent();
+            if (parent != null) {
+                filtered = targets.stream().map(target -> parent.resolve("unzip").resolve(target).toFile())
+                        .filter(File::isFile).filter(driver::supports).toArray(File[]::new);
+            }
+        }
         if (filtered.length == 0) {
             log.warn("None of declared catalogue targets {} found in {}; falling back to all discovered files",
                     targets, datasetDir);
@@ -636,25 +662,23 @@ public class BenchmarkHarness {
      * sorted alphabetically for reproducibility.
      */
     private File[] discoverFiles(String datasetDir) {
+        return discoverFiles(datasetDir, allowedFormats);
+    }
+
+    private File[] discoverFiles(String datasetDir, Set<BenchmarkFormat> formats) {
         File dir = new File(datasetDir);
         if (!dir.exists() || !dir.isDirectory()) {
             throw new IllegalArgumentException("Dataset directory does not exist or is not a directory: " + datasetDir);
         }
-        File[] files = dir.listFiles(f -> {
-            if (!f.isFile() || !BenchmarkFormat.isCanonicalFile(f) || !driver.supports(f)) {
-                return false;
-            }
-            if (formats.isEmpty()) {
-                return true;
-            }
-            String name = f.getName().toLowerCase(Locale.ROOT);
-            int dot = name.lastIndexOf('.');
-            return dot >= 0 && formats.contains(name.substring(dot + 1));
-        });
-        if (files == null || files.length == 0) {
+        File[] canonical = dir.listFiles(f -> f.isFile() && BenchmarkFormat.isCanonicalFile(f));
+        File[] files = canonical == null ? new File[0] : Arrays.stream(canonical)
+                .filter(driver::supports)
+                .filter(f -> formats.isEmpty() || BenchmarkFormat.fromFile(f).map(formats::contains).orElse(false))
+                .toArray(File[]::new);
+        if (files.length == 0) {
             throw new IllegalArgumentException(String.format(
-                "No supported RDF files (%s) found in: %s for driver %s",
-                driver.getSupportedFormats(), datasetDir, driver.getName()
+                "No supported RDF files (%s) found in: %s for driver %s; requested formats: %s; found files: %s",
+                driver.getSupportedFormats(), datasetDir, driver.getName(), formats, Arrays.toString(canonical)
             ));
         }
         Arrays.sort(files);
@@ -672,6 +696,8 @@ public class BenchmarkHarness {
             : sorted[mid];
     }
 
+    // ExecutorService.close() waits indefinitely if a timed-out worker ignores interruption.
+    @SuppressWarnings("java:S2095")
     private void loadWithTimeout(String path) throws InterruptedException, ExecutionException, TimeoutException {
         ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "load-" + new File(path).getName());
@@ -684,7 +710,7 @@ public class BenchmarkHarness {
         });
         try {
             future.get(protocol.loadTimeoutMs(), TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
+        } catch (TimeoutException _) {
             future.cancel(true);
             throw new TimeoutException(
                 "Load timed out after " + protocol.loadTimeoutMs() + " ms: " + path);
@@ -698,7 +724,7 @@ public class BenchmarkHarness {
                 if (!exec.awaitTermination(500, TimeUnit.MILLISECONDS)) {
                     log.warn("Load worker thread for {} still active after shutdown", path);
                 }
-            } catch (InterruptedException ie) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -731,14 +757,9 @@ public class BenchmarkHarness {
             driver.clear();
             memBefore[i] = metrics.getUsedMemoryMb();
 
-            IngestionTelemetrySampler sampler = null;
-            if (i == reps - 1) {
-                // Non-intrusive heap telemetry sampling during the final repetition
-                sampler = new IngestionTelemetrySampler(100, () -> 0L);
-                sampler.start();
-            }
-
-            try {
+            try (IngestionTelemetrySampler sampler = i == reps - 1
+                    ? new IngestionTelemetrySampler(100, () -> 0L) : null) {
+                if (sampler != null) sampler.start();
                 long start = System.nanoTime();
                 loadWithTimeout(path);
                 timesMs[i] = (System.nanoTime() - start) / 1_000_000L;
@@ -751,7 +772,6 @@ public class BenchmarkHarness {
                 if (footprint.isPresent()) {
                     diskBytesSamples.add(footprint.getAsLong());
                 }
-            } finally {
                 if (sampler != null) {
                     timeSeries = sampler.stop(triples);
                 }

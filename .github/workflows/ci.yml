@@ -8,7 +8,7 @@ on:
   schedule:
     - cron: '0 2 * * 6' # Weekly, Saturday 02:00 UTC
   repository_dispatch:
-    # client_payload: { corese_commit, release_tag, datasets, scales }
+    # client_payload: { corese_commit, release_tag, datasets }
     types: [corese-release, benchmark-trigger]
   workflow_dispatch:
     inputs:
@@ -20,28 +20,30 @@ on:
         description: 'Comma-separated engines (e.g. corese.next,corese.4.6.5,jena.6.2.0)'
         required: false
         default: 'corese.next,corese.4.6.5,jena.6.2.0,jena.6.2.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb'
-      scales:
-        description: 'Dataset scales (comma-separated)'
-        required: false
-        default: 'small,medium'
       corese_commit:
         description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = ignore.'
         required: false
         default: ''
+        type: string
       inference:
-        description: 'Enable RDFS inference (Corese only)'
+        description: 'Enable OWL-RL inference (Corese only)'
         required: false
         default: false
         type: boolean
-      cached_engines:
-        description: 'Engines whose results are read from cache (e.g. jena.6.2.0,rdf4j.6.1.0). Empty = re-run all.'
-        required: false
+      mode:
+        description: 'Benchmark mode'
+        type: choice
+        options: [all, load, query]
+        default: all
+      formats:
+        description: 'Formats CSV; empty means all'
+        type: string
         default: ''
-      force_all_engines:
-        description: 'Ignore baseline and force fresh execution of all engines'
-        required: false
-        default: false
-        type: boolean
+      reuse:
+        description: 'Reuse baseline measurements'
+        type: choice
+        options: [baseline, none]
+        default: baseline
       update_baseline:
         description: 'Update site/data/baseline.json with newly measured immutable engine runs'
         required: false
@@ -52,10 +54,6 @@ on:
         required: false
         default: false
         type: boolean
-      query_timeout:
-        description: 'Timeout in seconds for legacy text workloads; SPARQL v1 catalogue queries use per-query timeoutSecs'
-        required: false
-        default: ''
 
 permissions:
   contents: read
@@ -99,19 +97,18 @@ jobs:
       - name: Run Python unit tests
         shell: bash -l {0}
         run: |
-          python -m unittest discover -s python-utils -p "test_*.py" -v
+          python -m unittest discover -s python-utils/tests -p "test_*.py" -v
 
       - name: Run SPARQL feature tests
-        run: node --test site/tests/sparql-features.test.mjs
+        run: node --test site/tests/*.test.mjs
 
-      - name: Run smoke test (dbpedia small only)
+      - name: Run smoke test (dbpedia canonical)
         shell: bash -l {0}
         run: |
           python python-utils/workflow.py \
             --engines="$SMOKE_ENGINES" \
             --datasets="dbpedia" \
-            --scales="small" \
-            --force-all-engines \
+            --reuse=none \
             --quick
 
       - name: Check site/data output
@@ -125,7 +122,6 @@ jobs:
     outputs:
       engines: ${{ steps.params.outputs.engines }}
       datasets: ${{ steps.params.outputs.datasets }}
-      scales: ${{ steps.params.outputs.scales }}
       trigger: ${{ steps.params.outputs.trigger }}
 
     steps:
@@ -148,18 +144,16 @@ jobs:
           DISPATCH_ACTION: ${{ github.event.action }}
           IN_DATASETS: ${{ github.event.inputs.datasets }}
           IN_ENGINES: ${{ github.event.inputs.engines }}
-          IN_SCALES: ${{ github.event.inputs.scales }}
           IN_COMMIT: ${{ github.event.inputs.corese_commit }}
           IN_INFERENCE: ${{ github.event.inputs.inference }}
-          IN_CACHED: ${{ github.event.inputs.cached_engines }}
-          IN_FORCE: ${{ github.event.inputs.force_all_engines }}
+          IN_MODE: ${{ github.event.inputs.mode }}
+          IN_FORMATS: ${{ github.event.inputs.formats }}
+          IN_REUSE: ${{ github.event.inputs.reuse }}
           IN_UPDATE_BASELINE: ${{ github.event.inputs.update_baseline }}
           IN_QUICK: ${{ github.event.inputs.quick }}
-          IN_TIMEOUT: ${{ github.event.inputs.query_timeout }}
           PL_COMMIT: ${{ github.event.client_payload.corese_commit }}
           PL_TAG: ${{ github.event.client_payload.release_tag }}
           PL_DATASETS: ${{ github.event.client_payload.datasets }}
-          PL_SCALES: ${{ github.event.client_payload.scales }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
@@ -168,22 +162,18 @@ jobs:
 
           ENGINES="$BASE_ENGINES"
           DATASETS="$ALL_DATASETS"
-          SCALES="small"
-          COMMIT=""; INFERENCE=false; CACHED=""; FORCE=false
-          UPDATE_BASELINE=false; QUICK=false; TIMEOUT=""
+          COMMIT=""; INFERENCE=false; MODE=all; FORMATS=""; REUSE=baseline
+          UPDATE_BASELINE=false; QUICK=false
           TRIGGER="$EVENT"
 
           case "$EVENT" in
             push)
               ;;
             schedule)
-              SCALES="small,medium"
-              FORCE=false
               ;;
             repository_dispatch)
               TRIGGER="repository_dispatch:$DISPATCH_ACTION"
               [ -n "$PL_DATASETS" ] && DATASETS="$PL_DATASETS"
-              [ -n "$PL_SCALES" ] && SCALES="$PL_SCALES"
               COMMIT="$PL_COMMIT"
               if [ -n "$PL_TAG" ]; then
                 [[ "$PL_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.]+)?$ ]] \
@@ -193,10 +183,10 @@ jobs:
               fi
               ;;
             workflow_dispatch)
-              DATASETS="$IN_DATASETS"; ENGINES="$IN_ENGINES"; SCALES="$IN_SCALES"
-              COMMIT="$IN_COMMIT"; INFERENCE="$IN_INFERENCE"; CACHED="$IN_CACHED"
-              FORCE="$IN_FORCE"; UPDATE_BASELINE="$IN_UPDATE_BASELINE"
-              QUICK="$IN_QUICK"; TIMEOUT="$IN_TIMEOUT"
+              DATASETS="$IN_DATASETS"; ENGINES="$IN_ENGINES"
+              COMMIT="$IN_COMMIT"; INFERENCE="$IN_INFERENCE"; FORMATS="$IN_FORMATS"
+              MODE="$IN_MODE"; REUSE="$IN_REUSE"; UPDATE_BASELINE="$IN_UPDATE_BASELINE"
+              QUICK="$IN_QUICK"
               ;;
             *)
               fail "Unsupported event $EVENT"
@@ -205,28 +195,25 @@ jobs:
 
           check_list datasets "$DATASETS"
           check_list engines "$ENGINES"
-          check_list scales "$SCALES"
-          check_list cached_engines "$CACHED"
+          [[ "$FORMATS" =~ ^[A-Za-z0-9.,/-]*$ ]] || fail "Invalid formats"
+          [[ "$MODE" =~ ^(all|load|query)$ ]] || fail "Invalid mode"
+          [[ "$REUSE" =~ ^(baseline|none)$ ]] || fail "Invalid reuse"
           check_commit "$COMMIT"
-          [[ -z "$TIMEOUT" || "$TIMEOUT" =~ ^[0-9]+$ ]] || fail "Invalid query_timeout: '$TIMEOUT'"
-          [ -n "$DATASETS" ] && [ -n "$ENGINES" ] && [ -n "$SCALES" ] \
-            || fail "datasets, engines and scales must not be empty"
+          [ -n "$DATASETS" ] && [ -n "$ENGINES" ] \
+            || fail "datasets and engines must not be empty"
 
-          EXTRA=()
-          if [ -n "$COMMIT" ] && ! [[ "$ENGINES" =~ corese\.next ]]; then
-            EXTRA+=("--coreseCommits=$COMMIT")
+          EXTRA=("--mode=$MODE" "--reuse=$REUSE")
+          [ -z "$FORMATS" ] || EXTRA+=("--formats=$FORMATS")
+          if [ -n "$COMMIT" ] && ! [[ ",$ENGINES," == *,corese.next,* ]]; then
+            fail "corese_commit requires corese.next in engines"
           fi
           [ "$INFERENCE" = "true" ]        && EXTRA+=("--inference")
-          [ -n "$CACHED" ]                 && EXTRA+=("--cached-engines=$CACHED")
-          [ "$FORCE" = "true" ]            && EXTRA+=("--force-all-engines")
           [ "$UPDATE_BASELINE" = "true" ]  && EXTRA+=("--update-baseline")
           [ "$QUICK" = "true" ]            && EXTRA+=("--quick")
-          [ -n "$TIMEOUT" ]                && EXTRA+=("--query-timeout=$TIMEOUT")
 
           {
             echo "engines=$ENGINES"
             echo "datasets=$DATASETS"
-            echo "scales=$SCALES"
             echo "commit=$COMMIT"
             echo "trigger=$TRIGGER"
             echo "extra_args=${EXTRA[*]:-}"
@@ -237,7 +224,6 @@ jobs:
             echo "- **Trigger:** $TRIGGER"
             echo "- **Engines:** $ENGINES"
             echo "- **Datasets:** $DATASETS"
-            echo "- **Scales:** $SCALES"
             echo "- **Extra args:** ${EXTRA[*]:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -289,7 +275,6 @@ jobs:
         env:
           ENGINES: ${{ steps.params.outputs.engines }}
           DATASETS: ${{ steps.params.outputs.datasets }}
-          SCALES: ${{ steps.params.outputs.scales }}
           EXTRA_ARGS: ${{ steps.params.outputs.extra_args }}
         run: |
           source "$CONDA_SH"
@@ -299,7 +284,6 @@ jobs:
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \
-            --scales="$SCALES" \
             --baseline="site/data/baseline.json" \
             $EXTRA_ARGS
 

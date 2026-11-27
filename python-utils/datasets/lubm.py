@@ -5,12 +5,13 @@ Generator: UBA 1.7 (Java), produces OWL files converted to N-Triples.
 Scale tiers (universities):
   small  →  1 university   (~  100 K triples)
   medium →  10 universities (~    1 M triples)
-  large  → 100 universities (~   10 M triples)
 
 Note: UBA generates .owl (RDF/XML) files; we convert them to N-Triples with rdflib.
 """
 
 from __future__ import annotations
+
+from datasets import create_file_view
 
 import os
 import shutil
@@ -20,11 +21,13 @@ import zipfile
 
 UBA_URL = "https://swat.cse.lehigh.edu/projects/lubm/uba1.7.zip"
 UBA_ZIP = "uba1.7.zip"
+# LUBM UBA RDF namespace IRI (not a network transport endpoint)
+ONTOLOGY_IRI = "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl"  # NOSONAR
+LEGACY_BROKEN_IRI = "https://swat.cse.lehigh.edu/onto/univ-bench.owl"
 
 SCALES = {
     "small":  1,
     "medium": 10,
-    "large":  100,
 }
 
 
@@ -84,7 +87,7 @@ def _generate_scale_nt(tools_dir: str, classes_dir: str, scale: str, n_univ: int
         "-univ", str(n_univ),
         "-index", "0",
         "-seed", "0",
-        "-onto", "https://swat.cse.lehigh.edu/onto/univ-bench.owl",
+        "-onto", ONTOLOGY_IRI,
     ]
     subprocess.run(cmd, cwd=tmp_dir, check=True)
 
@@ -107,31 +110,23 @@ def _generate_scale_nt(tools_dir: str, classes_dir: str, scale: str, n_univ: int
     print(f"  Generated: lubm_{scale}.nt")
 
 
-def _create_view_dir(input_dir: str, store_dir: str, valid_scales: list[str]) -> str:
-    """Create a scoped directory with symlinks/copies for the requested scales."""
-    view_dir = os.path.join(input_dir, "lubm", "view_" + "_".join(valid_scales))
-    os.makedirs(view_dir, exist_ok=True)
-    for f in os.listdir(view_dir):
-        os.remove(os.path.join(view_dir, f))
-    for scale in valid_scales:
-        src = os.path.join(store_dir, f"lubm_{scale}.nt")
-        dst = os.path.join(view_dir,  f"lubm_{scale}.nt")
-        if os.path.exists(src):
-            try:
-                os.symlink(src, dst)
-            except (OSError, NotImplementedError):
-                shutil.copy2(src, dst)
-    return view_dir
+def _has_stale_ontology_iri(nt_file: str) -> bool:
+    """Detect N-Triples generated with the legacy wrong LUBM namespace IRI."""
+    with open(nt_file, encoding="utf-8", errors="ignore") as f:
+        sample = f.read(65536)
+    return LEGACY_BROKEN_IRI in sample and ONTOLOGY_IRI not in sample
 
 
-def prepare(input_dir: str, scales: list[str] | None = None) -> str:
-    """
-    Generate LUBM datasets for the requested scales.
-    Returns a directory containing ONLY the .nt files for the requested scales,
-    so the benchmark harness does not accidentally load larger scale files.
-    """
-    scales = scales or ["small", "medium", "large"]
-    valid_scales = [s for s in scales if s in SCALES]
+def _remove_scale_siblings(store_dir: str, scale: str) -> None:
+    """Remove generated LUBM files for a scale before regenerating from clean OWL."""
+    prefix = f"lubm_{scale}."
+    for name in os.listdir(store_dir):
+        if name.startswith(prefix):
+            os.remove(os.path.join(store_dir, name))
+
+
+def prepare(input_dir: str) -> str:
+    """Prepare medium loading data and small SPARQL catalogue data."""
     tools_dir  = os.path.join(input_dir, "_tools")
     store_dir  = os.path.join(input_dir, "lubm", "unzip")  # permanent per-scale storage
     os.makedirs(tools_dir, exist_ok=True)
@@ -139,18 +134,17 @@ def prepare(input_dir: str, scales: list[str] | None = None) -> str:
 
     classes_dir = os.path.abspath(_download_uba(tools_dir))
 
-    for scale in valid_scales:
-        n_univ   = SCALES[scale]
+    for scale, n_univ in SCALES.items():
         out_file = os.path.join(store_dir, f"lubm_{scale}.nt")
 
         if os.path.exists(out_file):
-            print(f"  Already generated: lubm_{scale}.nt")
-            continue
+            if not _has_stale_ontology_iri(out_file):
+                print(f"  Already generated: lubm_{scale}.nt")
+                continue
+            print(f"  Regenerating lubm_{scale}.nt (stale ontology IRI)...")
+            _remove_scale_siblings(store_dir, scale)
 
         _generate_scale_nt(tools_dir, classes_dir, scale, n_univ, out_file)
 
-    # Return a view directory containing only the requested scale files.
-    if len(valid_scales) == len(SCALES):
-        return store_dir
-
-    return _create_view_dir(input_dir, store_dir, valid_scales)
+    return create_file_view(os.path.join(input_dir, "lubm", "view_canonical"),
+                            store_dir, ["lubm_medium.nt"])

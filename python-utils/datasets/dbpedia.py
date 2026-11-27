@@ -1,7 +1,11 @@
 """
-DBpedia 3.5.1 dataset — 5 curated N-Triples files (~270K–770K triples each).
+DBpedia 3.5.1 persondata dataset.
 Source: S3 hosted on the SLICES/P16 infrastructure.
 """
+
+from __future__ import annotations
+
+from datasets import create_file_view
 
 import bz2
 import os
@@ -11,14 +15,7 @@ import requests
 
 BASE_URL = "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump"
 
-FILES = [
-    "category_labels_en.nt.bz2",
-    "disambiguations_en.nt.bz2",
-    "homepages_en.nt.bz2",
-    "persondata_en.nt.bz2",
-    "specific_mappingbased_properties_en.nt.bz2",
-]
-
+FILES = ["persondata_en.nt.bz2"]
 
 def prepare(input_dir: str) -> str:
     """Download and extract DBpedia files. Returns the directory of .nt files."""
@@ -31,6 +28,9 @@ def prepare(input_dir: str) -> str:
         archive_path = os.path.join(archive_dir, filename)
         nt_name = filename.replace(".bz2", "")
         nt_path = os.path.join(unzip_dir, nt_name)
+
+        if os.path.exists(nt_path):
+            continue
 
         if not os.path.exists(archive_path):
             url = f"{BASE_URL}/{filename}"
@@ -47,4 +47,4 @@ def prepare(input_dir: str) -> str:
         else:
             print(f"  Already ready: {nt_name}")
 
-    return unzip_dir
+    return create_file_view(os.path.join(archive_dir, "view_canonical"), unzip_dir, ["persondata_en.nt"])

@@ -21,6 +21,62 @@ import static org.junit.jupiter.api.Assertions.*;
 class BenchmarkHarnessTest {
 
     @Test
+    void catalogueFindsSmallInputOutsideMediumView(@TempDir Path directory) throws Exception {
+        Path view = Files.createDirectories(directory.resolve("view_medium"));
+        Path store = Files.createDirectories(directory.resolve("unzip"));
+        Files.writeString(view.resolve("bsbm_medium.nt"), "<urn:a> <urn:p> <urn:b> .\n<urn:c> <urn:p> <urn:d> .\n");
+        Files.writeString(store.resolve("bsbm_small.nt"), "<urn:a> <urn:p> <urn:b> .\n");
+        Path catalogue = directory.resolve("catalogue.json");
+        Files.writeString(directory.resolve("query.rq"), "SELECT ?s WHERE { ?s ?p ?o }");
+        Files.writeString(catalogue, """
+                {"queries":[{"id":"Q01","name":"q","file":"query.rq","dataset":"bsbm"}]}
+                """);
+        var loaded = new fr.inria.corese.benchmark.query.SparqlCatalogueLoader().load(catalogue);
+        var harness = new BenchmarkHarness(new JenaDriver("jena.test"), "bsbm",
+                BenchmarkProtocol.fromOptions(true, 30), Set.of(BenchmarkFormat.TURTLE));
+        var results = harness.runCatalogueBenchmark(view.toString(), loaded);
+        assertEquals(1, results.size());
+        assertEquals(1, results.getFirst().rowCount());
+        assertEquals("PASS", results.getFirst().status());
+    }
+
+    @Test
+    void filtersLoadingFormatsAndExplainsMissingFormats(@TempDir Path directory) throws Exception {
+        for (String extension : List.of("nt", "ttl", "trig")) {
+            Files.writeString(directory.resolve("data." + extension), "<urn:s> <urn:p> <urn:o> .");
+        }
+        for (String csv : List.of("nt", "ttl,trig")) {
+            var harness = new BenchmarkHarness(new JenaDriver("jena.test"), "test",
+                    BenchmarkProtocol.fromOptions(true, 30), BenchmarkFormat.parseFormatList(csv));
+            assertEquals(java.util.Arrays.stream(csv.split(",")).map(ext -> "data." + ext).sorted().toList(),
+                    harness.run(directory.toString()).stream().map(FileResult::file).toList());
+        }
+        var harness = new BenchmarkHarness(new JenaDriver("jena.test"), "test",
+                BenchmarkProtocol.fromOptions(true, 30), Set.of(BenchmarkFormat.JSONLD));
+        String datasetDir = directory.toString();
+        var error = assertThrows(IllegalArgumentException.class, () -> harness.run(datasetDir));
+        assertTrue(error.getMessage().contains("JSONLD"));
+        assertTrue(error.getMessage().contains("data.nt"));
+    }
+
+    @Test
+    void catalogueIgnoresLoadingFilter(@TempDir Path directory) throws Exception {
+        Files.writeString(directory.resolve("bsbm_small.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Path query = directory.resolve("query.rq");
+        Files.writeString(query, "SELECT * WHERE { ?s ?p ?o }");
+        Path catalogue = directory.resolve("catalogue.json");
+        Files.writeString(catalogue, """
+                {"queries":[{"id":"Q01","name":"q","file":"query.rq","dataset":"bsbm"}]}
+                """);
+        var loaded = new fr.inria.corese.benchmark.query.SparqlCatalogueLoader().load(catalogue);
+        var harness = new BenchmarkHarness(new JenaDriver("jena.test"), "bsbm",
+                BenchmarkProtocol.fromOptions(true, 30), Set.of(BenchmarkFormat.TURTLE));
+        var results = harness.runCatalogueBenchmark(directory.toString(), loaded);
+        assertEquals(1, results.size());
+        assertEquals("PASS", results.getFirst().status());
+    }
+
+    @Test
     void testMultiFormatDiscoveryAndExecution(@TempDir Path tempDir) throws Exception {
         // Create files with different extensions in non-alphabetical order
         Path trigFile = tempDir.resolve("b_data.trig");
@@ -131,7 +187,8 @@ class BenchmarkHarnessTest {
     void testThrowsWhenNoSupportedFiles(@TempDir Path tempDir) {
         JenaDriver driver = new JenaDriver("jena.test");
         BenchmarkHarness harness = new BenchmarkHarness(driver, "empty_dataset", 1);
+        String emptyDir = tempDir.toString();
 
-        assertThrows(IllegalArgumentException.class, () -> harness.run(tempDir.toString()));
+        assertThrows(IllegalArgumentException.class, () -> harness.run(emptyDir));
     }
 }

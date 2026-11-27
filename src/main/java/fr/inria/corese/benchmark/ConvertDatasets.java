@@ -1,5 +1,6 @@
 package fr.inria.corese.benchmark;
 
+import fr.inria.corese.benchmark.driver.BenchmarkFormat;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
 import org.apache.jena.rdf.model.Model;
@@ -15,11 +16,13 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Converts canonical N-Triples benchmark datasets to Turtle (.ttl), N-Quads (.nq) and TriG (.trig)
- * so they can be ingested across all 4 supported W3C formats in the benchmark suite.
+ * Converts canonical N-Triples datasets, optionally selecting output formats with {@code --formats}.
  *
  * <p>Run via: {@code ./gradlew convertDatasets}
  */
@@ -28,19 +31,35 @@ public class ConvertDatasets {
     private static final Logger log = LoggerFactory.getLogger(ConvertDatasets.class);
 
     public static void main(String[] args) throws IOException {
-        if (args.length == 0) {
-            convertDefaultTargetFiles();
+        List<String> paths = new ArrayList<>();
+        Set<BenchmarkFormat> targetFormats = EnumSet.allOf(BenchmarkFormat.class);
+        int i = 0;
+        while (i < args.length) {
+            String arg = args[i];
+            if (arg.startsWith("--formats=")) {
+                targetFormats = BenchmarkFormat.parseFormatList(arg.substring("--formats=".length()));
+                i++;
+            } else if ("--formats".equals(arg)) {
+                if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+                    throw new IllegalArgumentException("Missing value for --formats");
+                }
+                targetFormats = BenchmarkFormat.parseFormatList(args[i + 1]);
+                i += 2;
+            } else {
+                paths.add(arg);
+                i++;
+            }
+        }
+        if (paths.isEmpty()) {
+            convertDefaultTargetFiles(targetFormats);
         } else {
-            convertTargetPaths(args);
+            convertTargetPaths(paths, targetFormats);
         }
         log.info("Conversion completed successfully.");
     }
 
-    private static void convertDefaultTargetFiles() {
+    private static void convertDefaultTargetFiles(Set<BenchmarkFormat> targetFormats) {
         List<Path> targetFiles = List.of(
-                Path.of("input/bsbm/unzip/bsbm_small.nt"),
-                Path.of("input/bsbm/unzip/bsbm_medium.nt"),
-                Path.of("input/lubm/unzip/lubm_small.nt"),
                 Path.of("input/lubm/unzip/lubm_medium.nt"),
                 Path.of("input/dbpedia/unzip/persondata_en.nt"),
                 Path.of("input/bowlogna/unzip/Department0.nt")
@@ -51,11 +70,11 @@ public class ConvertDatasets {
                 log.warn("Skipping file (not found): {}", ntFile);
                 continue;
             }
-            safeConvertFile(ntFile);
+            safeConvertFile(ntFile, targetFormats);
         }
     }
 
-    private static void convertTargetPaths(String[] args) throws IOException {
+    private static void convertTargetPaths(List<String> args, Set<BenchmarkFormat> targetFormats) throws IOException {
         for (String arg : args) {
             Path targetPath = Path.of(arg);
             if (!Files.exists(targetPath)) {
@@ -63,14 +82,14 @@ public class ConvertDatasets {
                 continue;
             }
             if (Files.isRegularFile(targetPath) && targetPath.getFileName().toString().endsWith(".nt")) {
-                safeConvertFile(targetPath);
+                safeConvertFile(targetPath, targetFormats);
             } else if (Files.isDirectory(targetPath)) {
-                convertDirectory(targetPath);
+                convertDirectory(targetPath, targetFormats);
             }
         }
     }
 
-    private static void convertDirectory(Path directory) throws IOException {
+    private static void convertDirectory(Path directory, Set<BenchmarkFormat> targetFormats) throws IOException {
         try (var stream = Files.list(directory)) {
             List<Path> ntFiles = stream
                     .filter(p -> p.getFileName().toString().endsWith(".nt"))
@@ -78,12 +97,12 @@ public class ConvertDatasets {
                     .toList();
 
             for (Path ntFile : ntFiles) {
-                safeConvertFile(ntFile);
+                safeConvertFile(ntFile, targetFormats);
             }
         }
     }
 
-    private static void safeConvertFile(Path ntFile) {
+    private static void safeConvertFile(Path ntFile, Set<BenchmarkFormat> targetFormats) {
         try {
             // Guard against massive files (> 2 GB) that would cause Java heap OOM during monolithic in-memory parsing
             long sizeBytes = Files.size(ntFile);
@@ -92,7 +111,7 @@ public class ConvertDatasets {
                         ntFile.getFileName(), sizeBytes / (1024 * 1024));
                 return;
             }
-            convertFile(ntFile);
+            convertFile(ntFile, targetFormats);
         } catch (OutOfMemoryError oom) {
             log.error("Out of memory converting file: {} — aborting conversion", ntFile.getFileName(), oom);
             throw new IllegalStateException("OOM converting " + ntFile.getFileName(), oom);
@@ -102,42 +121,54 @@ public class ConvertDatasets {
         }
     }
 
-    public static void convertFile(Path ntFile) throws IOException {
+    public static void convertFile(Path ntFile) {
+        convertFile(ntFile, EnumSet.allOf(BenchmarkFormat.class));
+    }
+
+    /** Reads the source once and writes only the requested serializations. */
+    private static void convertFile(Path ntFile, Set<BenchmarkFormat> targetFormats) {
+        Set<BenchmarkFormat> effectiveFormats = targetFormats.isEmpty()
+                ? EnumSet.allOf(BenchmarkFormat.class)
+                : targetFormats;
+        if (effectiveFormats.equals(Set.of(BenchmarkFormat.NTRIPLES))) {
+            log.info("No derived formats requested; keeping N-Triples source: {}", ntFile);
+            return;
+        }
         String baseName = ntFile.getFileName().toString().replaceFirst("\\.nt$", "");
-        Path ttlFile  = ntFile.resolveSibling(baseName + ".ttl");
-        Path nqFile   = ntFile.resolveSibling(baseName + ".nq");
-        Path trigFile = ntFile.resolveSibling(baseName + ".trig");
-        Path rdfFile  = ntFile.resolveSibling(baseName + ".rdf");
-        Path jsonldFile = ntFile.resolveSibling(baseName + ".jsonld");
-
         log.info("Reading canonical N-Triples: {} ...", ntFile);
-
         Model model = ModelFactory.createDefaultModel();
-        RDFDataMgr.read(model, ntFile.toAbsolutePath().toString(), Lang.NTRIPLES);
-        long tripleCount = model.size();
-        log.info("  Parsed {} triples from {}", tripleCount, ntFile.getFileName());
+        Dataset dataset = null;
+        try {
+            RDFDataMgr.read(model, ntFile.toAbsolutePath().toString(), Lang.NTRIPLES);
+            log.info("  Parsed {} triples from {}", model.size(), ntFile.getFileName());
+            if (effectiveFormats.contains(BenchmarkFormat.NQUADS) || effectiveFormats.contains(BenchmarkFormat.TRIG)) {
+                dataset = DatasetFactory.create();
+                dataset.addNamedModel("urn:graph:" + baseName, model);
+            }
+            for (BenchmarkFormat format : effectiveFormats) {
+                generateFormat(ntFile, baseName, model, dataset, format);
+            }
+        } finally {
+            if (dataset != null) dataset.close();
+            model.close();
+        }
+    }
 
-        // 1. Turtle (.ttl) with subject grouping & prefixes
-        safeGenerateFile(ttlFile, out -> RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY), "Turtle", ntFile);
-
-        // 2. RDF/XML (.rdf) standard W3C XML representation
-        safeGenerateFile(rdfFile, out -> RDFDataMgr.write(out, model, RDFFormat.RDFXML_PLAIN), "RDF/XML", ntFile);
-
-        // 3. JSON-LD (.jsonld) standard Web / Linked Data representation
-        safeGenerateFile(jsonldFile, out -> RDFDataMgr.write(out, model, RDFFormat.JSONLD_FLAT), "JSON-LD", ntFile);
-
-        // 4. N-Quads (.nq) with named graph
-        String graphIri = "urn:graph:" + baseName;
-        Dataset dataset = DatasetFactory.create();
-        dataset.addNamedModel(graphIri, model);
-        safeGenerateFile(nqFile, out -> RDFDataMgr.write(out, dataset, RDFFormat.NQUADS_UTF8), "N-Quads", ntFile);
-
-        // 5. TriG (.trig) with named graph block
-        safeGenerateFile(trigFile, out -> RDFDataMgr.write(out, dataset, RDFFormat.TRIG_PRETTY), "TriG", ntFile);
-
-        // 6. RDFa (.html) XHTML+RDFa 1.1 representation
-        Path htmlFile = ntFile.resolveSibling(baseName + ".html");
-        safeGenerateFile(htmlFile, out -> writeRdfaHtml(model, out, baseName), "RDFa", ntFile);
+    private static void generateFormat(Path source, String baseName, Model model, Dataset dataset,
+                                       BenchmarkFormat format) {
+        if (format == BenchmarkFormat.NTRIPLES) return;
+        Path target = source.resolveSibling(baseName + "." + format.getExtension());
+        safeGenerateFile(target, out -> {
+            switch (format) {
+                case TURTLE -> RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY);
+                case RDFXML -> RDFDataMgr.write(out, model, RDFFormat.RDFXML_PLAIN);
+                case JSONLD -> RDFDataMgr.write(out, model, RDFFormat.JSONLD_FLAT);
+                case NQUADS -> RDFDataMgr.write(out, dataset, RDFFormat.NQUADS_UTF8);
+                case TRIG -> RDFDataMgr.write(out, dataset, RDFFormat.TRIG_PRETTY);
+                case RDFA -> writeRdfaHtml(model, out, baseName);
+                default -> throw new IllegalArgumentException("Unsupported output format: " + format);
+            }
+        }, format.name(), source);
     }
 
     @FunctionalInterface

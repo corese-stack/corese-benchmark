@@ -32,11 +32,9 @@ export async function loadBenchmarkReport(
 	}
 
 	const metadata = rawData.metadata || {};
-	const runs = (
-		Array.isArray(rawData.runs)
-			? rawData.runs.filter((r) => r && typeof r === "object")
-			: []
-	).map(normalizeRun);
+	const loadingRuns = normalizeRuns(rawData.loadingRuns ?? rawData.runs, normalizeRun);
+	const runs = normalizeRuns(rawData.runs ?? rawData.loadingRuns, normalizeRun);
+	const queryRuns = normalizeRuns(rawData.queryRuns, normalizeQueryRun);
 
 	// Dynamically extract the catalog of engines and versions ACTUALLY present in data
 	const catalogMap = new Map();
@@ -46,9 +44,8 @@ export async function loadBenchmarkReport(
 			: {};
 
 	// Include engines present only in SPARQL reports (e.g. query-only runs).
-    const catalogueRuns = [...runs, ...(Array.isArray(rawData.queryRuns)
-        ? rawData.queryRuns.filter((q) => q && typeof q === "object").map(normalizeQueryRun) : [])];
-    catalogueRuns.forEach((run) => {
+	const catalogueRuns = [...runs, ...loadingRuns, ...queryRuns];
+	catalogueRuns.forEach((run) => {
 		const { engineId, versionId, storageId } = run.parsedEngine;
 		if (!catalogMap.has(engineId)) {
 			// Safe property lookup guarding against Object prototype properties and null values
@@ -130,19 +127,10 @@ export async function loadBenchmarkReport(
 		};
 	});
 
-	const rawQueryRuns = Array.isArray(rawData.queryRuns)
-		? rawData.queryRuns.filter((q) => q && typeof q === "object")
-		: [];
-	const queryRuns = rawQueryRuns.map(normalizeQueryRun);
-
-	const rawLoadingRuns = Array.isArray(rawData.loadingRuns)
-		? rawData.loadingRuns.filter((r) => r && typeof r === "object").map(normalizeRun)
-		: [];
-
 	return {
 		metadata,
 		runs,
-		loadingRuns: rawLoadingRuns,
+		loadingRuns,
 		queryRuns,
 		enginesCatalog,
 	};
@@ -152,8 +140,6 @@ export async function loadBenchmarkReport(
  * Normalizes a single query run object (parses engine ID, handles sentinels).
  */
 function normalizeQueryRun(qrun) {
-	const sanitize = (val) => (val === -1 ? null : val);
-
 	return {
 		...qrun,
 		medianMs: sanitize(qrun.medianMs),
@@ -173,7 +159,6 @@ function normalizeQueryRun(qrun) {
  * Normalizes a single run object (removes Java sentinels -1, computes metrics if needed).
  */
 function normalizeRun(run) {
-	const sanitize = (val) => (val === -1 ? null : val);
 	const loadingTimeMs = sanitize(run.loadingTimeMs);
 	const triples = sanitize(run.triples);
 	let status = run.status;
@@ -199,4 +184,14 @@ function normalizeRun(run) {
 		cpuPercent: sanitize(run.cpuPercent),
 		parsedEngine: parseEngineId(run.engine),
 	};
+}
+
+function sanitize(val) {
+	return val === -1 ? null : val;
+}
+
+function normalizeRuns(runs, normalize) {
+	return Array.isArray(runs)
+		? runs.filter((run) => run && typeof run === "object").map((item) => normalize(item))
+		: [];
 }

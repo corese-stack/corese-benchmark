@@ -1,10 +1,4 @@
-"""baseline.py — Module for managing immutable reference baseline benchmarks and report merging.
-
-This module provides:
-1. Frozen baseline management for immutable releases (Corese 4.6.5/4.6.4, Apache Jena 6.2.0 including TDB2, Eclipse RDF4J 6.1.0 including Native/LMDB).
-2. Intelligent engine execution planning: skips immutable engines already present in baseline.
-3. Safe, deterministic merging of fresh runs with baseline runs into unified JSON, JS, and CSV outputs.
-"""
+"""Manage the frozen immutable reference baseline, engine planning, and report exports."""
 
 from __future__ import annotations
 
@@ -15,6 +9,7 @@ import os
 import re
 import sys
 import uuid
+from statistics import median
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -22,13 +17,90 @@ IMMUTABLE_ENGINES = (
     "corese.4.6.5", "corese.4.6.4", "jena.6.2.0", "jena.6.2.0.tdb2",
     "rdf4j.6.1.0", "rdf4j.6.1.0.native", "rdf4j.6.1.0.lmdb",
 )
+CANONICAL_NAMED_GRAPHS_FILE = "corese-feature-lubm.nq"
+LEGACY_NAMED_GRAPHS_FILE = "named-graphs.nq"
+CANONICAL_SPARQL_FILES = {
+    "bowlogna": "Department0.nt", "bsbm": "bsbm_small.nt",
+    "dbpedia": "persondata_en.nt", "lubm": "lubm_small.nt",
+    "named-graphs": CANONICAL_NAMED_GRAPHS_FILE,
+}
+
+def loading_runs(report: dict) -> list[dict]:
+    """Read the canonical field, accepting legacy reports."""
+    return report.get("loadingRuns", report.get("runs", []))
+
+def is_canonical_dashboard_loading_run(run: dict) -> bool:
+    dataset, filename = run.get("dataset"), run.get("file", "")
+    if dataset == "named-graphs":
+        return filename in (CANONICAL_NAMED_GRAPHS_FILE, LEGACY_NAMED_GRAPHS_FILE)
+    if dataset == "bsbm":
+        return filename == "bsbm_medium.nt"
+    stem = {"bowlogna": "Department0",
+            "lubm": "lubm_medium", "dbpedia": "persondata_en"}.get(dataset)
+    return bool(stem and filename.startswith(stem + "."))
+
+def extract_dataset_sizes(loading_runs: list[dict]) -> dict[str, int]:
+    sizes = {}
+    for dataset, target in CANONICAL_SPARQL_FILES.items():
+        files = {target, LEGACY_NAMED_GRAPHS_FILE} if dataset == "named-graphs" else {target}
+        counts = [r["triples"] for r in loading_runs
+                  if r.get("dataset") == dataset and r.get("file") in files
+                  and isinstance(r.get("triples"), (int, float))
+                  and not isinstance(r["triples"], bool)
+                  and math.isfinite(r["triples"]) and r["triples"] > 0]
+        if counts:
+            sizes[f"{dataset}:{target}"] = int(round(median(counts)))
+    return sizes
+
+def _complete_query_engines(report: dict, raw: list[dict], queries: list[dict], expected_queries) -> set[str]:
+    expected = load_expected_v1_queries() if expected_queries is None else expected_queries
+    engines = {r.get("engine") for r in raw + queries}
+    return {
+        engine for engine in engines
+        if all(has_v1_query_coverage(report, engine, ds, expected) for ds in expected)
+    }
+
+def _normalize_pruned_loading_run(run: dict, canonical_named: set[str], eligible: set[str] | None) -> dict | None:
+    if not is_canonical_dashboard_loading_run(run):
+        return None
+    if eligible is not None and run.get("engine") not in eligible:
+        return None
+    copy_run = dict(run)
+    if copy_run.get("dataset") == "named-graphs" and copy_run["file"] == LEGACY_NAMED_GRAPHS_FILE:
+        if copy_run.get("engine") in canonical_named:
+            return None
+        copy_run["file"] = CANONICAL_NAMED_GRAPHS_FILE
+    return copy_run
+
+def prune_report_for_site(report: dict, *, expected_queries=None,
+                          require_complete_queries: bool = False) -> dict:
+    """Keep dashboard observations and preserve measured SPARQL input sizes."""
+    raw = loading_runs(report)
+    meta = dict(report.get("metadata", {}))
+    sizes = dict(meta.get("datasetSizes", {}))
+    sizes.update(extract_dataset_sizes(raw))
+    if sizes:
+        meta["datasetSizes"] = sizes
+    queries = report.get("queryRuns", [])
+    eligible = _complete_query_engines(report, raw, queries, expected_queries) if require_complete_queries else None
+    canonical_named = {
+        r.get("engine") for r in raw
+        if r.get("dataset") == "named-graphs" and r.get("file") == CANONICAL_NAMED_GRAPHS_FILE
+    }
+    pruned = {}
+    for run in raw:
+        normalized = _normalize_pruned_loading_run(run, canonical_named, eligible)
+        if normalized is not None:
+            pruned[(normalized["dataset"], normalized["engine"], normalized["file"])] = normalized
+    return {"metadata": meta, "loadingRuns": [pruned[k] for k in sorted(pruned)],
+            "queryRuns": [dict(q) for q in queries if eligible is None or q.get("engine") in eligible]}
+
 DEFAULT_CATALOGUE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "site", "data", "sparql", "v1", "catalogue.json",
 )
-SCALED_DATASETS = frozenset({"lubm", "bsbm"})
-TERMINAL_LOADING_FAILURES = frozenset({"OOM", "TIMEOUT", "ERROR"})
-
+RESOURCE_LIMIT_FAILURES = frozenset({"OOM", "TIMEOUT"})
+TERMINAL_LOADING_FAILURES = RESOURCE_LIMIT_FAILURES | frozenset({"ERROR"})
 
 def load_expected_v1_queries(catalogue_path: str = DEFAULT_CATALOGUE_PATH) -> dict[str, set[str]]:
     """Read curated v1 query IDs grouped by dataset; fail on an invalid catalogue."""
@@ -41,7 +113,6 @@ def load_expected_v1_queries(catalogue_path: str = DEFAULT_CATALOGUE_PATH) -> di
     if not expected:
         raise ValueError("Catalogue contains no SPARQL v1 queries")
     return expected
-
 
 def has_v1_query_coverage(
     report: dict, engine: str, dataset: str, expected_queries: dict[str, set[str]],
@@ -57,7 +128,6 @@ def has_v1_query_coverage(
     }
     return expected <= present
 
-
 def valid_loading_run(run: dict) -> bool:
     """Accept successful loading observations with finite, nonnegative measurements."""
     elapsed = run.get("loadingTimeMs")
@@ -68,30 +138,16 @@ def valid_loading_run(run: dict) -> bool:
         and isinstance(triples, (int, float)) and math.isfinite(triples) and triples > 0
     )
 
-
-def has_scale_loading_coverage(
-    runs: list[dict],
-    engine: str,
-    dataset: str,
-    requested_scales: list[str] | tuple[str, ...] | None = None,
-) -> bool:
-    """Verify valid loading runs for one engine/dataset, enforcing per-scale coverage on scaled datasets."""
+def has_canonical_loading_coverage(runs: list[dict], engine: str, dataset: str) -> bool:
+    """Require a canonical loading observation and reject any dataset error."""
     matching = [r for r in runs if r.get("engine") == engine and r.get("dataset") == dataset]
-    if not any(valid_loading_run(r) for r in matching):
+    if any(r.get("status") == "ERROR" for r in matching):
         return False
-    if dataset in SCALED_DATASETS and requested_scales:
-        for scale in requested_scales:
-            scale_norm = scale.strip().lower()
-            if not scale_norm:
-                continue
-            token = f"_{scale_norm}."
-            if not any(
-                (str(r.get("scale", "")).lower() == scale_norm or token in str(r.get("file", "")).lower())
-                and (valid_loading_run(r) or r.get("status") in TERMINAL_LOADING_FAILURES)
-                for r in matching
-            ):
-                return False
-    return True
+    if dataset in CANONICAL_SPARQL_FILES:
+        matching = [r for r in matching if is_canonical_dashboard_loading_run(r)]
+    if dataset == "bsbm":
+        return any(valid_loading_run(r) or r.get("status") in RESOURCE_LIMIT_FAILURES for r in matching)
+    return any(valid_loading_run(r) for r in matching)
 
 # SPARQL category patterns matching SparqlAnalyser.java
 _P_IRI = re.compile(r"<[^>]*>")
@@ -103,7 +159,6 @@ _P_TEMPORAL = re.compile(
     r"\bNOW\s*\(|\bXSD:DATETIME\b|\bXSD:DATE\b|\b(?:DAY|MONTH|YEAR|HOURS|MINUTES|SECONDS)\s*\(",
     re.IGNORECASE,
 )
-
 
 def classify_sparql(sparql: str | None) -> str:
     """Classify SPARQL query matching Java SparqlAnalyser.java."""
@@ -120,14 +175,12 @@ def classify_sparql(sparql: str | None) -> str:
         return "TEMPORAL"
     return "GRAPH_PATTERN"
 
-
 def natural_query_key(query_id: str) -> tuple[int, str]:
     """Sort query_1, query_2, ..., query_10 naturally."""
     match = re.search(r"\d+", query_id)
     if match:
         return (int(match.group()), query_id)
     return (sys.maxsize, query_id)
-
 
 @dataclass(frozen=True)
 class ExecutionPlan:
@@ -138,24 +191,23 @@ class ExecutionPlan:
     def has_fresh(self) -> bool:
         return len(self.fresh_engines) > 0
 
-
 def load_baseline(path: str) -> dict:
     """Load baseline dictionary from path if present, otherwise return empty structure."""
     if not os.path.exists(path):
-        return {"metadata": {}, "runs": [], "queryRuns": []}
+        return {"metadata": {}, "loadingRuns": [], "queryRuns": []}
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
             if not isinstance(data, dict):
-                return {"metadata": {}, "runs": [], "queryRuns": []}
+                return {"metadata": {}, "loadingRuns": [], "queryRuns": []}
             data.setdefault("metadata", {})
-            data.setdefault("runs", [])
+            data.setdefault("loadingRuns", data.get("runs", []))
+            data.pop("runs", None)
             data.setdefault("queryRuns", [])
             return data
     except (json.JSONDecodeError, OSError) as err:
         print(f"[baseline] Warning: failed to parse baseline at {path}: {err}", file=sys.stderr)
-        return {"metadata": {}, "runs": [], "queryRuns": []}
-
+        return {"metadata": {}, "loadingRuns": [], "queryRuns": []}
 
 def plan_engines(
     requested_engines: list[str],
@@ -163,7 +215,6 @@ def plan_engines(
     baseline: dict,
     *,
     expected_queries: dict[str, set[str]] | None = None,
-    requested_scales: list[str] | tuple[str, ...] | None = None,
     force_all: bool = False,
     update_baseline: bool = False,
 ) -> ExecutionPlan:
@@ -172,7 +223,7 @@ def plan_engines(
     An engine is eligible for baseline cache if:
     1. It is declared in IMMUTABLE_ENGINES.
     2. Neither force_all nor update_baseline is set.
-    3. The baseline contains valid loading run records covering requested scales for all datasets.
+    3. The baseline contains valid loading run records covering canonical loading inputs for all datasets.
     4. Catalogue datasets contain every expected v1 query ID. Legacy datasets retain loading-only checks.
     """
     if force_all or update_baseline:
@@ -180,14 +231,14 @@ def plan_engines(
 
     if expected_queries is None:
         expected_queries = load_expected_v1_queries()
-    baseline_runs = baseline.get("runs") or baseline.get("loadingRuns") or []
+    baseline_runs = loading_runs(baseline)
 
     cached: list[str] = []
     fresh: list[str] = []
 
     for eng in requested_engines:
         if eng in IMMUTABLE_ENGINES and all(
-            has_scale_loading_coverage(baseline_runs, eng, ds, requested_scales)
+            has_canonical_loading_coverage(baseline_runs, eng, ds)
             and has_v1_query_coverage(baseline, eng, ds, expected_queries)
             for ds in requested_datasets
         ):
@@ -197,7 +248,6 @@ def plan_engines(
 
     return ExecutionPlan(cached_engines=cached, fresh_engines=fresh)
 
-
 def _merge_runs(
     baseline_data: dict,
     fresh_data: dict,
@@ -205,7 +255,7 @@ def _merge_runs(
 ) -> list[dict]:
     """Merge and deterministically sort benchmark runs from baseline and fresh reports."""
     merged_runs_map: dict[tuple[str, str, str], dict] = {}
-    baseline_runs = baseline_data.get("runs") or baseline_data.get("loadingRuns") or []
+    baseline_runs = loading_runs(baseline_data)
     for r in baseline_runs:
         eng = r.get("engine")
         ds = r.get("dataset")
@@ -213,7 +263,7 @@ def _merge_runs(
         if eng in cached_set and ds:
             merged_runs_map[(ds, eng, f)] = dict(r)
 
-    fresh_runs = fresh_data.get("runs") or fresh_data.get("loadingRuns") or []
+    fresh_runs = loading_runs(fresh_data)
     for r in fresh_runs:
         eng = r.get("engine")
         ds = r.get("dataset")
@@ -222,7 +272,6 @@ def _merge_runs(
             merged_runs_map[(ds, eng, f)] = dict(r)
 
     return [merged_runs_map[k] for k in sorted(merged_runs_map.keys())]
-
 
 def _merge_query_runs(
     baseline_data: dict,
@@ -253,7 +302,6 @@ def _merge_query_runs(
         )
     ]
 
-
 def _merge_metadata(
     baseline_data: dict,
     fresh_data: dict,
@@ -263,6 +311,11 @@ def _merge_metadata(
     meta = dict(baseline_data.get("metadata", {}))
     fresh_meta = fresh_data.get("metadata", {})
     meta.update(fresh_meta)
+
+    sizes = dict(baseline_data.get("metadata", {}).get("datasetSizes", {}))
+    sizes.update(fresh_meta.get("datasetSizes", {}))
+    if sizes:
+        meta["datasetSizes"] = sizes
 
     ds_queries = dict(baseline_data.get("metadata", {}).get("datasetQueries", {}))
     ds_queries.update(fresh_meta.get("datasetQueries", {}))
@@ -281,7 +334,6 @@ def _merge_metadata(
 
     return meta
 
-
 def merge_reports(
     baseline_data: dict,
     fresh_data: dict,
@@ -293,20 +345,18 @@ def merge_reports(
 
     return {
         "metadata": _merge_metadata(baseline_data, fresh_data, cached_set),
-        "runs": merged_runs,
         "loadingRuns": list(merged_runs),
         "queryRuns": _merge_query_runs(baseline_data, fresh_data, cached_set),
     }
 
-
 def save_baseline(baseline_data: dict, destination_path: str) -> None:
     """Save baseline dictionary to destination atomically with strict validation."""
-    runs = baseline_data.get("runs", [])
+    runs = loading_runs(baseline_data)
     if not runs:
         raise ValueError("Refusing to save empty baseline")
 
     # Strictly check that ONLY immutable engines are saved into baseline
-    for r in runs + baseline_data.get("loadingRuns", []) + baseline_data.get("queryRuns", []):
+    for r in runs + baseline_data.get("queryRuns", []):
         eng = r.get("engine", "")
         if eng not in IMMUTABLE_ENGINES:
             raise ValueError(f"Refusing to save non-immutable engine into baseline: {eng}")
@@ -317,13 +367,14 @@ def save_baseline(baseline_data: dict, destination_path: str) -> None:
 
     tmp_path = os.path.join(dest_dir or ".", f".baseline.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     with open(tmp_path, "x", encoding="utf-8") as f:
-        json.dump(baseline_data, f, separators=(",", ":"))
+        json.dump({"metadata": baseline_data.get("metadata", {}), "loadingRuns": runs,
+                   "queryRuns": baseline_data.get("queryRuns", [])}, f, separators=(",", ":"))
 
     try:
         # Validation: re-read to ensure valid JSON
         with open(tmp_path, encoding="utf-8") as f:
             validated = json.load(f)
-            if not isinstance(validated, dict) or "runs" not in validated:
+            if not isinstance(validated, dict) or "loadingRuns" not in validated:
                 raise ValueError("Baseline validation failed on temp file")
 
         os.replace(tmp_path, destination_path)
@@ -332,7 +383,6 @@ def save_baseline(baseline_data: dict, destination_path: str) -> None:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise
-
 
 def _fmt_float(val: float | None) -> str:
     """Safely format float value to 2 decimals, returning empty string for None."""
@@ -343,11 +393,10 @@ def _fmt_float(val: float | None) -> str:
     except (ValueError, TypeError):
         return ""
 
-
 def export_site_data(merged_data: dict, site_data_dir: str) -> None:
     """Generate benchmark-report.json, report-data.js, and benchmark-report.csv from a single merged dict."""
-    loading_runs = list(merged_data.get("runs") or merged_data.get("loadingRuns") or [])
-    merged_data = {**merged_data, "runs": loading_runs, "loadingRuns": list(loading_runs),
+    merged_data = {"metadata": merged_data.get("metadata", {}),
+                   "loadingRuns": list(loading_runs(merged_data)),
                    "queryRuns": list(merged_data.get("queryRuns") or [])}
     os.makedirs(site_data_dir, exist_ok=True)
 
@@ -370,7 +419,7 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
             "throughputTriplesPerSec", "memoryBeforeMb", "memoryAfterMb",
             "memoryDeltaMb", "cpuPercent", "status", "errorMessage"
         ])
-        for r in merged_data.get("runs", []):
+        for r in merged_data["loadingRuns"]:
             writer.writerow([
                 r.get("engine", ""),
                 r.get("dataset", ""),

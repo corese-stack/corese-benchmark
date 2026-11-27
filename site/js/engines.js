@@ -12,10 +12,10 @@ import {
 } from "./engine-id.js";
 import { focusStore, hoverSource } from "./focus-store.js";
 
-export const SETTLE_TRANSITION_MS = 180;
-export const SETTLE_SAFETY_MS = 40;
-export const AUTO_SCROLL_EDGE_PX = 40;
-export const AUTO_SCROLL_MAX_SPEED = 12;
+const SETTLE_TRANSITION_MS = 180;
+const SETTLE_SAFETY_MS = 40;
+const AUTO_SCROLL_EDGE_PX = 40;
+const AUTO_SCROLL_MAX_SPEED = 12;
 
 // Official engines supported in corese-benchmark with their WCAG AA compliant palettes
 const OFFICIAL_ENGINE_FAMILIES_LIGHT = {

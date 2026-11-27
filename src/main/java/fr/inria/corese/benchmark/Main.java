@@ -3,6 +3,7 @@ package fr.inria.corese.benchmark;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.inria.corese.benchmark.driver.DriverFactory;
+import fr.inria.corese.benchmark.driver.BenchmarkFormat;
 import fr.inria.corese.benchmark.driver.TripleStoreDriver;
 import fr.inria.corese.benchmark.harness.BenchmarkHarness;
 import fr.inria.corese.benchmark.metrics.FileResult;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -37,6 +39,9 @@ import java.util.concurrent.TimeUnit;
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
+    private static final String KEY_METADATA = "metadata";
+    private static final String OPT_FORMATS = "--formats";
+    private static final String OPT_FORMATS_EQ = "--formats=";
     private static final long DEFAULT_CHILD_TIMEOUT_MINUTES = 45;
     private static final long BOWLOGNA_CHILD_TIMEOUT_MINUTES = 120;
 
@@ -58,29 +63,29 @@ public class Main {
         for (ProcessHandle ph : descendants) {
             try {
                 ph.destroyForcibly();
-            } catch (Exception ignored) {
+            } catch (Exception _) {
                 // Best effort per-descendant signal
             }
         }
         try {
             p.destroyForcibly();
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // Best effort root process signal
         }
         for (ProcessHandle ph : descendants) {
             try {
                 ph.onExit().get(2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
-            } catch (Exception ignored) {
+            } catch (Exception _) {
                 // Timeout waiting on child exit
             }
         }
         try {
             p.waitFor(3, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // Timeout waiting on root exit
         }
     }
@@ -123,7 +128,7 @@ public class Main {
         int queryTimeoutSecs,
         boolean isolateProcess,
         BenchmarkMode mode,
-        Set<String> formats
+        Set<BenchmarkFormat> formats
     ) {}
 
     private Main() {}
@@ -139,7 +144,9 @@ public class Main {
      *   <li>{@code engines}      — comma-separated engine names (e.g. {@code corese.4.6.5,jena.6.2.0})</li>
      *   <li>{@code datasetName}  — (optional) logical dataset label; defaults to {@code "dataset"}</li>
      *   <li>{@code queriesFile}  — (optional) path to a catalogue JSON, multiline .rq, or legacy one-query-per-line file</li>
-     *   <li>{@code --inference}  — (optional flag) enables RDFS inference for Corese drivers</li>
+     *   <li>{@code --mode}       — (optional) {@code all}, {@code load}, or {@code query} (default: {@code all})</li>
+     *   <li>{@code --formats}    — (optional) comma-separated canonical dataset formats; empty selects all</li>
+     *   <li>{@code --inference}  — (optional flag) enables OWL-RL inference for Corese drivers</li>
      *   <li>{@code --quick}      — (optional flag) quick mode (1 repetition)</li>
      *   <li>{@code --no-isolate} — (optional flag) disable subprocess JVM isolation</li>
      * </ol>
@@ -224,8 +231,10 @@ public class Main {
             List<QueryResult> peers = grouped.get(qr.dataset() + "::" + qr.queryId());
             PeerComparison comparison = evaluatePeerComparison(qr, peers);
             if (comparison == PeerComparison.MISMATCH) {
-                log.warn("Cross-engine mismatch detected for query {} on dataset {}: engine {} produced hash {} (rows: {})",
-                    qr.queryId(), qr.dataset(), qr.engine(), qr.resultHash().substring(0, Math.min(8, qr.resultHash().length())), qr.rowCount());
+                if (log.isWarnEnabled()) {
+                    log.warn("Cross-engine mismatch detected for query {} on dataset {}: engine {} produced hash {} (rows: {})",
+                        qr.queryId(), qr.dataset(), qr.engine(), qr.resultHash().substring(0, Math.min(8, qr.resultHash().length())), qr.rowCount());
+                }
                 queryResults.set(i, withStatus(qr, "MISMATCH"));
             } else if (comparison == PeerComparison.INCONCLUSIVE) {
                 log.info("Cross-engine comparison inconclusive for query {} on dataset {}: blank nodes present with matching row counts (rows: {})",
@@ -280,53 +289,77 @@ public class Main {
         );
     }
 
-    private static BenchmarkOptions parseOptions(String[] args) {
-        String datasetDir  = args[0];
-        String outputFile  = args[1];
-        List<String> engines = Arrays.asList(args[2].split(","));
-        String datasetName = args.length > 3 ? args[3] : "dataset";
-
-        String queriesFile   = null;
-        boolean inference    = false;
-        boolean quick        = false;
+    private static final class OptionBuilder {
+        String queriesFile;
+        boolean inference;
+        boolean quick;
         int queryTimeoutSecs = -1;
-        boolean isolate      = true;
-        BenchmarkMode mode   = BenchmarkMode.ALL;
-        Set<String> formats  = Collections.emptySet();
+        boolean isolate = true;
+        BenchmarkMode mode = BenchmarkMode.ALL;
+        Set<BenchmarkFormat> formats = Set.of();
+    }
 
-        int i = 4;
+    private static BenchmarkOptions parseOptions(String[] args) {
+        String datasetDir = args[0];
+        String outputFile = args[1];
+        List<String> engines = Arrays.asList(args[2].split(","));
+        boolean hasDatasetName = args.length > 3 && !args[3].startsWith("--");
+        String datasetName = hasDatasetName ? args[3] : "dataset";
+
+        OptionBuilder parsed = new OptionBuilder();
+        int i = hasDatasetName ? 4 : 3;
         while (i < args.length) {
-            String arg = args[i];
-            if ("--inference".equals(arg)) {
-                inference = true;
-                i++;
-            } else if ("--quick".equals(arg)) {
-                quick = true;
-                i++;
-            } else if ("--no-isolate".equals(arg)) {
-                isolate = false;
-                i++;
-            } else if ("--query-timeout".equals(arg) && i + 1 < args.length) {
-                queryTimeoutSecs = parseTimeout(args[i + 1]);
-                i += 2;
-            } else if (("--benchmark-type".equals(arg) || "--mode".equals(arg)) && i + 1 < args.length) {
-                mode = parseMode(args[i + 1]);
-                i += 2;
-            } else if ("--formats".equals(arg) && i + 1 < args.length) {
-                formats = Set.copyOf(Arrays.asList(args[i + 1].toLowerCase(Locale.ROOT).split(",")));
-                i += 2;
-            } else if (queriesFile == null && !arg.startsWith("--")) {
-                queriesFile = arg;
-                i++;
-            } else {
-                i++;
-            }
+            i += parseSingleOption(args, i, parsed);
         }
 
         return new BenchmarkOptions(
             datasetDir, outputFile, engines, datasetName,
-            queriesFile, inference, quick, queryTimeoutSecs, isolate, mode, formats
+            parsed.queriesFile, parsed.inference, parsed.quick,
+            parsed.queryTimeoutSecs, parsed.isolate, parsed.mode, parsed.formats
         );
+    }
+
+    private static int parseSingleOption(String[] args, int index, OptionBuilder out) {
+        String arg = args[index];
+        if (arg.startsWith(OPT_FORMATS_EQ)) {
+            out.formats = BenchmarkFormat.parseFormatList(arg.substring(OPT_FORMATS_EQ.length()));
+            return 1;
+        }
+        if (OPT_FORMATS.equals(arg)) {
+            out.formats = BenchmarkFormat.parseFormatList(requireOptionValue(args, index, OPT_FORMATS));
+            return 2;
+        }
+        if ("--inference".equals(arg)) {
+            out.inference = true;
+            return 1;
+        }
+        if ("--quick".equals(arg)) {
+            out.quick = true;
+            return 1;
+        }
+        if ("--no-isolate".equals(arg)) {
+            out.isolate = false;
+            return 1;
+        }
+        if ("--query-timeout".equals(arg) && index + 1 < args.length) {
+            out.queryTimeoutSecs = parseTimeout(args[index + 1]);
+            return 2;
+        }
+        if (("--benchmark-type".equals(arg) || "--mode".equals(arg)) && index + 1 < args.length) {
+            out.mode = parseMode(args[index + 1]);
+            return 2;
+        }
+        if (out.queriesFile == null && !arg.startsWith("--")) {
+            out.queriesFile = arg;
+        }
+        return 1;
+    }
+
+    private static String requireOptionValue(String[] args, int index, String flag) {
+        if (index + 1 >= args.length || args[index + 1].startsWith("--")) {
+            throw new IllegalArgumentException("Missing value for " + flag);
+        }
+        return args[index + 1];
     }
 
     private static BenchmarkMode parseMode(String value) {
@@ -336,7 +369,7 @@ public class Main {
     private static int parseTimeout(String value) {
         try {
             return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             log.warn("Invalid --query-timeout value '{}', using default", value);
             return -1;
         }
@@ -404,12 +437,8 @@ public class Main {
                         : harness.runCatalogueBenchmark(opts.datasetDir(), queryInput.catalogue());
                 allQueryResults.addAll(queryResults);
             }
-        } catch (OutOfMemoryError e) {
-            log.error("Engine {} ran out of memory on dataset '{}'", engineName, opts.datasetName(), e);
-            throw e;
         } catch (Exception e) {
-            log.error("Engine {} failed: {}", engineName, e.getMessage(), e);
-            throw new IllegalStateException("Execution failed for engine " + engineName, e);
+            throw new IllegalStateException("Execution failed for engine " + engineName + " on dataset " + opts.datasetName(), e);
         }
     }
 
@@ -432,10 +461,8 @@ public class Main {
             boolean completed = p.waitFor(timeoutMinutes, TimeUnit.MINUTES);
             if (!completed) {
                 terminateProcessTree(p);
-                log.error("Engine {} timed out in isolated subprocess after {} minutes", engineName, timeoutMinutes);
                 throw new IllegalStateException("Subprocess execution timed out for engine " + engineName + " after " + timeoutMinutes + " minutes");
             } else if (p.exitValue() != 0) {
-                log.error("Engine {} failed in isolated subprocess with exit code {}", engineName, p.exitValue());
                 throw new IllegalStateException("Subprocess execution failed for engine " + engineName + " with exit code " + p.exitValue());
             }
             // Even if process failed partway through (e.g. OOM on one file), salvage whatever runs were recorded
@@ -443,18 +470,16 @@ public class Main {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             terminateProcessTree(p);
-            log.warn("Isolated execution interrupted for engine: {}", engineName);
             throw new IllegalStateException("Execution interrupted for engine " + engineName, e);
         } catch (Exception e) {
             terminateProcessTree(p);
-            log.error("Failed to run isolated subprocess for engine {}: {}", engineName, e.getMessage(), e);
-            throw (e instanceof RuntimeException re) ? re : new IllegalStateException(e);
+            throw (e instanceof RuntimeException re) ? re : new IllegalStateException("Failed to run isolated subprocess for engine " + engineName, e);
         } finally {
             terminateProcessTree(p);
             if (tmp != null) {
                 try {
                     Files.deleteIfExists(tmp);
-                } catch (Exception ignored) {
+                } catch (Exception _) {
                     // Ignore temp file cleanup failure
                 }
             }
@@ -466,14 +491,14 @@ public class Main {
         List<FileResult> allFileResults,
         List<QueryResult> allQueryResults,
         Map<String, Object> childEnvironment
-    ) throws Exception {
+    ) throws IOException {
         if (!Files.exists(tmp)) {
             return;
         }
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         JsonNode root = mapper.readTree(tmp.toFile());
-        if (childEnvironment.isEmpty() && root.has("metadata") && root.get("metadata").has("environment")) {
-            JsonNode envNode = root.get("metadata").get("environment");
+        if (childEnvironment.isEmpty() && root.has(KEY_METADATA) && root.get(KEY_METADATA).has("environment")) {
+            JsonNode envNode = root.get(KEY_METADATA).get("environment");
             Map<String, Object> envMap = mapper.convertValue(envNode, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
             if (envMap != null) {
                 childEnvironment.putAll(envMap);
@@ -496,7 +521,7 @@ public class Main {
         List<String> cmd = new ArrayList<>();
         String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         cmd.add(javaBin);
-        cmd.add("-Xms1g");
+        cmd.add("-Xms4g");
         cmd.add("-Xmx8g");
         cmd.add("-XX:+UseG1GC");
         cmd.add("-cp");
@@ -524,8 +549,8 @@ public class Main {
             cmd.add(opts.mode().name().toLowerCase(Locale.ROOT));
         }
         if (!opts.formats().isEmpty()) {
-            cmd.add("--formats");
-            cmd.add(String.join(",", opts.formats()));
+            cmd.add(OPT_FORMATS);
+            cmd.add(opts.formats().stream().map(BenchmarkFormat::getExtension).collect(Collectors.joining(",")));
         }
         cmd.add("--no-isolate");
         return cmd;

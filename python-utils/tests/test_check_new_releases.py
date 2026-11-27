@@ -8,6 +8,10 @@ import urllib.error
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import check_new_releases as cnr
 
 

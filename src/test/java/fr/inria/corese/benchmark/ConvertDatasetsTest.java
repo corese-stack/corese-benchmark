@@ -1,0 +1,60 @@
+package fr.inria.corese.benchmark;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.*;
+
+class ConvertDatasetsTest {
+    @TempDir Path directory;
+
+    @Test
+    void generatesOnlyRequestedFormats() throws Exception {
+        Path source = directory.resolve("data.nt");
+        Files.writeString(source, "<urn:s> <urn:p> <urn:o> .");
+        Path existing = directory.resolve("data.rdf");
+        ConvertDatasets.main(new String[]{"--formats", "ttl,jsonld", source.toString()});
+        assertTrue(Files.size(directory.resolve("data.ttl")) > 0);
+        assertTrue(Files.size(directory.resolve("data.jsonld")) > 0);
+        assertFalse(Files.exists(existing));
+        Files.writeString(existing, "preserve existing output");
+        ConvertDatasets.main(new String[]{source.toString(), "--formats=ttl,jsonld"});
+        assertEquals("preserve existing output", Files.readString(existing));
+        for (String extension : List.of("nq", "trig", "html")) {
+            assertFalse(Files.exists(directory.resolve("data." + extension)));
+        }
+    }
+
+    @Test
+    void sourceOnlyDoesNotParseOrGenerateFiles() throws Exception {
+        Path source = directory.resolve("data.nt");
+        Files.writeString(source, "invalid RDF must not be parsed");
+        ConvertDatasets.main(new String[]{directory.toString(), "--formats=nt"});
+        assertEquals("invalid RDF must not be parsed", Files.readString(source));
+        try (var files = Files.list(directory)) {
+            assertEquals(List.of(source), files.toList());
+        }
+    }
+
+    @Test
+    void emptyFormatsFilterConvertsAllFormats() throws Exception {
+        Path source = directory.resolve("data.nt");
+        Files.writeString(source, "<http://example.org/s> <http://example.org/p> <http://example.org/o> .");
+        ConvertDatasets.main(new String[]{source.toString(), "--formats="});
+        for (String extension : List.of("ttl", "rdf", "jsonld", "nq", "trig", "html")) {
+            assertTrue(Files.size(directory.resolve("data." + extension)) > 0, "Missing converted ." + extension);
+        }
+    }
+
+    @Test
+    void invalidFilterFailsBeforeConversion() throws Exception {
+        Path source = directory.resolve("data.nt");
+        Files.writeString(source, "invalid RDF");
+        for (String filter : List.of("foo", "nt,,ttl", "html")) {
+            String[] argv = {source.toString(), "--formats=" + filter};
+            assertThrows(IllegalArgumentException.class, () -> ConvertDatasets.main(argv));
+        }
+    }
+}

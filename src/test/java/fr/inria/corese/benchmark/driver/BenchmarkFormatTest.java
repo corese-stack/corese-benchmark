@@ -13,6 +13,30 @@ import static org.junit.jupiter.api.Assertions.*;
 class BenchmarkFormatTest {
 
     @ParameterizedTest
+    @CsvSource({"nt,NTRIPLES", "ntriples,NTRIPLES", "NQ,NQUADS", "nquads,NQUADS",
+            "ttl,TURTLE", ".ttl,TURTLE", "turtle,TURTLE", "trig,TRIG", "rdf,RDFXML",
+            "rdfxml,RDFXML", "rdf/xml,RDFXML", "jsonld,JSONLD", "json-ld,JSONLD"})
+    void parsesCanonicalTokensAndAliases(String token, BenchmarkFormat expected) {
+        assertEquals(expected, BenchmarkFormat.fromToken(token));
+    }
+
+    @Test
+    void validatesCsvAndReturnsImmutableFormats() {
+        assertTrue(BenchmarkFormat.parseFormatList(null).isEmpty());
+        assertTrue(BenchmarkFormat.parseFormatList("  ").isEmpty());
+        var formats = BenchmarkFormat.parseFormatList("nt, .TTL,turtle");
+        assertEquals(java.util.Set.of(BenchmarkFormat.NTRIPLES, BenchmarkFormat.TURTLE), formats);
+        assertThrows(UnsupportedOperationException.class, () -> formats.add(BenchmarkFormat.TRIG));
+        for (String token : new String[]{"", " ", "html", "rdfa", "unknown"}) {
+            assertThrows(IllegalArgumentException.class, () -> BenchmarkFormat.fromToken(token));
+        }
+        assertThrows(IllegalArgumentException.class, () -> BenchmarkFormat.fromToken(null));
+        for (String csv : new String[]{"nt,,ttl", "nt,foo", ",nt", "nt,"}) {
+            assertThrows(IllegalArgumentException.class, () -> BenchmarkFormat.parseFormatList(csv));
+        }
+    }
+
+    @ParameterizedTest
     @CsvSource({
         "data.nt, NTRIPLES, false",
         "data.NT, NTRIPLES, false",
