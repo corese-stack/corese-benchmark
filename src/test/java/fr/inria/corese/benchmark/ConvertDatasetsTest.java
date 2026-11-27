@@ -57,4 +57,25 @@ class ConvertDatasetsTest {
             assertThrows(IllegalArgumentException.class, () -> ConvertDatasets.main(argv));
         }
     }
+
+    @Test
+    void convertsSymlinkedViewIntoBackingStoreAndLinksOutputs() throws Exception {
+        Path unzip = Files.createDirectory(directory.resolve("unzip"));
+        Path view = Files.createDirectory(directory.resolve("view"));
+        Path backing = Files.writeString(unzip.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Path link = view.resolve("data.nt");
+        try {
+            Files.createSymbolicLink(link, backing);
+        } catch (UnsupportedOperationException | java.io.IOException e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "Symlinks unsupported: " + e.getMessage());
+        }
+        ConvertDatasets.main(new String[]{"--formats=ttl,jsonld", view.toString()});
+        for (String ext : List.of("ttl", "jsonld")) {
+            Path stored = unzip.resolve("data." + ext);
+            Path exposed = view.resolve("data." + ext);
+            assertTrue(Files.size(stored) > 0, "Missing backing file " + stored);
+            assertTrue(Files.exists(exposed), "Missing view file " + exposed);
+            assertEquals(Files.readString(stored), Files.readString(exposed));
+        }
+    }
 }

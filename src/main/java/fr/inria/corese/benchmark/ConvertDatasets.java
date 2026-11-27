@@ -134,19 +134,22 @@ public class ConvertDatasets {
             log.info("No derived formats requested; keeping N-Triples source: {}", ntFile);
             return;
         }
-        String baseName = ntFile.getFileName().toString().replaceFirst("\\.nt$", "");
-        log.info("Reading canonical N-Triples: {} ...", ntFile);
+        Path viewFile = ntFile.toAbsolutePath().normalize();
+        Path realSource = resolveRealSource(viewFile);
+        Path viewDir = viewFile.getParent();
+        String baseName = realSource.getFileName().toString().replaceFirst("\\.nt$", "");
+        log.info("Reading canonical N-Triples: {} ...", realSource);
         Model model = ModelFactory.createDefaultModel();
         Dataset dataset = null;
         try {
-            RDFDataMgr.read(model, ntFile.toAbsolutePath().toString(), Lang.NTRIPLES);
-            log.info("  Parsed {} triples from {}", model.size(), ntFile.getFileName());
+            RDFDataMgr.read(model, realSource.toString(), Lang.NTRIPLES);
+            log.info("  Parsed {} triples from {}", model.size(), realSource.getFileName());
             if (effectiveFormats.contains(BenchmarkFormat.NQUADS) || effectiveFormats.contains(BenchmarkFormat.TRIG)) {
                 dataset = DatasetFactory.create();
                 dataset.addNamedModel("urn:graph:" + baseName, model);
             }
             for (BenchmarkFormat format : effectiveFormats) {
-                generateFormat(ntFile, baseName, model, dataset, format);
+                generateFormat(realSource, viewDir, baseName, model, dataset, format);
             }
         } finally {
             if (dataset != null) dataset.close();
@@ -154,10 +157,22 @@ public class ConvertDatasets {
         }
     }
 
-    private static void generateFormat(Path source, String baseName, Model model, Dataset dataset,
+    private static Path resolveRealSource(Path viewFile) {
+        if (!Files.isSymbolicLink(viewFile)) {
+            return viewFile;
+        }
+        try {
+            return viewFile.toRealPath();
+        } catch (IOException e) {
+            log.debug("Failed to resolve symlink {}; using original path: {}", viewFile, e.getMessage());
+            return viewFile;
+        }
+    }
+
+    private static void generateFormat(Path realSource, Path viewDir, String baseName, Model model, Dataset dataset,
                                        BenchmarkFormat format) {
         if (format == BenchmarkFormat.NTRIPLES) return;
-        Path target = source.resolveSibling(baseName + "." + format.getExtension());
+        Path target = realSource.resolveSibling(baseName + "." + format.getExtension());
         safeGenerateFile(target, out -> {
             switch (format) {
                 case TURTLE -> RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY);
@@ -168,7 +183,28 @@ public class ConvertDatasets {
                 case RDFA -> writeRdfaHtml(model, out, baseName);
                 default -> throw new IllegalArgumentException("Unsupported output format: " + format);
             }
-        }, format.name(), source);
+        }, format.name(), realSource);
+        if (Files.exists(target) && viewDir != null && !realSource.getParent().equals(viewDir)) {
+            exposeInView(target, viewDir);
+        }
+    }
+
+    private static void exposeInView(Path target, Path viewDir) {
+        Path link = viewDir.resolve(target.getFileName());
+        try {
+            Files.deleteIfExists(link);
+            linkOrCopy(target, link);
+        } catch (IOException e) {
+            log.warn("Failed to expose {} in view {}: {}", target.getFileName(), viewDir, e.getMessage());
+        }
+    }
+
+    private static void linkOrCopy(Path target, Path link) throws IOException {
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (UnsupportedOperationException | IOException _) {
+            Files.copy(target, link, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     @FunctionalInterface
