@@ -86,6 +86,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+          cache: 'gradle'
 
       - name: Set up conda
         uses: conda-incubator/setup-miniconda@v3
