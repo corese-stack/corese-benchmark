@@ -156,7 +156,7 @@ public class CoreseNextDriver implements TripleStoreDriver {
         if (ttfrNs < 0) ttfrNs = totalNs;
         double totalMs = totalNs / 1_000_000.0;
         double ttfrMs = ttfrNs / 1_000_000.0;
-        return new QueryMetrics(totalMs, ttfrMs, count, MetricsCollector.usedHeapBytes() - heapBefore, "");
+        return new QueryMetrics(totalMs, ttfrMs, count, MetricsCollector.usedHeapBytes() - heapBefore);
     }
 
     @Override

@@ -3,7 +3,7 @@
  * Evaluates ingestion throughput, retained heap, and JVM heap telemetry across engines.
  */
 
-import { attachChartPointerInteraction, clearChartInteraction, colorWithAlpha, createEngineLegendConfig, findBarElement, getChartThemeTokens, createStatusBadgePlugin, normalizeRunStatus, formatStatusBadgeLabel } from "../chart-utils.js";
+import { attachChartPointerInteraction, colorWithAlpha, createEngineLegendConfig, getChartThemeTokens, createStatusBadgePlugin, normalizeRunStatus, formatStatusBadgeLabel } from "../chart-utils.js";
 import { createProtocolTile, populateDatasetCards } from "../components/protocol-tile.js";
 import { escapeHtml, formatEngineId, isBranchVersion, parseEngineId } from "../engine-id.js";
 import {
@@ -1028,47 +1028,10 @@ export class LoadingView {
 				},
 			});
 
-			// Direct DOM pointer interactions on horizontal bars
-			const clearCanvasState = () => clearChartInteraction(chart, this.#canvasHover);
-
-			canvas.addEventListener("pointerleave", clearCanvasState, { signal });
-			canvas.addEventListener("pointercancel", clearCanvasState, { signal });
-			canvas.addEventListener("mouseout", clearCanvasState, { signal });
-
-			canvas.addEventListener(
-				"pointermove",
-				(e) => {
-					const rect = canvas.getBoundingClientRect();
-					const x = e.clientX - rect.left;
-					const y = e.clientY - rect.top;
-
-					if (!chart.isPointInArea({ x, y })) {
-						clearCanvasState();
-						return;
-					}
-
-					const hit = findBarElement(chart, x, y);
-					if (hit) {
-						const summary = engineSummaries[hit.index];
-						if (summary) {
-							this.#canvasHover.set({ kind: "engine", key: summary.engineKey });
-							const activeElements = [{ datasetIndex: 0, index: hit.index }];
-							chart.setActiveElements(activeElements);
-							if (chart.tooltip) {
-								chart.tooltip.setActiveElements(activeElements, { x, y });
-							}
-							chart.update("none");
-						} else {
-							clearCanvasState();
-						}
-					} else {
-						clearCanvasState();
-					}
-				},
-				{ signal, passive: true },
-			);
-
-			window.addEventListener("scroll", clearCanvasState, { signal, passive: true });
+			attachChartPointerInteraction(chart, canvas, this.#canvasHover, signal, (_dataset, index) => {
+				const summary = engineSummaries[index];
+				return summary ? { kind: "engine", key: summary.engineKey } : null;
+			});
 
 			chart._engineKeys = engineKeys;
 			this.#charts.set("memory", chart);
@@ -1286,46 +1249,10 @@ export class LoadingView {
 				},
 			});
 
-			const clearCanvasState = () => clearChartInteraction(chart, this.#canvasHover);
-
-			canvas.addEventListener("pointerleave", clearCanvasState, { signal });
-			canvas.addEventListener("pointercancel", clearCanvasState, { signal });
-			canvas.addEventListener("mouseout", clearCanvasState, { signal });
-
-			canvas.addEventListener(
-				"pointermove",
-				(e) => {
-					const rect = canvas.getBoundingClientRect();
-					const x = e.clientX - rect.left;
-					const y = e.clientY - rect.top;
-
-					if (!chart.isPointInArea({ x, y })) {
-						clearCanvasState();
-						return;
-					}
-
-					const hit = findBarElement(chart, x, y);
-					if (hit) {
-						const summary = engineSummaries[hit.index];
-						if (summary) {
-							this.#canvasHover.set({ kind: "engine", key: summary.engineKey });
-							const activeElements = [{ datasetIndex: 0, index: hit.index }];
-							chart.setActiveElements(activeElements);
-							if (chart.tooltip) {
-								chart.tooltip.setActiveElements(activeElements, { x, y });
-							}
-							chart.update("none");
-						} else {
-							clearCanvasState();
-						}
-					} else {
-						clearCanvasState();
-					}
-				},
-				{ signal, passive: true },
-			);
-
-			window.addEventListener("scroll", clearCanvasState, { signal, passive: true });
+			attachChartPointerInteraction(chart, canvas, this.#canvasHover, signal, (_dataset, index) => {
+				const summary = engineSummaries[index];
+				return summary ? { kind: "engine", key: summary.engineKey } : null;
+			});
 
 			chart._engineKeys = engineKeys;
 			this.#charts.set("disk", chart);

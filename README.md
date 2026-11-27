@@ -90,7 +90,6 @@ Run `make help` for predefined targets (`regression`, `compare`, `next`, `versio
 | `out/json/<timestamp>_report.json` | Combined run report |
 | `out/logs/<timestamp>.log` | Execution log |
 | `site/data/benchmark-report.json` | Exported dashboard report (unless `--no-export` or partial `--formats`) |
-| `site/data/report-data.js` | Browser bundle matching `benchmark-report.json` |
 | `site/data/benchmark-report.csv` | Exported CSV table matching `benchmark-report.json` |
 
 ## Datasets & Engines

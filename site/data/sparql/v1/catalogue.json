@@ -18,13 +18,13 @@
   "datasets": {
     "lubm": {
       "defaultGraphFiles": [
-        "input/lubm/unzip_small/lubm_small.nt"
+        "input/lubm/unzip/lubm_small.nt"
       ],
       "namedGraphs": false
     },
     "bsbm": {
       "defaultGraphFiles": [
-        "input/bsbm/unzip_small/bsbm_small.nt"
+        "input/bsbm/unzip/bsbm_small.nt"
       ],
       "namedGraphs": false
     },
@@ -41,8 +41,8 @@
       "namedGraphs": false
     },
     "named-graphs": {
-      "source": "input/lubm/unzip_small/lubm_small.nt",
-      "prepare": "python3 input/queries/v1/named-graphs/prepare_dataset.py input/lubm/unzip_small/lubm_small.nt /tmp/corese-feature-lubm.nq",
+      "source": "input/lubm/unzip/lubm_small.nt",
+      "prepare": "python3 input/queries/v1/named-graphs/prepare_dataset.py input/lubm/unzip/lubm_small.nt /tmp/corese-feature-lubm.nq",
       "quadFile": "/tmp/corese-feature-lubm.nq",
       "namedGraphs": true,
       "graphIris": [

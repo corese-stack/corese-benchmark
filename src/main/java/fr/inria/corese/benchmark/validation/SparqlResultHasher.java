@@ -49,36 +49,12 @@ public final class SparqlResultHasher {
         this(List.of(), ResultOrder.MULTISET);
     }
 
-    public SparqlResultHasher(boolean ordered) {
-        this(List.of(), ordered ? ResultOrder.SEQUENCE : ResultOrder.MULTISET);
-    }
-
     public SparqlResultHasher(List<String> projectedVariables, ResultOrder order) {
         Objects.requireNonNull(projectedVariables, "projectedVariables cannot be null");
         this.order = Objects.requireNonNull(order, "order cannot be null");
         List<String> sorted = new ArrayList<>(projectedVariables);
         Collections.sort(sorted);
         this.projectedVariables = Collections.unmodifiableList(sorted);
-    }
-
-    /** Legacy helper for backward-compatibility with untyped string maps. */
-    public SparqlResultHasher addRow(Map<String, String> binding) {
-        if (binding == null) {
-            return addTypedRow(Map.of());
-        }
-        Map<String, BindingTerm> typed = new HashMap<>(binding.size());
-        binding.forEach((k, v) -> {
-            if (v == null) {
-                typed.put(k, BindingTerm.Unbound.INSTANCE);
-            } else if (v.startsWith("_:")) {
-                typed.put(k, BindingTerm.fromBlank(v.substring(2)));
-            } else if (v.startsWith("http://") || v.startsWith("https://") || v.startsWith("urn:")) {
-                typed.put(k, BindingTerm.fromIri(v));
-            } else {
-                typed.put(k, BindingTerm.fromLiteral(v, null, null));
-            }
-        });
-        return addTypedRow(typed);
     }
 
     /** Legacy helper for untyped list of strings. */
@@ -144,10 +120,9 @@ public final class SparqlResultHasher {
         Map<String, Integer> bnodeMap = new HashMap<>();
         int[] nextBnodeId = new int[]{0};
 
-        List<byte[]> encodedRows = new ArrayList<>(bufferedRows.size());
-        for (Map<String, BindingTerm> row : bufferedRows) {
-            encodedRows.add(encodeRow(row, effectiveVars, bnodeMap, nextBnodeId));
-        }
+        List<byte[]> encodedRows = bufferedRows.stream()
+                .map(row -> encodeRow(row, effectiveVars, bnodeMap, nextBnodeId))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
         if (order == ResultOrder.MULTISET) {
             encodedRows.sort(Arrays::compareUnsigned);
@@ -180,29 +155,29 @@ public final class SparqlResultHasher {
 
     private void encodeTerm(ByteArrayOutputStream out, BindingTerm term, Map<String, Integer> bnodeMap, int[] nextBnodeId) {
         switch (term) {
-            case BindingTerm.Unbound ignored -> out.write(TAG_UNBOUND);
-            case BindingTerm.Iri iri -> {
+            case BindingTerm.Unbound _ -> out.write(TAG_UNBOUND);
+            case BindingTerm.Iri(String uri) -> {
                 out.write(TAG_IRI);
-                writeString(out, iri.uri());
+                writeString(out, uri);
             }
-            case BindingTerm.Blank blank -> {
+            case BindingTerm.Blank(String localId) -> {
                 out.write(TAG_BLANK);
-                int canonId = bnodeMap.computeIfAbsent(blank.localId(), k -> nextBnodeId[0]++);
+                int canonId = bnodeMap.computeIfAbsent(localId, k -> nextBnodeId[0]++);
                 writeInt(out, canonId);
             }
-            case BindingTerm.PlainString str -> {
+            case BindingTerm.PlainString(String lexical) -> {
                 out.write(TAG_STRING);
-                writeString(out, str.lexical());
+                writeString(out, lexical);
             }
-            case BindingTerm.LangString lang -> {
+            case BindingTerm.LangString(String lexical, String lang) -> {
                 out.write(TAG_LANG);
-                writeString(out, lang.lexical());
-                writeString(out, lang.lang());
+                writeString(out, lexical);
+                writeString(out, lang);
             }
-            case BindingTerm.TypedLiteral typed -> {
+            case BindingTerm.TypedLiteral(String lexical, String datatypeUri) -> {
                 out.write(TAG_TYPED);
-                writeString(out, typed.lexical());
-                writeString(out, typed.datatypeUri());
+                writeString(out, lexical);
+                writeString(out, datatypeUri);
             }
         }
     }

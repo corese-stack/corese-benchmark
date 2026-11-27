@@ -100,8 +100,7 @@ class BaselineCoverageTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             baseline.export_site_data(data, directory)
             saved = json.loads((Path(directory) / "benchmark-report.json").read_text())
-            js = (Path(directory) / "report-data.js").read_text()
-            self.assertEqual(json.loads(js.removeprefix("window.BENCHMARK_REPORT = ").removesuffix(";\n")), saved)
+            self.assertFalse((Path(directory) / "report-data.js").exists())
             self.assertNotIn("runs", saved)
             self.assertEqual(saved["queryRuns"], data["queryRuns"])
             with open(Path(directory) / "benchmark-report.csv", newline="") as stream:
@@ -123,6 +122,19 @@ class BaselineCoverageTest(unittest.TestCase):
 
 
 class WorkflowCacheTest(unittest.TestCase):
+    def test_duplicate_engines_cannot_form_consensus(self):
+        row = dict(engine=ENGINE, dataset="lubm", queryId="Q01", status="PASS",
+                   rowCount=10, resultHash="a")
+        rows = [dict(row), dict(row), dict(row, engine="corese.next", resultHash="b"),
+                dict(row, engine="rdf4j.6.1.0", resultHash="c"),
+                dict(row, status="INCONCLUSIVE")]
+        original = copy.deepcopy(rows)
+        workflow_reports.cross_validate_merged_queries(rows)
+        self.assertEqual([r["status"] for r in rows],
+                         ["PASS", "PASS", "MISMATCH", "MISMATCH", "INCONCLUSIVE"])
+        self.assertEqual(rows[:2], original[:2])
+        self.assertEqual(rows[-1], original[-1])
+
     def test_checkpoints_survive_failed_output_validation(self):
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / "checkpoint.json"
@@ -173,8 +185,8 @@ class WorkflowCacheTest(unittest.TestCase):
         for observations, expected in cases:
             with self.subTest(observations=observations):
                 rows = [dict(dataset="lubm", queryId="Q01", status="PASS",
-                             rowCount=count, resultHash=hash_value, hasBlankNodes=blank)
-                        for count, hash_value, blank in observations]
+                             rowCount=count, resultHash=hash_value, hasBlankNodes=blank, engine=str(index))
+                        for index, (count, hash_value, blank) in enumerate(observations)]
                 workflow_reports.cross_validate_merged_queries(rows)
                 self.assertEqual([row["status"] for row in rows], expected)
 
@@ -193,18 +205,58 @@ class WorkflowCacheTest(unittest.TestCase):
     def test_merge_preserves_nested_dataset_sizes(self):
         with tempfile.TemporaryDirectory() as directory:
             first, second = report(), report()
-            first["metadata"] = {"datasetSizes": {"lubm:lubm_small.nt": 100573}}
-            second["metadata"] = {"datasetSizes": {"bsbm:bsbm_small.nt": 374911}}
+            first["metadata"] = {"datasetSizes": {"lubm:lubm_small.nt": 100573},
+                                 "queries": ["obsolete"], "datasetQueries": {"lubm": ["obsolete"]}}
+            second["metadata"] = {"datasetSizes": {"bsbm:bsbm_small.nt": 374911},
+                                  "queries": ["obsolete"], "datasetQueries": {"bsbm": ["obsolete"]}}
             p1, p2, out = Path(directory) / "1.json", Path(directory) / "2.json", Path(directory) / "out.json"
             p1.write_text(json.dumps(first))
             p2.write_text(json.dumps(second))
             workflow_reports.merge_json_files([str(p1), str(p2)], str(out))
             merged = json.loads(out.read_text())
+            self.assertNotIn("queries", merged["metadata"])
+            self.assertNotIn("datasetQueries", merged["metadata"])
             self.assertEqual(merged["metadata"]["datasetSizes"],
                              {"lubm:lubm_small.nt": 100573, "bsbm:bsbm_small.nt": 374911})
 
 
 class SyncReportsTest(unittest.TestCase):
+    def test_noncanonical_protocols_are_skipped_and_cannot_be_promoted(self):
+        protocols = [
+            {"quick": True}, {"inference": True},
+            {"protocol": {"warmup": 0, "repetitions": 1, "queryRepetitions": 1}},
+            {"protocol": {"warmup": 0}}, {"protocol": {"repetitions": 2}},
+            {"protocol": {"queryRepetitions": 2}},
+        ]
+        for metadata in protocols:
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                good, bad = report(), report()
+                bad["metadata"] = dict(metadata, generatedAt="2026-11-27T12:00:00Z")
+                bad["queryRuns"][0]["medianMs"] = 999
+                bad["runs"][0]["loadingTimeMs"] = 999
+                (root / "good.json").write_text(json.dumps(good))
+                (root / "bad.json").write_text(json.dumps(bad))
+                destination = root / "baseline.json"
+                destination.write_text("preserve baseline")
+                with self.assertRaisesRegex(ValueError, "non-canonical"):
+                    sync_reports.promote_baseline(bad, EXPECTED, str(destination))
+                self.assertEqual(destination.read_text(), "preserve baseline")
+                destination.unlink()
+                with patch.multiple(sync_reports, OUT_JSON_DIR=directory,
+                                    TMP_RUNS_DIR=str(root / "tmp"), NIGHT_RUNS_DIR=str(root / "night"),
+                                    SITE_DATA_DIR=str(root / "export")), \
+                     patch.object(sync_reports, "load_expected_v1_queries", return_value=EXPECTED):
+                    merged = sync_reports.merge_all_data()
+                self.assertCountEqual(merged["queryRuns"], good["queryRuns"])
+                self.assertTrue(all(r["loadingTimeMs"] == 5 for r in merged["loadingRuns"]))
+                self.assertNotIn("inference", merged["metadata"])
+
+    def test_canonical_protocol_is_accepted(self):
+        for metadata in ({}, {"inference": False, "protocol": {
+                "warmup": 1, "repetitions": 3, "queryRepetitions": 3}}):
+            self.assertTrue(sync_reports._is_canonical_protocol_report(metadata))
+
     def test_deterministic_merge_filters_legacy_and_unknown_ids(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

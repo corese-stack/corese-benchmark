@@ -33,7 +33,7 @@ export async function loadBenchmarkReport(
 
 	const metadata = rawData.metadata || {};
 	const loadingRuns = normalizeRuns(rawData.loadingRuns ?? rawData.runs, normalizeRun);
-	const runs = normalizeRuns(rawData.runs ?? rawData.loadingRuns, normalizeRun);
+	const runs = loadingRuns;
 	const queryRuns = normalizeRuns(rawData.queryRuns, normalizeQueryRun);
 
 	// Dynamically extract the catalog of engines and versions ACTUALLY present in data
@@ -44,7 +44,7 @@ export async function loadBenchmarkReport(
 			: {};
 
 	// Include engines present only in SPARQL reports (e.g. query-only runs).
-	const catalogueRuns = [...runs, ...loadingRuns, ...queryRuns];
+	const catalogueRuns = [...loadingRuns, ...queryRuns];
 	catalogueRuns.forEach((run) => {
 		const { engineId, versionId, storageId } = run.parsedEngine;
 		if (!catalogMap.has(engineId)) {

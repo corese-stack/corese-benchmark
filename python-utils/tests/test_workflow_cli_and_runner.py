@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shlex
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -84,6 +85,7 @@ class WorkflowCliTest(unittest.TestCase):
         script = """
 import os
 import sys
+import subprocess
 from unittest.mock import patch
 sys.path.insert(0, 'python-utils')
 before = dict(os.environ)
@@ -247,3 +249,24 @@ class CanonicalWorkflowTest(unittest.TestCase):
             runner.prepare_datasets(['bowlogna', 'bsbm', 'lubm', 'dbpedia', 'named-graphs'], '/input')
         self.assertEqual([c.kwargs for c in module.return_value.prepare.call_args_list],
                          [{}, {}, {}, {}, {}])
+
+
+class PublishableWorkflowTest(unittest.TestCase):
+    def test_only_full_canonical_coverage_is_publishable(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow_text = (root / ".github/workflows/ci.yml").read_text()
+        block = workflow_text.split("          PUBLISHABLE=false\n", 1)[1].split("          EXTRA=", 1)[0]
+        script = "PUBLISHABLE=false\n" + block + '\nprintf "%s" "$PUBLISHABLE"'
+        defaults = dict(MODE="all", QUICK="false", INFERENCE="false", FORMATS="",
+                        ALL_DATASETS="a,b", DATASETS="b,a", BASE_ENGINES="x,y", ENGINES="y,x")
+        cases = [({}, "true"), ({"ENGINES": "x,y,z"}, "true"),
+                 ({"DATASETS": "a,b,c"}, "true"), ({"ENGINES": "x"}, "false"),
+                 ({"ENGINES": "x,yy"}, "false"), ({"DATASETS": "a"}, "false"),
+                 ({"DATASETS": "a,bb"}, "false"), ({"MODE": "load"}, "false"),
+                 ({"MODE": "query"}, "false"), ({"QUICK": "true"}, "false"),
+                 ({"INFERENCE": "true"}, "false"), ({"FORMATS": "nt"}, "false")]
+        for changes, expected in cases:
+            with self.subTest(changes=changes):
+                result = subprocess.run(["bash", "-c", script], env=dict(defaults, **changes),
+                                        capture_output=True, text=True, check=True)
+                self.assertEqual(result.stdout, expected)

@@ -121,7 +121,19 @@ class MainQueryInputTest {
             assertEquals("PASS", run.path("status").asText());
             assertEquals(1, run.path("rowCount").asLong());
         }
-        assertEquals(sparql, report.path("metadata").path("queries").get(0).asText());
+        assertFalse(report.path("metadata").has("queries"));
+        assertFalse(report.has("runs"));
+    }
+
+    @Test
+    void cliRecordsInferenceMetadataFlag() throws Exception {
+        String coreseEngine = "corese." + fr.inria.corese.benchmark.driver.EngineRuntimeVerifier.getExpectedCoreseVersion();
+        Path data = Files.createDirectory(directory.resolve("data-inf"));
+        Files.writeString(data.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Path output = directory.resolve("report-inf.json");
+        Main.main(new String[]{data.toString(), output.toString(), coreseEngine, "test", "--quick", "--no-isolate", "--mode", "load", "--inference"});
+        var report = new com.fasterxml.jackson.databind.ObjectMapper().readTree(output.toFile());
+        assertTrue(report.path("metadata").path("inference").asBoolean());
     }
 
     @Test

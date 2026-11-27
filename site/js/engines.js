@@ -225,7 +225,6 @@ export class EngineManager extends EventTarget {
 		this.draftStorage = null;
 		this.isPickerOpen = false;
 		this.settleDurationMs = 180;
-		this.explicitChoices = { engine: false, version: false, storage: false };
 	}
 
 	#isMobile() {
@@ -1404,49 +1403,14 @@ export class EngineManager extends EventTarget {
 
 	triggerItemSelection(columnEl, itemId) {
 		if (columnEl.classList.contains("miller__col--engines")) {
-			const eng = this.catalog.find((e) => e.id === itemId);
-			if (eng) {
-				this.draftEngine = eng;
-				this.draftVersion = eng.versions[0] || null;
-				this.draftStorage =
-					(eng.storages || []).find((s) => s.isDefault) ||
-					eng.storages?.[0] ||
-					null;
-				this.explicitChoices.engine = true;
-				this.explicitChoices.version = false;
-				this.explicitChoices.storage = false;
-				this.renderMillerColumns({
-					colClass: ".miller__col--engines",
-					id: eng.id,
-				});
-			}
+			const engine = this.catalog.find((item) => item.id === itemId);
+			if (engine) this.selectEngine(engine);
 		} else if (columnEl.classList.contains("miller__col--versions")) {
-			const ver = this.draftEngine?.versions.find((v) => v.id === itemId);
-			if (ver) {
-				this.draftVersion = ver;
-				this.explicitChoices.version = true;
-				this.draftStorage =
-					(this.draftEngine?.storages || []).find((s) => s.isDefault) ||
-					this.draftEngine?.storages?.[0] ||
-					null;
-				this.explicitChoices.storage = true;
-				this.renderMillerColumns({
-					colClass: ".miller__col--versions",
-					id: ver.id,
-				});
-			}
+			const version = this.draftEngine?.versions.find((item) => item.id === itemId);
+			if (version) this.selectVersion(version);
 		} else if (columnEl.classList.contains("miller__col--storages")) {
-			const st = (this.draftEngine?.storages || []).find(
-				(s) => s.id === itemId,
-			);
-			if (st) {
-				this.draftStorage = st;
-				this.explicitChoices.storage = true;
-				this.renderMillerColumns({
-					colClass: ".miller__col--storages",
-					id: st.id,
-				});
-			}
+			const storage = this.draftEngine?.storages?.find((item) => item.id === itemId);
+			if (storage) this.selectStorage(storage);
 		}
 	}
 
@@ -1496,12 +1460,6 @@ export class EngineManager extends EventTarget {
 	openPicker() {
 		if (this.catalog.length === 0) return;
 		this.isPickerOpen = true;
-		const isMobile = this.#isMobile();
-		this.explicitChoices = {
-			engine: !isMobile,
-			version: !isMobile,
-			storage: !isMobile,
-		};
 		if (this.el.popover) {
 			this.el.popover.hidden = false;
 			this.setStep(1);
@@ -1535,9 +1493,6 @@ export class EngineManager extends EventTarget {
 			(engine.storages || []).find((s) => s.isDefault) ||
 			engine.storages?.[0] ||
 			null;
-		this.explicitChoices.engine = true;
-		this.explicitChoices.version = false;
-		this.explicitChoices.storage = false;
 		this.renderMillerColumns({
 			colClass: ".miller__col--engines",
 			id: engine.id,
@@ -1549,12 +1504,12 @@ export class EngineManager extends EventTarget {
 
 	selectVersion(version) {
 		this.draftVersion = version;
-		this.explicitChoices.version = true;
+
 		this.draftStorage =
 			(this.draftEngine?.storages || []).find((s) => s.isDefault) ||
 			this.draftEngine?.storages?.[0] ||
 			null;
-		this.explicitChoices.storage = true;
+
 		this.renderMillerColumns({
 			colClass: ".miller__col--versions",
 			id: version.id,
@@ -1566,7 +1521,7 @@ export class EngineManager extends EventTarget {
 
 	selectStorage(storage) {
 		this.draftStorage = storage;
-		this.explicitChoices.storage = true;
+
 		this.renderMillerColumns({
 			colClass: ".miller__col--storages",
 			id: storage.id,

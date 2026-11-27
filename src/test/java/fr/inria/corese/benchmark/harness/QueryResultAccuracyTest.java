@@ -21,10 +21,11 @@ class QueryResultAccuracyTest {
     @DisplayName("Cross-engine accuracy verification: Jena and RDF4J return identical count and hash on same dataset")
     void testCrossEngineResultAccuracy(@TempDir Path tempDir) throws Exception {
         Path ntFile = tempDir.resolve("data.nt");
-        Files.writeString(ntFile,
-            "<http://example.org/alice> <http://xmlns.com/foaf/0.1/name> \"Alice\" .\n" +
-            "<http://example.org/bob> <http://xmlns.com/foaf/0.1/name> \"Bob\" .\n" +
-            "<http://example.org/alice> <http://xmlns.com/foaf/0.1/knows> <http://example.org/bob> .\n"
+        Files.writeString(ntFile, """
+            <http://example.org/alice> <http://xmlns.com/foaf/0.1/name> "Alice" .
+            <http://example.org/bob> <http://xmlns.com/foaf/0.1/name> "Bob" .
+            <http://example.org/alice> <http://xmlns.com/foaf/0.1/knows> <http://example.org/bob> .
+            """
         );
 
         String query = "SELECT ?name WHERE { ?s <http://xmlns.com/foaf/0.1/name> ?name }";
@@ -63,7 +64,7 @@ class QueryResultAccuracyTest {
         // 3. Test report serialization with new fields
         Path jsonOut = tempDir.resolve("json/report.json");
         Files.createDirectories(jsonOut.getParent());
-        BenchmarkReport.write(Collections.emptyList(), List.of(qJena, qRdf4j), queries, jsonOut.toString());
+        BenchmarkReport.write(Collections.emptyList(), List.of(qJena, qRdf4j), jsonOut.toString());
 
         String jsonContent = Files.readString(jsonOut);
         assertTrue(jsonContent.contains("\"rowCount\" : 2"));

@@ -180,7 +180,6 @@ public class Main {
                 return;
             }
         }
-        List<String> queries = queryInput.queries();
 
         List<FileResult> allFileResults = new ArrayList<>();
         List<QueryResult> allQueryResults = new ArrayList<>();
@@ -200,7 +199,7 @@ public class Main {
         crossValidateQueries(allQueryResults);
 
         try {
-            BenchmarkReport.write(allFileResults, allQueryResults, queries, opts.outputFile(), proto, childEnvironment.isEmpty() ? null : childEnvironment);
+            BenchmarkReport.write(allFileResults, allQueryResults, opts.outputFile(), proto, childEnvironment.isEmpty() ? null : childEnvironment, opts.inference());
         } catch (Exception e) {
             log.error("Failed to write report: {}", e.getMessage(), e);
             System.exit(1);

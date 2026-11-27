@@ -78,4 +78,23 @@ class ConvertDatasetsTest {
             assertEquals(Files.readString(stored), Files.readString(exposed));
         }
     }
+    @Test
+    void failedGenerationRemovesStaleViewOutput() throws Exception {
+        Path backing = Files.createDirectory(directory.resolve("backing"));
+        Path view = Files.createDirectory(directory.resolve("view"));
+        Path source = Files.writeString(backing.resolve("data.nt"), "<urn:s> <urn:p> <urn:o> .");
+        Files.createSymbolicLink(view.resolve("data.nt"), source);
+        Path target = Files.writeString(backing.resolve("data.ttl"), "old backing output");
+        // A nonempty directory at the temporary output path forces serialization to fail.
+        Path blocked = Files.createDirectory(backing.resolve("data.ttl.tmp"));
+        Files.writeString(blocked.resolve("blocker"), "keep");
+        Path stale = Files.writeString(view.resolve("data.ttl"), "stale copied output");
+        ConvertDatasets.main(new String[]{"--formats=ttl", view.toString()});
+        assertFalse(Files.exists(stale));
+        assertEquals("old backing output", Files.readString(target));
+        Files.createSymbolicLink(stale, target);
+        ConvertDatasets.main(new String[]{"--formats=ttl", view.toString()});
+        assertFalse(Files.exists(stale, java.nio.file.LinkOption.NOFOLLOW_LINKS));
+    }
+
 }

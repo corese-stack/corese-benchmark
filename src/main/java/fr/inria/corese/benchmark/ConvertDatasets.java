@@ -173,7 +173,7 @@ public class ConvertDatasets {
                                        BenchmarkFormat format) {
         if (format == BenchmarkFormat.NTRIPLES) return;
         Path target = realSource.resolveSibling(baseName + "." + format.getExtension());
-        safeGenerateFile(target, out -> {
+        boolean generated = safeGenerateFile(target, out -> {
             switch (format) {
                 case TURTLE -> RDFDataMgr.write(out, model, RDFFormat.TURTLE_PRETTY);
                 case RDFXML -> RDFDataMgr.write(out, model, RDFFormat.RDFXML_PLAIN);
@@ -184,8 +184,12 @@ public class ConvertDatasets {
                 default -> throw new IllegalArgumentException("Unsupported output format: " + format);
             }
         }, format.name(), realSource);
-        if (Files.exists(target) && viewDir != null && !realSource.getParent().equals(viewDir)) {
-            exposeInView(target, viewDir);
+        if (viewDir != null && !realSource.getParent().equals(viewDir)) {
+            if (generated) {
+                exposeInView(target, viewDir);
+            } else {
+                deleteGeneratedFile(viewDir.resolve(target.getFileName()));
+            }
         }
     }
 
@@ -212,22 +216,32 @@ public class ConvertDatasets {
         void write(OutputStream out) throws IOException;
     }
 
-    private static void safeGenerateFile(Path targetFile, OutputWriter writer, String formatName, Path sourceNt) {
+    private static boolean safeGenerateFile(Path targetFile, OutputWriter writer, String formatName, Path sourceNt) {
         Path tempFile = targetFile.resolveSibling(targetFile.getFileName() + ".tmp");
         try {
-            try (OutputStream out = Files.newOutputStream(tempFile)) {
-                writer.write(out);
-            }
+            writeGeneratedFile(tempFile, writer);
             Files.move(tempFile, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             log.info("  Generated {}: {} ({} bytes)", formatName, targetFile.getFileName(), Files.size(targetFile));
+            return true;
         } catch (Exception t) {
-            try {
-                Files.deleteIfExists(tempFile);
-            } catch (Exception e) {
-                log.debug("Failed to delete temp file {}: {}", tempFile, e.getMessage());
-            }
+            deleteGeneratedFile(tempFile);
             log.warn("  Skipping format {} for {} (format serialization constraint or unsupported IRI: {})",
                     formatName, sourceNt.getFileName(), t.getMessage());
+            return false;
+        }
+    }
+
+    private static void writeGeneratedFile(Path tempFile, OutputWriter writer) throws IOException {
+        try (OutputStream out = Files.newOutputStream(tempFile)) {
+            writer.write(out);
+        }
+    }
+
+    private static void deleteGeneratedFile(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            log.warn("Failed to delete generated file {}: {}", file, e.getMessage());
         }
     }
 

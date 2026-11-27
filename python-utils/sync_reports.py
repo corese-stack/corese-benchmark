@@ -69,6 +69,19 @@ def fetch_latest_artifacts():
             downloaded.append(target_dir)
     return downloaded
 
+def _is_canonical_protocol_report(metadata):
+    """Accept standard protocols and synthetic reports without protocol metadata."""
+    if metadata.get("inference") or metadata.get("quick"):
+        return False
+    protocol = metadata.get("protocol")
+    if not isinstance(protocol, dict):
+        return True
+    return all(
+        key not in protocol or isinstance(protocol[key], (int, float)) and protocol[key] >= minimum
+        for key, minimum in (("warmup", 1), ("repetitions", 3), ("queryRepetitions", 3))
+    )
+
+
 def _ingest_file(f, merged_loading, merged_queries, expected_queries=None):
     """Ingest a single report JSON into merged maps."""
     if expected_queries is None:
@@ -76,6 +89,8 @@ def _ingest_file(f, merged_loading, merged_queries, expected_queries=None):
     try:
         with open(f, encoding="utf-8") as fp:
             d = json.load(fp)
+            if not _is_canonical_protocol_report(d.get("metadata", {})):
+                return None
             lruns = d.get("loadingRuns", []) or d.get("runs", [])
             for r in lruns:
                 k = (r.get("engine"), r.get("dataset"), r.get("format"), r.get("scale"), r.get("file"))
@@ -106,6 +121,8 @@ def report_sort_key(path):
 
 def promote_baseline(report, expected_queries, destination):
     """Freeze only complete immutable engines with valid v1 queries and complete dataset loading runs."""
+    if not _is_canonical_protocol_report(report.get("metadata", {})):
+        raise ValueError("Cannot promote a non-canonical protocol report")
     eligible = set()
     for engine in IMMUTABLE_ENGINES:
         loading = [r for r in loading_runs(report) if r.get("engine") == engine]

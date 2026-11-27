@@ -14,55 +14,45 @@ const esc = (s) => escapeHtml(String(s ?? ""));
 
 export const DATASET_CONFIGS = Object.freeze({
 	lubm: {
-		id: "lubm",
 		name: "LUBM",
 		fullName: "Lehigh University Benchmark",
 		shortFile: "lubm_small.nt",
-		fullFile: "input/lubm/unzip_small/lubm_small.nt",
 		format: "N-Triples",
 		graph: "Default graph",
 		upstreamUrl: "https://swat.cse.lehigh.edu/projects/lubm/",
 		downloadUrl: "https://swat.cse.lehigh.edu/projects/lubm/uba1.7.zip",
 	},
 	bsbm: {
-		id: "bsbm",
 		name: "BSBM",
 		fullName: "Berlin SPARQL Benchmark",
 		shortFile: "bsbm_small.nt",
-		fullFile: "input/bsbm/unzip_small/bsbm_small.nt",
 		format: "N-Triples",
 		graph: "Default graph",
 		upstreamUrl: "https://wbsg.informatik.uni-mannheim.de/bizer/berlinsparqlbenchmark/",
 		downloadUrl: "https://sourceforge.net/projects/bsbmtools/files/latest/download",
 	},
 	dbpedia: {
-		id: "dbpedia",
 		name: "DBpedia",
 		fullName: "DBpedia 3.5.1",
 		shortFile: "persondata_en.nt",
-		fullFile: "input/dbpedia/unzip/persondata_en.nt",
 		format: "N-Triples",
 		graph: "Default graph",
 		upstreamUrl: "https://dbpedia.org",
 		downloadUrl: "https://s3.slices-be.eu/ilabt.imec.be-project-p16/corese/dbpedia_3.5.1_dump/persondata_en.nt.bz2",
 	},
 	bowlogna: {
-		id: "bowlogna",
 		name: "BowlognaBench",
 		fullName: "BowlognaBench",
 		shortFile: "Department0.nt",
-		fullFile: "input/bowlogna/unzip/Department0.nt",
 		format: "N-Triples",
 		graph: "Default graph",
 		upstreamUrl: "https://exascale.info/assets/pdf/BowlognaBenchSIMPDA2011.pdf",
 		downloadUrl: "https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip",
 	},
 	"named-graphs": {
-		id: "named-graphs",
 		name: "Named Graphs",
 		fullName: "Named Graphs (LUBM Partition)",
-		shortFile: "lubm_named.nq",
-		fullFile: "input/queries/v1/named-graphs/prepare_dataset.py",
+		shortFile: "corese-feature-lubm.nq",
 		format: "N-Quads",
 		graph: "2 Named graphs",
 		upstreamUrl: "https://swat.cse.lehigh.edu/projects/lubm/",
@@ -71,11 +61,11 @@ export const DATASET_CONFIGS = Object.freeze({
 });
 
 const LOADING_DATASET_FILES = Object.freeze({
-	bsbm: { shortFile: "bsbm_medium.nt", fullFile: "input/bsbm/view_small_medium/bsbm_medium.nt" },
-	lubm: { shortFile: "lubm_medium.nt", fullFile: "input/lubm/unzip_medium/lubm_medium.nt" },
+	bsbm: { shortFile: "bsbm_medium.nt" },
+	lubm: { shortFile: "lubm_medium.nt" },
 	"named-graphs": { shortFile: "corese-feature-lubm.nq", format: "N-Quads" },
-	dbpedia: { shortFile: "persondata_en.nt", fullFile: "input/dbpedia/unzip/persondata_en.nt" },
-	bowlogna: { shortFile: "Department0.nt", fullFile: "input/bowlogna/unzip/Department0.nt" },
+	dbpedia: { shortFile: "persondata_en.nt" },
+	bowlogna: { shortFile: "Department0.nt" },
 });
 
 export function resolveDatasetCardConfig(datasetId, mode = "sparql") {
@@ -83,7 +73,6 @@ export function resolveDatasetCardConfig(datasetId, mode = "sparql") {
 		name: datasetId,
 		fullName: datasetId,
 		shortFile: "Not reported",
-		fullFile: "Not reported",
 		format: "RDF",
 		graph: "Default graph",
 	};
@@ -98,15 +87,15 @@ function isPositiveTripleCount(triples) {
 export function resolveDatasetTripleCount(dataset, reportData, mode = "sparql") {
 	const info = resolveDatasetCardConfig(dataset, mode);
 	const files = dataset === "named-graphs"
-		? ["named-graphs.nq", "corese-feature-lubm.nq", "lubm_named.nq"]
-		: [info.shortFile];
+		? new Set(["named-graphs.nq", "corese-feature-lubm.nq", "lubm_named.nq"])
+		: new Set([info.shortFile]);
 	for (const file of files) {
 		const measured = reportData?.metadata?.datasetSizes?.[`${dataset}:${file}`];
 		if (isPositiveTripleCount(measured)) return measured;
 	}
 	const runs = reportData?.loadingRuns || reportData?.runs || [];
 	const counts = runs.filter((run) => run.dataset === dataset
-		&& files.includes(run.file) && isPositiveTripleCount(run.triples))
+		&& files.has(run.file) && isPositiveTripleCount(run.triples))
 		.map((run) => run.triples).sort((a, b) => a - b);
 	if (!counts.length) return null;
 	const mid = Math.floor(counts.length / 2);
@@ -262,9 +251,6 @@ function resolveTimeout(catalogue, proto) {
 }
 
 function buildDatasetFileLink(info, repoRef) {
-	if (info.fullFile?.startsWith("input/")) {
-		return `<a href="https://github.com/corese-stack/corese-benchmark/blob/${esc(repoRef)}/${esc(info.fullFile)}" class="protocol-link" target="_blank" rel="noopener"><code>${esc(info.shortFile)}</code> ↗</a>`;
-	}
 	if (info.scriptPath) {
 		return `<a href="https://github.com/corese-stack/corese-benchmark/blob/${esc(repoRef)}/${esc(info.scriptPath)}" class="protocol-link" target="_blank" rel="noopener"><code>${esc(info.shortFile)}</code> ↗</a>`;
 	}

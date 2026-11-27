@@ -108,7 +108,7 @@ public class CoreseDriver implements TripleStoreDriver {
         }
 
         double totalMs = totalNs / 1_000_000.0;
-        return new QueryMetrics(totalMs, totalMs, count, MetricsCollector.usedHeapBytes() - heapBefore, "");
+        return new QueryMetrics(totalMs, totalMs, count, MetricsCollector.usedHeapBytes() - heapBefore);
     }
 
     @Override
@@ -209,7 +209,7 @@ public class CoreseDriver implements TripleStoreDriver {
     }
 
 
-    private void applyInference() throws Exception {
+    private void applyInference() throws fr.inria.corese.core.sparql.exceptions.EngineException {
         if (inference) {
             RuleEngine re = RuleEngine.create(graph);
             re.setProfile(RuleEngine.OWL_RL);

@@ -227,11 +227,6 @@ export function parseUrlSparql(searchStr) {
   pin = { kind: "feature", key: rawPin.slice(8) };
  }
  return {
-  reference: params.get("sf-ref") || "",
-  dataset: params.get("sf-dataset") || "",
-  feature: params.get("sf-feature") || "",
-  q: params.get("sf-q") || "",
-  chart: params.get("sf-chart") === "radar" ? "radar" : "bar",
   sort: /^(id|name|dataset|primaryFeature|(?:medianMs|medianTtfrMs|status):[^:]+)$/.test(sort) ? sort : "id",
   direction: params.get("sf-dir") === "desc" ? "desc" : "asc",
   pin,
@@ -241,9 +236,9 @@ export function parseUrlSparql(searchStr) {
 export function updateUrlSparql(state) {
  if (typeof window === "undefined") return;
  const params = new URLSearchParams(window.location.search);
+ for (const name of ["ref", "dataset", "feature", "q", "chart"]) params.delete(`sf-${name}`);
  for (const [key, name, fallback] of [
-  ["reference", "ref", ""], ["dataset", "dataset", ""], ["feature", "feature", ""],
-  ["chart", "chart", "bar"], ["q", "q", ""], ["sort", "sort", "id"], ["direction", "dir", "asc"],
+  ["sort", "sort", "id"], ["direction", "dir", "asc"],
  ]) applyParam(params, `sf-${name}`, state[key], fallback);
  const pinStr = state.pin?.kind && state.pin?.key ? `${state.pin.kind}:${state.pin.key}` : null;
  applyParam(params, "pin", pinStr);

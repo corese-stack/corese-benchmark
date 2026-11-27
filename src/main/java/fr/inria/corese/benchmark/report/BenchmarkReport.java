@@ -10,6 +10,7 @@ import fr.inria.corese.benchmark.telemetry.SystemEnvironmentCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,24 +39,28 @@ public final class BenchmarkReport {
      * using the same filename with a {@code .csv} extension.</p>
      *
      * <p>The JSON structure contains a {@code metadata} block (timestamp, protocol,
-     * Java version, OS), a {@code runs} array of {@link FileResult} objects, and an
+     * Java version, OS), a {@code loadingRuns} array of {@link FileResult} objects, and an
      * optional {@code queryRuns} array of {@link QueryResult} objects.</p>
      *
      * @param results      load-benchmark results (may be empty but not {@code null})
      * @param queryResults query-benchmark results; {@code null} or empty means the
      *                     {@code queryRuns} section is omitted from the report
      * @param outputPath   path of the JSON output file; parent directories must exist
-     * @throws Exception if serialisation or file I/O fails
+     * @throws IOException if serialisation or file I/O fails
      */
-    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath) throws Exception {
-        write(results, queryResults, queries, outputPath, BenchmarkProtocol.defaultProtocol());
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, String outputPath) throws IOException {
+        write(results, queryResults, outputPath, BenchmarkProtocol.defaultProtocol());
     }
 
-    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath, BenchmarkProtocol protocolConfig) throws Exception {
-        write(results, queryResults, queries, outputPath, protocolConfig, null);
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, String outputPath, BenchmarkProtocol protocolConfig) throws IOException {
+        write(results, queryResults, outputPath, protocolConfig, null);
     }
 
-    public static void write(List<FileResult> results, List<QueryResult> queryResults, List<String> queries, String outputPath, BenchmarkProtocol protocolConfig, Map<String, Object> environmentOverride) throws Exception {
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, String outputPath, BenchmarkProtocol protocolConfig, Map<String, Object> environmentOverride) throws IOException {
+        write(results, queryResults, outputPath, protocolConfig, environmentOverride, false);
+    }
+
+    public static void write(List<FileResult> results, List<QueryResult> queryResults, String outputPath, BenchmarkProtocol protocolConfig, Map<String, Object> environmentOverride, boolean inference) throws IOException {
         Map<String, Object> report = new LinkedHashMap<>();
 
         // Metadata
@@ -82,16 +87,14 @@ public final class BenchmarkReport {
         protocol.put("loadTimeoutMs", proto.loadTimeoutMs());
         protocol.put("metric", proto.metric());
         metadata.put("protocol", protocol);
+        if (inference) {
+            metadata.put("inference", true);
+        }
         metadata.put("java", System.getProperty("java.version"));
         metadata.put("os", System.getProperty("os.name"));
-        // Embed SPARQL queries so the dashboard can display them without external files
-        if (queries != null && !queries.isEmpty()) {
-            metadata.put("queries", queries);
-        }
         report.put("metadata", metadata);
 
-        // Load benchmark runs (both 'runs' and 'loadingRuns' for v2 dashboard and python-utils compatibility)
-        report.put("runs", results);
+        // Load benchmark runs
         report.put("loadingRuns", results);
 
         // Query benchmark runs (optional)
@@ -139,9 +142,9 @@ public final class BenchmarkReport {
      * @param results      load-benchmark results
      * @param queryResults query-benchmark results; {@code null} or empty skips the query section
      * @param csvPath      absolute path of the CSV file to create or overwrite
-     * @throws Exception if file I/O fails
+     * @throws IOException if file I/O fails
      */
-    private static void writeCsv(List<FileResult> results, List<QueryResult> queryResults, String csvPath) throws Exception {
+    private static void writeCsv(List<FileResult> results, List<QueryResult> queryResults, String csvPath) throws IOException {
         try (PrintWriter pw = new PrintWriter(csvPath)) {
             // Load benchmark section
             int loadReps = results.isEmpty() ? 3 : results.get(0).repetitionsMs().length;

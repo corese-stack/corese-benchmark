@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
@@ -224,7 +225,7 @@ public class RDF4JDriver implements TripleStoreDriver {
         }
     }
 
-    private void loadNtBatched(String filePath) throws Exception {
+    private void loadNtBatched(String filePath) throws IOException {
         // Parse in batches; on failure fall back to line-by-line to skip malformed triples.
         // The NPE from GenericStatement (null IRI) is a RuntimeException and IS catchable.
         try (RepositoryConnection conn = repository.getConnection();
@@ -264,13 +265,13 @@ public class RDF4JDriver implements TripleStoreDriver {
     private void flushBatch(String content, RepositoryConnection conn) {
         try {
             conn.add(new StringReader(content), "", RDFFormat.NTRIPLES);
-        } catch (Exception batchEx) {
+        } catch (Exception _) {
             // Batch contains a malformed triple — fall back to line-by-line
             for (String ln : content.split("\n")) {
                 if (ln.trim().isEmpty()) continue;
                 try {
                     conn.add(new StringReader(ln + "\n"), "", RDFFormat.NTRIPLES);
-                } catch (Exception lineEx) {
+                } catch (Exception _) {
                     log.warn("Skipping malformed triple: {}", ln);
                 }
             }
@@ -329,7 +330,7 @@ public class RDF4JDriver implements TripleStoreDriver {
         if (ttfrNs < 0) ttfrNs = totalNs;
         double totalMs = totalNs / 1_000_000.0;
         double ttfrMs = ttfrNs / 1_000_000.0;
-        return new QueryMetrics(totalMs, ttfrMs, count, MetricsCollector.usedHeapBytes() - heapBefore, "");
+        return new QueryMetrics(totalMs, ttfrMs, count, MetricsCollector.usedHeapBytes() - heapBefore);
     }
 
     @Override

@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import baseline
 
 from baseline import (
-    classify_sparql,
     export_site_data,
     merge_reports,
     natural_query_key,
@@ -30,6 +29,7 @@ class TestBaseline(unittest.TestCase):
             "metadata": {
                 "version": "1.0",
                 "generatedAt": "2026-10-28T00:00:00Z",
+                "queries": ["obsolete"],
                 "datasetQueries": {
                     "ds1": ["SELECT * WHERE { ?s ?p ?o }"]
                 }
@@ -182,14 +182,15 @@ class TestBaseline(unittest.TestCase):
             save_baseline(self.sample_baseline, out_file)
             export_site_data(self.sample_baseline, tmpdir)
             self.assertTrue(os.path.exists(os.path.join(tmpdir, "benchmark-report.json")))
-            self.assertTrue(os.path.exists(os.path.join(tmpdir, "report-data.js")))
+            self.assertFalse(os.path.exists(os.path.join(tmpdir, "report-data.js")))
             self.assertTrue(os.path.exists(os.path.join(tmpdir, "benchmark-report.csv")))
+            for filename in ("baseline.json", "benchmark-report.json"):
+                with open(os.path.join(tmpdir, filename), encoding="utf-8") as stream:
+                    metadata = json.load(stream)["metadata"]
+                self.assertNotIn("queries", metadata)
+                self.assertNotIn("datasetQueries", metadata)
 
-    def test_classify_sparql(self):
-        self.assertEqual(classify_sparql("SELECT ?x WHERE { ?x ?p ?o }"), "GRAPH_PATTERN")
-        self.assertEqual(classify_sparql("SELECT ?x WHERE { ?x ?p ?o } GROUP BY ?x"), "GROUP_BY")
-        self.assertEqual(classify_sparql("SELECT ?x WHERE { ?x ?p ?o . FILTER(NOW() > ?d) }"), "TEMPORAL")
-        self.assertEqual(classify_sparql("SELECT ?x WHERE { { SELECT ?x WHERE { ?x ?p ?o } } }"), "SUBQUERY")
+
 
 
 class CanonicalReportTest(unittest.TestCase):

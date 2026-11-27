@@ -51,8 +51,15 @@ try {
    await route.fulfill({body:await readFile(path),contentType:({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.rq':'text/plain'})[extname(path)] || 'application/octet-stream'});
   } catch {await route.fulfill({status:404});}
  });
- await page.goto(`${base}/?engines=corese.next,jena.6.2.0,rdf4j.5.1.3&sf-chart=radar&sf-q=absent&sf-feature=NAMED_GRAPH#sparql`);
+ await page.goto(`${base}/?engines=corese.next,jena.6.2.0,rdf4j.5.1.3#sparql`);
  await page.waitForSelector('[data-sf-query]');
+ const uncertaintySummaries = await page.evaluate(async () => {
+  const { featureStatusSummary, indexRuns } = await import(new URL('/js/views/sparql-features.js', window.location.origin).href);
+  const queries = [{ dataset: 'bsbm', id: 'uncertain' }];
+  return ['INCONCLUSIVE', 'UNSTABLE'].map(status => featureStatusSummary(queries,
+   indexRuns([{ dataset: 'bsbm', queryId: 'uncertain', engine: 'corese.next', status }]), 'corese.next').status);
+ });
+ assert.deepEqual(uncertaintySummaries, ['INCONCLUSIVE', 'UNSTABLE']);
  const chart = () => page.evaluate(() => {
   const c = Chart.getChart(document.querySelector('.sf-view canvas'));
   return {type:c.config.type, indexAxis:c.options.indexAxis, labels:c.data.labels,
@@ -77,7 +84,6 @@ try {
  assert.equal(data.series.find(s=>s.label==='corese.next').color,'#00b4d8');
  assert.equal(data.series.find(s=>s.label==='jena.6.2.0').color,'#d55e00');
  assert.equal(data.series.find(s=>s.label==='rdf4j.5.1.3').color,'#00664b');
- assert.ok(!page.url().includes('sf-chart=')); assert.ok(!page.url().includes('sf-q='));
  // Null badges must be interactive through real DOM pointer events and native tooltips.
  const badgePoint = await page.evaluate(() => {
   const canvas = document.querySelector('.sf-view canvas'), c = Chart.getChart(canvas);
@@ -96,7 +102,8 @@ try {
  await page.keyboard.press('Escape');
  await view.locator('.protocol-tile > summary').click();
  assert.ok((await view.locator('[data-sf-inputs]').textContent()).includes('lubm_small.nt'));
- assert.equal(await view.locator('[data-sf-inputs] a[href*="unzip_small/lubm_small.nt"]').count(), 1);
+ assert.equal(await view.locator('[data-sf-inputs] a[href*="input/lubm/"]').count(), 0);
+ assert.equal(await view.locator('[data-sf-inputs] a[href*="named-graphs/prepare_dataset.py"]').count(), 2);
  assert.equal(await view.locator('[data-sf-inputs] [data-sf-dataset-size]').count(), 5);
  assert.equal(await view.locator('[data-sf-dataset-size="bsbm"]').textContent(), '—');
  await view.locator('[data-sf-sort="medianMs:corese.next"]').click();
@@ -127,7 +134,8 @@ try {
  await page.locator('.protocol-tile > summary').click();
  assert.equal(await page.locator('[data-sf-dataset-size="bsbm"]').textContent(), '1,000,000 triples');
  assert.equal(await page.locator('[data-sf-dataset-size]').count(), 5);
- assert.equal(await page.locator('[data-sf-inputs] a[href*="view_small_medium/bsbm_medium.nt"]').count(), 1);
+ assert.equal(await page.locator('[data-sf-inputs] a[href*="input/bsbm/"]').count(), 0);
+ assert.ok((await page.locator('[data-sf-inputs] code').allTextContents()).includes("bsbm_medium.nt"));
  await page.waitForFunction(()=>Chart.getChart(document.getElementById('loading-memory-chart'))?._statusBadgeHitBoxes?.length===3);
  const loading = await page.evaluate(()=>Object.fromEntries(['summary','memory','disk'].map(name=>{
   const c=Chart.getChart(document.getElementById(`loading-${name}-chart`));

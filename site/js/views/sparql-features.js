@@ -20,7 +20,6 @@ const CATALOGUE_URL = "data/sparql/v1/catalogue.json";
 
 const keyOf = (dataset, id) => JSON.stringify([dataset, id]);
 const canonicalEngine = (engine) => formatEngineId(parseEngineId(engine));
-const positive = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 const measured = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 const milliseconds = (v) => measured(v) ? `${v.toLocaleString("en", { maximumFractionDigits: 3 })} ms` : "—";
 export const statusOf = (run) => run ? normalizeRunStatus(run.status || "UNKNOWN") : "MISSING";
@@ -38,48 +37,6 @@ export function indexRuns(runs = []) {
  return index;
 }
 
-/** Equal weight per query; log differences avoid overflow in ref / engine. */
-export function aggregateFeatures(queries, index, engines, reference) {
- return engines.map((engine) => ({ engine, axes: FEATURE_IDS.map((feature) => {
-  const scope = queries.filter((q) => q.primaryFeature === feature);
-  let passed = 0;
-  const logs = [];
-  for (const q of scope) {
-   const runs = index.get(keyOf(q.dataset, q.id));
-   const run = runs?.get(engine);
-   const ref = runs?.get(reference);
-   if (statusOf(run) === "PASS") passed++;
-   if (statusOf(run) === "PASS" && statusOf(ref) === "PASS" && positive(run.medianMs) && positive(ref.medianMs)) {
-    logs.push(Math.log(ref.medianMs) - Math.log(run.medianMs));
-   }
-  }
-  const value = logs.length ? Math.exp(logs.reduce((a, b) => a + b, 0) / logs.length) : null;
-  return { feature, total: scope.length, passed, paired: logs.length,
-   speedup: positive(value) ? value : null };
- }) }));
-}
-
-/** Scope summaries count query/engine observations, never average feature means. */
-export function summarizeScope(queries, index, engines, reference) {
- let present = 0, passed = 0;
- const logs = [];
- for (const q of queries) {
-  const runs = index.get(keyOf(q.dataset, q.id));
-  const ref = runs?.get(reference);
-  for (const engine of engines) {
-   const run = runs?.get(engine);
-   if (run) present++;
-   if (statusOf(run) === "PASS") passed++;
-   if (engine !== reference && statusOf(run) === "PASS" && statusOf(ref) === "PASS" && positive(run.medianMs) && positive(ref.medianMs)) {
-    logs.push(Math.log(ref.medianMs) - Math.log(run.medianMs));
-   }
-  }
- }
- const value = logs.length ? Math.exp(logs.reduce((a, b) => a + b, 0) / logs.length) : null;
- return { total: queries.length * engines.length, present, passed, paired: logs.length,
-  speedup: positive(value) ? value : null };
-}
-
 const DATASETS = new Set(["lubm", "bsbm", "bowlogna", "dbpedia", "named-graphs"]);
 
 function badge(status) {
@@ -95,7 +52,7 @@ export function featureStatusSummary(queries, index, engine) {
  const counts = {};
  for (const run of runs) { const status = statusOf(run); counts[status] = (counts[status] || 0) + 1; }
  const passed = counts.PASS || 0;
- const status = ["DUPLICATE", "MISMATCH", "OOM", "ERROR", "TIMEOUT"].find((value) => counts[value]) || "MISSING";
+ const status = ["DUPLICATE", "MISMATCH", "OOM", "ERROR", "TIMEOUT", "INCONCLUSIVE", "UNSTABLE"].find((value) => counts[value]) || "MISSING";
  const causes = Object.entries(counts).map(([value, count]) => `${value}: ${count}`).join(", ");
  const detail = `${passed}/${queries.length} queries passed (${causes || "MISSING"})`;
  return { status, shortLabel: formatStatusBadgeLabel(status), detail, engineKey: engine };
@@ -153,7 +110,7 @@ export class SparqlFeaturesView {
 
  // Old links retain their sorting; removed controls cannot hide queries.
  #setState(state) {
-  this.#state = { ...parseUrlSparql(""), ...state, reference: "", feature: "", q: "", chart: "bar" };
+  this.#state = { ...parseUrlSparql(""), ...state };
  }
 
  mount() {

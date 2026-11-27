@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import http.client
 import io
 import json
@@ -164,6 +166,28 @@ class MainTests(unittest.TestCase):
     def test_missing_baseline_file(self):
         with redirect_stderr(io.StringIO()):
             self.assertEqual(cnr.main(["--baseline", "/nonexistent.json"]), 2)
+
+
+class BaselineRunEnginesTest(unittest.TestCase):
+    def test_missing_metadata_engines_uses_loading_and_query_runs(self):
+        engines = ["corese.4.6.5", "corese.4.6.4", "jena.6.2.0", "jena.6.2.0.tdb2",
+                   "jena.6.1.0", "jena.6.1.0.tdb2", "rdf4j.6.1.0", "rdf4j.6.1.0.native",
+                   "rdf4j.6.1.0.lmdb", "rdf4j.5.3.2", "rdf4j.5.3.2.native", "rdf4j.5.3.2.lmdb"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "baseline.json"
+            path.write_text(json.dumps({"metadata": {},
+                "loadingRuns": [{"engine": e} for e in engines[:7]],
+                "queryRuns": [{"engine": e} for e in engines[7:]] + [{}]}))
+            self.assertEqual(cnr.load_baseline(path), {
+                "corese": {"4.6.5", "4.6.4"}, "jena": {"6.2.0", "6.1.0"},
+                "rdf4j": {"6.1.0", "5.3.2"}})
+
+    def test_explicit_metadata_engines_takes_precedence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "baseline.json"
+            path.write_text(json.dumps({"metadata": {"engines": ["jena.6.2.0"]},
+                                       "loadingRuns": [{"engine": "jena.6.1.0"}]}))
+            self.assertEqual(cnr.load_baseline(path)["jena"], {"6.2.0"})
 
 
 if __name__ == "__main__":

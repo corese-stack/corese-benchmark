@@ -1,39 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { featureTimings, aggregateFeatures, indexRuns, highlightSparql, statusOf, summarizeScope } from '../js/views/sparql-features.js';
+import { featureTimings, indexRuns, highlightSparql } from '../js/views/sparql-features.js';
 import { parseUrlLoading, parseUrlSparql, updateUrlSparql, getCurrentView } from '../js/router.js';
 import { loadBenchmarkReport } from '../js/api.js';
-import { DATASET_CONFIGS, resolveDatasetCardConfig, resolveDatasetTripleCount, formatDatasetSizeBadge } from '../js/components/protocol-tile.js';
+import { DATASET_CONFIGS, resolveDatasetCardConfig, resolveDatasetTripleCount, formatDatasetSizeBadge, populateDatasetCards } from '../js/components/protocol-tile.js';
 const q = (id, feature = 'BGP_JOIN', dataset = 'bsbm') => ({ id, dataset, primaryFeature: feature });
 const r = (queryId, engine, medianMs, status = 'PASS', dataset = 'bsbm') => ({ queryId, engine, medianMs, status, dataset });
-const aggregate = (queries, runs) => aggregateFeatures(queries, indexRuns(runs), ['corese.next'], 'jena.6.2.0')[0].axes;
 
-test('geometric mean of paired ratios, one weight per query; nine axes', () => {
- const axes = aggregate([q('Q01'), q('Q02')], [r('Q01','jena.6.2.0',20),r('Q01','corese.next',10),r('Q02','jena.6.2.0',80),r('Q02','corese.next',10)]);
- assert.equal(axes.length, 9); assert.ok(Math.abs(axes[0].speedup - 4) < 1e-12);
- assert.equal(axes[0].paired, 2); assert.equal(axes[1].speedup, null);
-});
-test('exclude non-PASS, missing and zero values on either side; preserve coverage', () => {
- const statuses = ['TIMEOUT','ERROR','MISMATCH','UNSTABLE','INCONCLUSIVE','UNKNOWN'];
- const queries = statuses.map((_,i) => q(`Q${i}`));
- const runs = statuses.flatMap((status,i) => [r(`Q${i}`,'corese.next',1,status),r(`Q${i}`,'jena.6.2.0',10)]);
- for (const [id, a, b] of [['zero',0,10],['refzero',10,0],['negative',-1,10],['infinite',Infinity,10],['missing',null,10]]) {
-  queries.push(q(id)); runs.push(r(id,'corese.next',a),r(id,'jena.6.2.0',b));
- }
- assert.equal(aggregate(queries,runs)[0].speedup,null);
- assert.equal(aggregate(queries,runs)[0].paired,0);
- assert.equal(aggregate(queries,[r('Q0','corese.next',1),r('Q0','jena.6.2.0',5,'ERROR')])[0].paired,0);
-});
-test('dataset identity, storage identity, duplicate observations and missing statuses', () => {
- assert.equal(aggregate([q('Q01')],[r('Q01','corese.next',1),r('Q01','jena.6.2.0',10,'PASS','lubm')])[0].paired,0);
- assert.equal(aggregate([q('Q01')],[r('Q01','corese.next',1),r('Q01','jena.6.2.0.tdb2',10)])[0].paired,0);
- assert.equal(aggregate([q('Q01')],[r('Q01','corese.next',1),r('Q01','corese.next',2),r('Q01','jena.6.2.0',10)])[0].paired,0);
- assert.equal(statusOf({}), 'UNKNOWN'); assert.equal(statusOf(null), 'MISSING');
-});
-test('logs handle extreme individual ratios without intermediate overflow', () => {
- const a = aggregate([q('a'),q('b')],[r('a','corese.next',1e-300),r('a','jena.6.2.0',1e300),r('b','corese.next',1e300),r('b','jena.6.2.0',1e-300)])[0];
- assert.equal(a.speedup,1);
-});
 test('source highlighting preserves original text and escapes executable markup', () => {
  const source = '# <script>alert(1)</script>\nSELECT ?x WHERE { ?x <urn:a#b> "<img src=x onerror=alert(1)>" }';
  const html = highlightSparql(source);
@@ -42,12 +15,15 @@ test('source highlighting preserves original text and escapes executable markup'
  assert.ok(html.includes('&lt;img'));
 });
 test('URL state preserves loading parameters, engines and hash; alias routes', () => {
- const state = parseUrlSparql('?sf-sort=bad&sf-dir=oops&sf-q=Q01&sf-ref=corese.next');
- assert.equal(state.sort,'id'); assert.equal(state.direction,'asc');
+ const state = parseUrlSparql('?sf-sort=name&sf-dir=desc&pin=query:Q01');
+ assert.equal(state.sort,'name'); assert.equal(state.direction,'desc');
+ assert.deepEqual(state.pin, {kind:'query',key:'Q01'});
+ assert.equal(parseUrlSparql('?sf-sort=bad&sf-dir=oops').sort, 'id');
  let url;
  globalThis.window = { location: { search:'?dataset=lubm&engines=corese.next', pathname:'/site/', hash:'#sparql-features' }, history:{replaceState:(_,__,value)=>url=value} };
  updateUrlSparql(state);
- assert.ok(url.includes('dataset=lubm')); assert.ok(url.includes('sf-q=Q01')); assert.ok(url.endsWith('#sparql-features'));
+ assert.ok(url.includes('sf-sort=name')); assert.ok(url.includes('pin=query%3AQ01'));
+ assert.ok(url.includes('dataset=lubm')); assert.ok(url.endsWith('#sparql-features'));
  assert.equal(getCurrentView(),'sparql'); delete globalThis.window;
 });
 test('query-only engines are selectable and absent status is not fabricated as PASS', async () => {
@@ -58,49 +34,6 @@ test('query-only engines are selectable and absent status is not fabricated as P
   assert.equal(data.enginesCatalog.length,2); assert.equal(data.queryRuns[1].status,'UNKNOWN'); assert.equal(data.queryRuns[1].medianMs,null);
  } finally {globalThis.fetch=previous;}
 });
-
-test('reference self-comparison is 1x and missing axes stay absent', () => {
- const queries = [q('Q01'),q('Q02'),q('Q03','PROPERTY_PATH')];
- const runs = indexRuns([r('Q01','jena.6.2.0',20),r('Q02','jena.6.2.0',0)]);
- const axes = aggregateFeatures(queries,runs,['jena.6.2.0'],'jena.6.2.0')[0].axes;
- assert.equal(axes[0].speedup,1); assert.equal(axes[0].paired,1);
- assert.equal(axes[0].passed,2); assert.equal(axes[0].total,2);
- assert.equal(axes[1].speedup,null); assert.equal(axes[1].passed,0);
-});
-
-
-test('summary counts scoped observations and failures; mean excludes the reference', () => {
- const queries = [q('a'),q('b'),q('c')];
- const index = indexRuns([r('a','jena.6.2.0',20),r('a','corese.next',10),
-  r('b','jena.6.2.0',80),r('b','corese.next',10),r('c','corese.next',1,'MISMATCH')]);
- const summary = summarizeScope(queries,index,['jena.6.2.0','corese.next'],'jena.6.2.0');
- assert.equal(summary.total,6); assert.equal(summary.present,5); assert.equal(summary.passed,4);
- assert.equal(summary.paired,2); assert.ok(Math.abs(summary.speedup-4)<1e-12);
- assert.equal(summarizeScope(queries,index,['jena.6.2.0'],'jena.6.2.0').speedup,null);
- assert.deepEqual(summarizeScope([],index,[],'jena.6.2.0'),{total:0,present:0,passed:0,paired:0,speedup:null});
-});
-test('summary excludes ambiguous duplicates and invalid ratios without inventing coverage', () => {
- const queries = [q('a'),q('b'),q('c')];
- const index = indexRuns([r('a','jena.6.2.0',20),r('a','corese.next',1),r('a','corese.next',2),
-  r('b','jena.6.2.0',20),r('b','corese.next',0),r('c','corese.next',5,'INCONCLUSIVE')]);
- const summary = summarizeScope(queries,index,['corese.next'],'jena.6.2.0');
- assert.equal(summary.present,3); assert.equal(summary.passed,1);
- assert.equal(summary.paired,0); assert.equal(summary.speedup,null);
-});
-test('chart URL defaults to bars and restores radar without touching RDF filters', () => {
- assert.equal(parseUrlSparql('').chart,'bar');
- assert.equal(parseUrlSparql('?sf-chart=invalid').chart,'bar');
- const state = parseUrlSparql('?sf-chart=radar');
- assert.equal(state.chart,'radar');
- let url;
- globalThis.window = {location:{search:'?dataset=lubm&engines=corese.next',pathname:'/site/',hash:'#sparql'},history:{replaceState:(_,__,value)=>url=value}};
- try {
-  updateUrlSparql(state); assert.ok(url.includes('sf-chart=radar')); assert.ok(url.includes('dataset=lubm'));
-  window.location.search = new URL(url,'https://example.org').search;
-  updateUrlSparql({...state,chart:'bar'}); assert.ok(!url.includes('sf-chart=')); assert.ok(url.includes('engines=corese.next'));
- } finally {delete globalThis.window;}
-});
-
 
 test('feature timings show absolute milliseconds without reference pairing', () => {
  const queries = [q('a'), q('b'), q('c'), q('d', 'NAMED_GRAPH')];
@@ -132,7 +65,7 @@ test('status normalization, labels and Node palettes share canonical semantics',
 test('failed feature summaries preserve all causes and count missing and ambiguous queries', async () => {
  const { featureStatusSummary } = await import('../js/views/sparql-features.js');
  const queries = [q('a'), q('b')];
- for (const status of ['TIMEOUT', 'ERROR', 'MISMATCH', 'DUPLICATE']) {
+ for (const status of ['TIMEOUT', 'ERROR', 'MISMATCH', 'DUPLICATE', 'INCONCLUSIVE', 'UNSTABLE']) {
   const runs = indexRuns([r('a', 'corese.next', -1, status), r('b', 'corese.next', -1, status)]);
   const summary = featureStatusSummary(queries, runs, 'corese.next');
   assert.equal(summary.status, status); assert.match(summary.detail, /0\/2 queries passed/);
@@ -239,9 +172,9 @@ test('loadBenchmarkReport infers SUCCESS only for legacy loading runs with valid
   const report = await loadBenchmarkReport('data/benchmark-report.json');
   assert.equal(report.runs[0].status, 'SUCCESS');
   assert.equal(report.loadingRuns[0].status, 'SUCCESS');
-  assert.equal(report.runs[1].status, null);
-  assert.equal(report.runs[1].loadingTimeMs, null);
-  assert.equal(report.runs[2].status, 'TIMEOUT');
+  assert.equal(report.runs, report.loadingRuns);
+  assert.equal(report.runs.length, 1);
+  assert.equal(report.enginesCatalog.length, 1);
  } finally {
   globalThis.fetch = originalFetch;
  }
@@ -253,16 +186,14 @@ test('dataset card files follow the view without changing SPARQL configurations'
   assert.equal(resolveDatasetCardConfig(dataset), DATASET_CONFIGS[dataset]);
  }
  assert.equal(resolveDatasetCardConfig('lubm').shortFile, 'lubm_small.nt');
- assert.equal(resolveDatasetCardConfig('lubm').fullFile, 'input/lubm/unzip_small/lubm_small.nt');
- for (const [dataset, shortFile, fullFile] of [
-  ['bsbm', 'bsbm_medium.nt', 'input/bsbm/view_small_medium/bsbm_medium.nt'],
-  ['lubm', 'lubm_medium.nt', 'input/lubm/unzip_medium/lubm_medium.nt'],
-  ['dbpedia', 'persondata_en.nt', 'input/dbpedia/unzip/persondata_en.nt'],
-  ['bowlogna', 'Department0.nt', 'input/bowlogna/unzip/Department0.nt'],
+ for (const [dataset, shortFile] of [
+  ['bsbm', 'bsbm_medium.nt'],
+  ['lubm', 'lubm_medium.nt'],
+  ['dbpedia', 'persondata_en.nt'],
+  ['bowlogna', 'Department0.nt'],
  ]) {
   const config = resolveDatasetCardConfig(dataset, 'loading');
   assert.equal(config.shortFile, shortFile);
-  assert.equal(config.fullFile, fullFile);
  }
  assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').shortFile, 'corese-feature-lubm.nq');
  assert.equal(resolveDatasetCardConfig('named-graphs', 'loading').format, 'N-Quads');
@@ -362,4 +293,97 @@ test('dataset sizes survive loading pruning and take precedence', () => {
   }), 374911);
   assert.equal(resolveDatasetTripleCount('bsbm', { loadingRuns }), null);
   assert.equal(resolveDatasetTripleCount('bsbm', { loadingRuns }, 'loading'), 1700000);
+});
+
+test('feature summary uses status priority across uncertainty and failures', async () => {
+ const { featureStatusSummary } = await import('../js/views/sparql-features.js');
+ const priority = ['DUPLICATE', 'MISMATCH', 'OOM', 'ERROR', 'TIMEOUT', 'INCONCLUSIVE', 'UNSTABLE'];
+ for (const [position, status] of priority.entries()) {
+  const statuses = priority.slice(position).reverse();
+  const queries = statuses.map((_, i) => q(String(i)));
+  const index = indexRuns(statuses.map((value, i) => r(String(i), 'corese.next', null, value)));
+  assert.equal(featureStatusSummary(queries, index, 'corese.next').status, status);
+ }
+});
+
+test('dataset cards link only tracked preparation scripts and escape generated filenames', () => {
+ const container = { innerHTML: '' };
+ populateDatasetCards(container);
+ assert.match(container.innerHTML, /<code>lubm_small\.nt<\/code>/);
+ assert.match(container.innerHTML, /<code>bsbm_small\.nt<\/code>/);
+ const links = [...container.innerHTML.matchAll(/href="(https:\/\/github\.com[^"]+)"/g)].map(match => match[1]);
+ assert.equal(links.length, 2);
+ assert.ok(links.every(link => link.endsWith('/input/queries/v1/named-graphs/prepare_dataset.py')));
+ assert.match(container.innerHTML, /<code>corese-feature-lubm\.nq<\/code>/);
+});
+
+test('keyboard item selection delegates to the shared engine selection methods', async () => {
+ const { EngineManager } = await import('../js/engines.js');
+ const version = { id: 'next' }, storage = { id: 'in-memory' };
+ const engine = { id: 'corese', versions: [version], storages: [storage] };
+ const selected = [];
+ const manager = {
+  catalog: [engine], draftEngine: engine,
+  selectEngine: item => selected.push(item),
+  selectVersion: item => selected.push(item),
+  selectStorage: item => selected.push(item),
+ };
+ for (const [column, id] of [['engines', engine.id], ['versions', version.id], ['storages', storage.id]]) {
+  const element = { classList: { contains: value => value === `miller__col--${column}` } };
+  EngineManager.prototype.triggerItemSelection.call(manager, element, id);
+  EngineManager.prototype.triggerItemSelection.call(manager, element, 'absent');
+ }
+ assert.deepEqual(selected, [engine, version, storage]);
+});
+
+test('shared chart pointers preserve hover, tooltip, badge pin and abort cleanup', async () => {
+ const { attachChartPointerInteraction } = await import('../js/chart-utils.js');
+ const previousWindow = globalThis.window;
+ const canvas = new EventTarget();
+ canvas.getBoundingClientRect = () => ({ left: 10, top: 20 });
+ const controller = new AbortController();
+ let hover = null, active = [], tooltip = [], clicks = 0;
+ const chart = {
+  data: { datasets: [{ data: [12] }] },
+  isPointInArea: ({ x, y }) => x >= 0 && y >= 0,
+  getDatasetMeta: () => ({ data: [{ inRange: (x, y) => x === 5 && y === 6 }] }),
+  setActiveElements: elements => { active = elements; },
+  tooltip: { setActiveElements: elements => { tooltip = elements; } },
+  update: () => {},
+  options: { onClick: () => { clicks++; } },
+  _statusBadgeHitBoxes: [{ x: 20, y: 20, w: 10, h: 10, datasetIndex: 0, index: 0 }],
+ };
+ const move = (x, y) => {
+  const event = new Event('pointermove');
+  Object.assign(event, { clientX: x + 10, clientY: y + 20 });
+  canvas.dispatchEvent(event);
+ };
+ globalThis.window = new EventTarget();
+ try {
+  attachChartPointerInteraction(chart, canvas, { set: target => { hover = target; }, clear: () => { hover = null; } }, controller.signal,
+   () => ({ kind: 'engine', key: 'corese.next' }));
+  move(5, 6);
+  assert.deepEqual(hover, { kind: 'engine', key: 'corese.next' });
+  assert.deepEqual(active, [{ datasetIndex: 0, index: 0 }]);
+  assert.deepEqual(tooltip, active);
+  for (const event of ['pointerleave', 'pointercancel', 'mouseout']) {
+   canvas.dispatchEvent(new Event(event));
+   assert.equal(hover, null); assert.deepEqual(tooltip, []);
+   move(5, 6);
+  }
+  window.dispatchEvent(new Event('scroll'));
+  assert.equal(hover, null); assert.deepEqual(active, []);
+  move(-1, 6); assert.equal(hover, null);
+  move(50, 60); assert.equal(hover, null);
+  const click = new Event('click');
+  Object.assign(click, { clientX: 35, clientY: 45 });
+  canvas.dispatchEvent(click);
+  assert.equal(clicks, 1); assert.equal(click._statusBadgeHandled, true);
+  controller.abort();
+  move(5, 6); assert.equal(hover, null);
+ } finally {
+  controller.abort();
+  if (previousWindow === undefined) delete globalThis.window;
+  else globalThis.window = previousWindow;
+ }
 });

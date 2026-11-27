@@ -13,6 +13,11 @@ import workflow_reports as reports
 
 
 class WorkflowQueriesTest(unittest.TestCase):
+    def test_input_and_site_catalogues_are_identical(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual((root / "input/queries/v1/catalogue.json").read_bytes(),
+                         (root / "site/data/sparql/v1/catalogue.json").read_bytes())
+
     def test_every_dataset_uses_existing_v1_catalogue(self):
         self.assertEqual(set(runner.SUPPORTED_DATASETS), set(runner.QUERIES_FILES))
         for catalogue in runner.QUERIES_FILES.values():

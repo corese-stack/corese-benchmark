@@ -63,7 +63,6 @@ class BenchmarkReportTest {
         BenchmarkReport.write(
             List.of(fileResult),
             List.of(queryResult),
-            List.of("SELECT * WHERE { ?s ?p ?o }"),
             jsonOut.toString(),
             protocol
         );
@@ -74,15 +73,18 @@ class BenchmarkReportTest {
         JsonNode root = mapper.readTree(jsonOut.toFile());
 
         // Verify metadata block
+        assertMetadataAndProtocol(root);
+        // Verify loading and query runs
+        assertRuns(root);
+    }
+
+    private static void assertMetadataAndProtocol(JsonNode root) {
         assertTrue(root.has("metadata"), "Report must contain metadata");
         JsonNode metadata = root.get("metadata");
         assertEquals("2.0", metadata.get("version").asText());
         assertTrue(metadata.has("generatedAt"));
-        assertTrue(metadata.has("queries"));
-        assertEquals(1, metadata.get("queries").size());
-        assertEquals("SELECT * WHERE { ?s ?p ?o }", metadata.get("queries").get(0).asText());
+        assertFalse(metadata.has("queries"));
 
-        // Verify protocol
         assertTrue(metadata.has("protocol"));
         JsonNode protoNode = metadata.get("protocol");
         assertEquals(1, protoNode.get("warmup").asInt());
@@ -92,21 +94,19 @@ class BenchmarkReportTest {
         assertEquals(600_000L, protoNode.get("loadTimeoutMs").asLong());
         assertEquals("median", protoNode.get("metric").asText());
 
-        // Verify environment
         assertTrue(metadata.has("environment"));
         JsonNode envNode = metadata.get("environment");
         assertTrue(envNode.has("cpuModel"));
         assertTrue(envNode.has("cpuArchitecture"));
         assertTrue(envNode.has("ramTotalGb"));
         assertTrue(envNode.has("jvmVersion"));
+    }
 
-        // Verify loading runs (both v2 'loadingRuns' and legacy 'runs' are identical)
+    private static void assertRuns(JsonNode root) {
         assertTrue(root.has("loadingRuns"), "Must export 'loadingRuns' for v2 dashboard");
-        assertTrue(root.has("runs"), "Must export 'runs' for backward compatibility");
-        assertEquals(root.get("loadingRuns"), root.get("runs"), "loadingRuns and runs must be identical");
+        assertFalse(root.has("runs"));
         assertEquals(1, root.get("loadingRuns").size());
 
-        // Verify timeSeries on loadingRun
         JsonNode run = root.get("loadingRuns").get(0);
         assertTrue(run.has("timeSeries"), "FileResult must contain timeSeries");
         JsonNode ts = run.get("timeSeries");
@@ -115,7 +115,6 @@ class BenchmarkReportTest {
         assertEquals(42.5, ts.get(0).get("heapUsedMb").asDouble());
         assertEquals(5000L, ts.get(2).get("triplesLoaded").asLong());
 
-        // Verify queryRuns
         assertTrue(root.has("queryRuns"));
         assertEquals(1, root.get("queryRuns").size());
         assertEquals("query_1", root.get("queryRuns").get(0).get("queryId").asText());
@@ -125,7 +124,7 @@ class BenchmarkReportTest {
     @Test
     void nullProtocolFallsBackToDefaultProtocol(@TempDir Path tempDir) throws Exception {
         Path jsonOut = tempDir.resolve("default-report.json");
-        BenchmarkReport.write(Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), jsonOut.toString(), null);
+        BenchmarkReport.write(Collections.emptyList(), Collections.emptyList(), jsonOut.toString(), null);
 
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(jsonOut.toFile());

@@ -39,8 +39,12 @@ public final class DriverFactory {
      *         {@code corese.next} is requested but the Corese 5 JAR is absent
      */
     public static TripleStoreDriver create(String engineName, boolean inference) {
+        boolean coreseNext = "corese.next".equals(engineName) || "corese.local".equals(engineName);
+        if (coreseNext && inference) {
+            throw new UnsupportedOperationException("OWL-RL inference is not supported by CoreseNextDriver");
+        }
         EngineRuntimeVerifier.verifyEngineName(engineName);
-        if ("corese.next".equals(engineName) || "corese.local".equals(engineName)) {
+        if (coreseNext) {
             return createCoreseNext(engineName);
         } else if (engineName.startsWith("corese.")) {
             return createCoreseDriver(engineName, inference);

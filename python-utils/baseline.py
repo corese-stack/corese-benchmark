@@ -35,6 +35,11 @@ def loading_runs(report: dict) -> list[dict]:
     """Read the canonical field, accepting legacy reports."""
     return report.get("loadingRuns", report.get("runs", []))
 
+def _report_metadata(report: dict) -> dict:
+    """Copy report metadata without obsolete embedded query catalogues."""
+    return {key: value for key, value in report.get("metadata", {}).items()
+            if key not in ("queries", "datasetQueries")}
+
 def is_canonical_dashboard_loading_run(run: dict) -> bool:
     dataset, filename = run.get("dataset"), run.get("file", "")
     if dataset == "named-graphs":
@@ -82,7 +87,7 @@ def prune_report_for_site(report: dict, *, expected_queries=None,
                           require_complete_queries: bool = False) -> dict:
     """Keep dashboard observations and preserve measured SPARQL input sizes."""
     raw = loading_runs(report)
-    meta = dict(report.get("metadata", {}))
+    meta = _report_metadata(report)
     sizes = dict(meta.get("datasetSizes", {}))
     sizes.update(extract_dataset_sizes(raw))
     if sizes:
@@ -103,7 +108,7 @@ def prune_report_for_site(report: dict, *, expected_queries=None,
 
 DEFAULT_CATALOGUE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "site", "data", "sparql", "v1", "catalogue.json",
+    "input", "queries", "v1", "catalogue.json",
 )
 RESOURCE_LIMIT_FAILURES = frozenset({"OOM", "TIMEOUT"})
 TERMINAL_LOADING_FAILURES = RESOURCE_LIMIT_FAILURES | frozenset({"ERROR"})
@@ -161,32 +166,6 @@ def has_canonical_loading_coverage(runs: list[dict], engine: str, dataset: str) 
         matching = [r for r in matching if r.get("file") in
                     (CANONICAL_NAMED_GRAPHS_FILE, LEGACY_NAMED_GRAPHS_FILE)]
     return any(valid_loading_run(r) for r in matching)
-
-# SPARQL category patterns matching SparqlAnalyser.java
-_P_IRI = re.compile(r"<[^>]*>")
-_P_COMMENT = re.compile(r"#[^\n]*")
-_P_STRING = re.compile(r'"[^"]*"|\'[^\']*\'')
-_P_SUBQUERY = re.compile(r"\{[^{}]*\bSELECT\b", re.IGNORECASE)
-_P_GROUP_BY = re.compile(r"\bGROUP\s+BY\b", re.IGNORECASE)
-_P_TEMPORAL = re.compile(
-    r"\bNOW\s*\(|\bXSD:DATETIME\b|\bXSD:DATE\b|\b(?:DAY|MONTH|YEAR|HOURS|MINUTES|SECONDS)\s*\(",
-    re.IGNORECASE,
-)
-
-def classify_sparql(sparql: str | None) -> str:
-    """Classify SPARQL query matching Java SparqlAnalyser.java."""
-    if not sparql or not sparql.strip():
-        return "GRAPH_PATTERN"
-    cleaned = _P_IRI.sub("<>", sparql)
-    cleaned = _P_COMMENT.sub("", cleaned)
-    cleaned = _P_STRING.sub('""', cleaned)
-    if _P_SUBQUERY.search(cleaned):
-        return "SUBQUERY"
-    if _P_GROUP_BY.search(cleaned):
-        return "GROUP_BY"
-    if _P_TEMPORAL.search(cleaned):
-        return "TEMPORAL"
-    return "GRAPH_PATTERN"
 
 def natural_query_key(query_id: str) -> tuple[int, str]:
     """Sort query_1, query_2, ..., query_10 naturally."""
@@ -320,26 +299,15 @@ def _merge_metadata(
     fresh_data: dict,
     cached_set: set[str],
 ) -> dict:
-    """Merge metadata dictionaries, preserving queries and dataset mappings."""
-    meta = dict(baseline_data.get("metadata", {}))
-    fresh_meta = fresh_data.get("metadata", {})
+    """Merge metadata dictionaries, preserving dataset sizes."""
+    meta = _report_metadata(baseline_data)
+    fresh_meta = _report_metadata(fresh_data)
     meta.update(fresh_meta)
 
     sizes = dict(baseline_data.get("metadata", {}).get("datasetSizes", {}))
     sizes.update(fresh_meta.get("datasetSizes", {}))
     if sizes:
         meta["datasetSizes"] = sizes
-
-    ds_queries = dict(baseline_data.get("metadata", {}).get("datasetQueries", {}))
-    ds_queries.update(fresh_meta.get("datasetQueries", {}))
-    if ds_queries:
-        meta["datasetQueries"] = ds_queries
-
-    if "queries" not in meta or not meta["queries"]:
-        for queries_list in ds_queries.values():
-            if queries_list:
-                meta["queries"] = queries_list
-                break
 
     meta["baselineEngines"] = sorted(cached_set)
     if "generatedAt" not in fresh_meta:
@@ -380,7 +348,7 @@ def save_baseline(baseline_data: dict, destination_path: str) -> None:
 
     tmp_path = os.path.join(dest_dir or ".", f".baseline.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     with open(tmp_path, "x", encoding="utf-8") as f:
-        json.dump({"metadata": baseline_data.get("metadata", {}), "loadingRuns": runs,
+        json.dump({"metadata": _report_metadata(baseline_data), "loadingRuns": runs,
                    "queryRuns": baseline_data.get("queryRuns", [])}, f, separators=(",", ":"))
 
     try:
@@ -407,8 +375,8 @@ def _fmt_float(val: float | None) -> str:
         return ""
 
 def export_site_data(merged_data: dict, site_data_dir: str) -> None:
-    """Generate benchmark-report.json, report-data.js, and benchmark-report.csv from a single merged dict."""
-    merged_data = {"metadata": merged_data.get("metadata", {}),
+    """Generate benchmark-report.json and benchmark-report.csv from a single merged dict."""
+    merged_data = {"metadata": _report_metadata(merged_data),
                    "loadingRuns": list(loading_runs(merged_data)),
                    "queryRuns": list(merged_data.get("queryRuns") or [])}
     os.makedirs(site_data_dir, exist_ok=True)
@@ -417,11 +385,6 @@ def export_site_data(merged_data: dict, site_data_dir: str) -> None:
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(merged_data, f, indent=2)
     print(f"[site] Wrote {json_path}")
-
-    js_path = os.path.join(site_data_dir, "report-data.js")
-    with open(js_path, "w", encoding="utf-8") as f:
-        f.write(f"window.BENCHMARK_REPORT = {json.dumps(merged_data, indent=2)};\n")
-    print(f"[site] Wrote {js_path}")
 
     csv_path = os.path.join(site_data_dir, "benchmark-report.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:

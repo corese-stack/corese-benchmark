@@ -212,6 +212,10 @@ jobs:
             for dataset in "${REQUIRED_DATASETS[@]}"; do
               [[ ",$DATASETS," == *,$dataset,* ]] || PUBLISHABLE=false
             done
+            IFS=',' read -ra REQUIRED_ENGINES <<< "$BASE_ENGINES"
+            for engine in "${REQUIRED_ENGINES[@]}"; do
+              [[ ",$ENGINES," == *,$engine,* ]] || PUBLISHABLE=false
+            done
           fi
 
           EXTRA=("--mode=$MODE" "--reuse=$REUSE")
