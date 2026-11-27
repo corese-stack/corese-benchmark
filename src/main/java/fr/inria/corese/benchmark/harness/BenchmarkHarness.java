@@ -18,9 +18,11 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
@@ -56,12 +58,18 @@ public class BenchmarkHarness {
     private final MetricsCollector metrics;
     private final String datasetName;
     private final BenchmarkProtocol protocol;
+    private final Set<String> formats;
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, BenchmarkProtocol protocol) {
+        this(driver, datasetName, protocol, Collections.emptySet());
+    }
+
+    public BenchmarkHarness(TripleStoreDriver driver, String datasetName, BenchmarkProtocol protocol, Set<String> formats) {
         this.driver = driver;
         this.datasetName = datasetName;
         this.protocol = protocol != null ? protocol : BenchmarkProtocol.defaultProtocol();
         this.metrics = new MetricsCollector();
+        this.formats = formats != null ? formats : Collections.emptySet();
     }
 
     public BenchmarkHarness(TripleStoreDriver driver, String datasetName, int repetitions) {
@@ -632,7 +640,17 @@ public class BenchmarkHarness {
         if (!dir.exists() || !dir.isDirectory()) {
             throw new IllegalArgumentException("Dataset directory does not exist or is not a directory: " + datasetDir);
         }
-        File[] files = dir.listFiles(f -> f.isFile() && BenchmarkFormat.isCanonicalFile(f) && driver.supports(f));
+        File[] files = dir.listFiles(f -> {
+            if (!f.isFile() || !BenchmarkFormat.isCanonicalFile(f) || !driver.supports(f)) {
+                return false;
+            }
+            if (formats.isEmpty()) {
+                return true;
+            }
+            String name = f.getName().toLowerCase(Locale.ROOT);
+            int dot = name.lastIndexOf('.');
+            return dot >= 0 && formats.contains(name.substring(dot + 1));
+        });
         if (files == null || files.length == 0) {
             throw new IllegalArgumentException(String.format(
                 "No supported RDF files (%s) found in: %s for driver %s",

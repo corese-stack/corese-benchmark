@@ -155,6 +155,12 @@ parser.add_argument(
     metavar="SECONDS",
     help="Per-query timeout for legacy text workloads (default: 30). Catalogue entries use timeoutSecs.",
 )
+parser.add_argument(
+    "--formats",
+    default=None,
+    metavar="FORMATS",
+    help="Comma-separated list of file extensions to benchmark (e.g. 'nt,nq,ttl,trig'). Skips all other formats.",
+)
 args = parser.parse_args()
 
 # Validate exclusivity of workload execution selectors
@@ -298,12 +304,12 @@ for target_dir in unique_dirs:
 ####################################################################################
 
 def gradle_build(extra_args=None):
-    cmd = [gradle_wrapper, "clean", "build"] + (extra_args or [])
+    cmd = [gradle_wrapper, "--no-daemon", "build"] + (extra_args or [])
     print(f"Building: {' '.join(cmd)}")
     try:
         subprocess.run(cmd, cwd=project_dir, check=True, timeout=600, stderr=subprocess.PIPE)
     except subprocess.TimeoutExpired:
-        print("[ERROR] Gradle build timed out after 600s — check for stuck daemon", file=sys.stderr)
+        print("[ERROR] Gradle build timed out after 600s -- check for stuck daemon", file=sys.stderr)
         raise
     except subprocess.CalledProcessError as e:
         stderr_text = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
@@ -338,7 +344,10 @@ def run_benchmark(engines_str, output_file, dataset_label, unzip_dir, gradle_pro
     if args.query_timeout is not None:
         args_str += f" --query-timeout {args.query_timeout}"
         print(f"  Query timeout: {args.query_timeout}s")
-    cmd = [gradle_wrapper, "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
+    if getattr(args, "formats", None):
+        args_str += f" --formats {args.formats}"
+        print(f"  Formats filter: {args.formats}")
+    cmd = [gradle_wrapper, "--no-daemon", "--no-configuration-cache", "runBenchmark"] + (gradle_props or []) + [f"--args={args_str}"]
     print(f"Running benchmark: {' '.join(cmd)}")
     try:
         subprocess.run(cmd, cwd=project_dir, check=True, timeout=7200, stderr=subprocess.PIPE)
@@ -530,14 +539,14 @@ if args.engines and args.resume:
                     with open(out_file) as _f:
                         _data = _json_early.load(_f)
                     if isinstance(_data.get("runs"), list) and len(_data["runs"]) > 0:
-                        print(f"[resume] SKIP {engine} × {ds} — already done ({out_file})")
+                        print(f"[resume] SKIP {engine} x {ds} -- already done ({out_file})")
                         collected.append(out_file)
                         continue
                     else:
-                        print(f"[resume] REDO {engine} × {ds} — output exists but has no valid runs")
+                        print(f"[resume] REDO {engine} x {ds} -- output exists but has no valid runs")
                 except (ValueError, OSError) as _e:
-                    print(f"[resume] REDO {engine} × {ds} — output invalid ({_e})")
-            print(f"[resume] RUN  {engine} × {ds}")
+                    print(f"[resume] REDO {engine} x {ds} -- output invalid ({_e})")
+            print(f"[resume] RUN  {engine} x {ds}")
             if gradle_props != last_build_props:
                 gradle_build(gradle_props)
                 last_build_props = gradle_props
@@ -626,7 +635,7 @@ elif args.engines:
                 del filtered["queryRuns"]
             with open(dst, "w") as _f:
                 _json_early.dump(filtered, _f, indent=2)
-            print(f"[baseline] Extracted {engine} × {ds} from baseline → {dst}")
+            print(f"[baseline] Extracted {engine} x {ds} from baseline -> {dst}")
             return dst
         return None
 
@@ -683,7 +692,7 @@ elif args.engines:
             del filtered["queryRuns"]
         with open(dst, "w") as _f:
             _json_early.dump(filtered, _f, indent=2)
-        print(f"[cache] Saved {engine} × {ds} → {dst}")
+        print(f"[cache] Saved {engine} x {ds} -> {dst}")
 
     local_engines = [e for e in engines_list if needs_local_jar(e)]
     other_engines = [e for e in engines_list if not needs_local_jar(e)]
@@ -706,10 +715,10 @@ elif args.engines:
                 if e in cached_engine_set:
                     hit = get_cached(e, ds)
                     if hit:
-                        print(f"[cache] HIT  {e} × {ds} — {hit}")
+                        print(f"[cache] HIT  {e} x {ds} -- {hit}")
                         cached_hits[e] = hit
                     else:
-                        print(f"[cache] MISS {e} × {ds} — will run normally")
+                        print(f"[cache] MISS {e} x {ds} -- will run normally")
                         fresh_engines.append(e)
                 else:
                     fresh_engines.append(e)
@@ -759,7 +768,7 @@ elif args.engines:
 
             dataset_output_files.append(output_file)
         except Exception as _ds_err:  # noqa: BLE001
-            print(f"[ERROR] Dataset '{ds}' failed: {_ds_err} — skipping", file=sys.stderr)
+            print(f"[ERROR] Dataset '{ds}' failed: {_ds_err} -- skipping", file=sys.stderr)
             traceback.print_exc()
             # Remove orphaned temp files so Step 3 doesn't pick up partial data
             try:
@@ -945,5 +954,5 @@ if latest:
             save_baseline(merged_baseline, args.baseline)
 
 else:
-    print("[ERROR] No JSON report found or generated in out/ — benchmark failed", file=sys.stderr)
+    print("[ERROR] No JSON report found or generated in out/ -- benchmark failed", file=sys.stderr)
     sys.exit(1)

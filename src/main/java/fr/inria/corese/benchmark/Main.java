@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -121,7 +122,8 @@ public class Main {
         boolean quick,
         int queryTimeoutSecs,
         boolean isolateProcess,
-        BenchmarkMode mode
+        BenchmarkMode mode,
+        Set<String> formats
     ) {}
 
     private Main() {}
@@ -290,6 +292,7 @@ public class Main {
         int queryTimeoutSecs = -1;
         boolean isolate      = true;
         BenchmarkMode mode   = BenchmarkMode.ALL;
+        Set<String> formats  = Collections.emptySet();
 
         int i = 4;
         while (i < args.length) {
@@ -309,6 +312,9 @@ public class Main {
             } else if (("--benchmark-type".equals(arg) || "--mode".equals(arg)) && i + 1 < args.length) {
                 mode = parseMode(args[i + 1]);
                 i += 2;
+            } else if ("--formats".equals(arg) && i + 1 < args.length) {
+                formats = Set.copyOf(Arrays.asList(args[i + 1].toLowerCase(Locale.ROOT).split(",")));
+                i += 2;
             } else if (queriesFile == null && !arg.startsWith("--")) {
                 queriesFile = arg;
                 i++;
@@ -319,7 +325,7 @@ public class Main {
 
         return new BenchmarkOptions(
             datasetDir, outputFile, engines, datasetName,
-            queriesFile, inference, quick, queryTimeoutSecs, isolate, mode
+            queriesFile, inference, quick, queryTimeoutSecs, isolate, mode, formats
         );
     }
 
@@ -385,7 +391,7 @@ public class Main {
         log.info("Starting engine: {}", engineName);
         try {
             TripleStoreDriver driver = DriverFactory.create(engineName, opts.inference());
-            BenchmarkHarness harness = new BenchmarkHarness(driver, opts.datasetName(), protocol);
+            BenchmarkHarness harness = new BenchmarkHarness(driver, opts.datasetName(), protocol, opts.formats());
 
             if (opts.mode().includesLoad()) {
                 List<FileResult> fileResults = harness.run(opts.datasetDir());
@@ -490,7 +496,7 @@ public class Main {
         List<String> cmd = new ArrayList<>();
         String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         cmd.add(javaBin);
-        cmd.add("-Xms4g");
+        cmd.add("-Xms1g");
         cmd.add("-Xmx8g");
         cmd.add("-XX:+UseG1GC");
         cmd.add("-cp");
@@ -516,6 +522,10 @@ public class Main {
         if (opts.mode() != BenchmarkMode.ALL) {
             cmd.add("--mode");
             cmd.add(opts.mode().name().toLowerCase(Locale.ROOT));
+        }
+        if (!opts.formats().isEmpty()) {
+            cmd.add("--formats");
+            cmd.add(String.join(",", opts.formats()));
         }
         cmd.add("--no-isolate");
         return cmd;

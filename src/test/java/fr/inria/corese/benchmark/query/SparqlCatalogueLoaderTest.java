@@ -3,9 +3,11 @@ package fr.inria.corese.benchmark.query;
 import fr.inria.corese.benchmark.metrics.SparqlAnalyser;
 import fr.inria.corese.benchmark.metrics.SparqlAnalyser.SparqlFeature;
 import java.io.IOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -80,7 +82,12 @@ class SparqlCatalogueLoaderTest {
     @Test
     void rejectsSymlinkOutsideCatalogue(@TempDir Path outside) throws Exception {
         Path target = Files.writeString(outside.resolve("external.rq"), "SELECT * WHERE {}");
-        Files.createSymbolicLink(directory.resolve("query.rq"), target);
+        try {
+            Files.createSymbolicLink(directory.resolve("query.rq"), target);
+        } catch (UnsupportedOperationException | FileSystemException e) {
+            // Windows without elevated privileges or Developer Mode cannot create symlinks
+            Assumptions.assumeTrue(false, "Symlink creation not supported: " + e.getMessage());
+        }
         Path catalogue = write("{\"queries\":[" + entry("query.rq") + "]}");
         assertThrows(IOException.class, () -> loader.load(catalogue));
     }

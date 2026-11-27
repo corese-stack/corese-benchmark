@@ -74,9 +74,11 @@ final class TempStorage {
         if (path == null) {
             return;
         }
-        if (deleteQuietly(path)) {
-            PENDING.remove(path);
-        }
+        // Always unregister: the caller has taken responsibility for this directory.
+        // If deletion fails (e.g. file locks on Windows from older Jena/RDF4J versions),
+        // the shutdown hook will handle residual cleanup.
+        PENDING.remove(path);
+        deleteQuietly(path);
     }
 
     /**

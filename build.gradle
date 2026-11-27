@@ -74,7 +74,7 @@ dependencies {
     implementation "org.eclipse.rdf4j:rdf4j-rio-jsonld:${rdf4jVersion}"
 
     // JSON output
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.11.4'
 
     // Logging
     implementation 'ch.qos.logback:logback-classic:1.4.14'
@@ -138,6 +138,7 @@ classes.dependsOn(generateEngineProperties)
 test {
     useJUnitPlatform()
     maxHeapSize = '4g'
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
     // The corese-next fat JAR bundles its own SLF4J classes (2.x) which conflict
     // with the project's logback-classic (SLF4J 1.x) at test runtime, causing
     // Jena/RDF4J class-loading failures. Remove it from the test classpath; its
@@ -159,7 +160,8 @@ task runBenchmark(type: JavaExec) {
     jvmArgs = [
         '-Xmx12g',
         '-Xms4g',
-        '-XX:+UseG1GC'
+        '-XX:+UseG1GC',
+        '--enable-native-access=ALL-UNNAMED'
     ]
 }
 
@@ -171,6 +173,7 @@ task convertDatasets(type: JavaExec) {
     jvmArgs = [
         '-Xmx12g',
         '-Xms4g',
-        '-XX:+UseG1GC'
+        '-XX:+UseG1GC',
+        '--enable-native-access=ALL-UNNAMED'
     ]
 }
