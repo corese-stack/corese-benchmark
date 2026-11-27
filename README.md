@@ -115,5 +115,3 @@ Run `make help` for predefined targets (`regression`, `compare`, `next`, `versio
 python3 -m unittest discover -s python-utils/tests -p "test_*.py" -v
 node --test site/tests/*.test.mjs
 ```
-
-The minimal dataset preparation measures the 20 canonical loading files instead of 111: Bowlogna Department0, BSBM medium, LUBM medium, DBpedia persondata, and the named-graphs N-Quads input, in their supported formats. BSBM and LUBM small inputs are also prepared in `unzip/` for the SPARQL catalogue but excluded from the loading views.
