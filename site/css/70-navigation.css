@@ -1,0 +1,87 @@
+/* ==========================================================================
+   Benchmark Navigation Bar & Tabs (Academic Minimalist Style with Sliding Indicator)
+   ========================================================================== */
+
+.benchmark-nav {
+	position: relative;
+	isolation: isolate;
+	z-index: 10;
+	background: var(--bg);
+	border-bottom: 1px solid var(--border);
+	padding: 0 24px;
+}
+
+.benchmark-nav__inner {
+	max-width: 1200px;
+	margin: 0 auto;
+}
+
+.benchmark-tabs {
+	position: relative;
+	display: flex;
+	gap: 4px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.benchmark-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.benchmark-tab {
+	padding: 12px 18px;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-muted);
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	white-space: nowrap;
+	letter-spacing: 0.01em;
+	position: relative;
+	z-index: 1;
+	transition: color 150ms ease;
+}
+
+.benchmark-tab:hover {
+	color: var(--text);
+}
+
+.benchmark-tab.is-active {
+	color: var(--text);
+}
+
+.benchmark-tab:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: -2px;
+	border-radius: 4px;
+}
+
+/* Sliding active indicator underline (hardware-accelerated, robust against resize/fonts) */
+.benchmark-tabs__indicator {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	height: 2px;
+	width: var(--tab-w, 0px);
+	transform: translateX(var(--tab-x, 0px));
+	background: var(--text);
+	border-radius: 2px 2px 0 0;
+	pointer-events: none;
+	will-change: transform, width;
+	transition:
+		transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+		width 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.benchmark-tabs:not(.is-ready) .benchmark-tabs__indicator,
+.benchmark-tabs.is-resizing .benchmark-tabs__indicator {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.benchmark-tabs .benchmark-tabs__indicator {
+		transition: none;
+	}
+}
+

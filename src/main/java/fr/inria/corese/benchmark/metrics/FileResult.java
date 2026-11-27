@@ -1,5 +1,7 @@
 package fr.inria.corese.benchmark.metrics;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import fr.inria.corese.benchmark.telemetry.TelemetryPoint;
 
 import java.util.Arrays;
@@ -24,29 +26,114 @@ import java.util.Objects;
  * @param timeSeries             real-time telemetry samples captured during ingestion
  */
 public record FileResult(
-    String engine,
-    String dataset,
-    String file,
-    long triples,
+    @JsonProperty("engine") String engine,
+    @JsonProperty("dataset") String dataset,
+    @JsonProperty("file") String file,
+    @JsonProperty("triples") long triples,
 
     // Loading metrics (median of repetitions)
-    long loadingTimeMs,
-    double throughputTriplesPerSec,
+    @JsonProperty("loadingTimeMs") long loadingTimeMs,
+    @JsonProperty("throughputTriplesPerSec") double throughputTriplesPerSec,
 
     // Memory metrics (median delta: after - before, with forced GC)
-    double memoryBeforeMb,
-    double memoryAfterMb,
-    double memoryDeltaMb,
+    @JsonProperty("memoryBeforeMb") double memoryBeforeMb,
+    @JsonProperty("memoryAfterMb") double memoryAfterMb,
+    @JsonProperty("memoryDeltaMb") double memoryDeltaMb,
 
     // CPU usage during loading
-    double cpuPercent,
+    @JsonProperty("cpuPercent") double cpuPercent,
 
     // Raw repetition values (for transparency)
-    long[] repetitionsMs,
+    @JsonProperty("repetitionsMs") long[] repetitionsMs,
 
     // Real-time telemetry samples during loading
-    List<TelemetryPoint> timeSeries
+    @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries,
+
+    // Optional on-disk storage footprint for persistent stores (Jena TDB2, RDF4J Native/LMDB)
+    @JsonProperty("diskFootprintBytes") Long diskFootprintBytes,
+    @JsonProperty("status") FileStatus status,
+    @JsonProperty("errorMessage") String errorMessage
 ) {
+    @JsonCreator
+    public FileResult(
+        @JsonProperty("engine") String engine,
+        @JsonProperty("dataset") String dataset,
+        @JsonProperty("file") String file,
+        @JsonProperty("triples") long triples,
+        @JsonProperty("loadingTimeMs") long loadingTimeMs,
+        @JsonProperty("throughputTriplesPerSec") double throughputTriplesPerSec,
+        @JsonProperty("memoryBeforeMb") double memoryBeforeMb,
+        @JsonProperty("memoryAfterMb") double memoryAfterMb,
+        @JsonProperty("memoryDeltaMb") double memoryDeltaMb,
+        @JsonProperty("cpuPercent") double cpuPercent,
+        @JsonProperty("repetitionsMs") long[] repetitionsMs,
+        @JsonProperty("timeSeries") List<TelemetryPoint> timeSeries,
+        @JsonProperty("diskFootprintBytes") Long diskFootprintBytes,
+        @JsonProperty("status") FileStatus status,
+        @JsonProperty("errorMessage") String errorMessage
+    ) {
+        this.engine = engine;
+        this.dataset = dataset;
+        this.file = file;
+        this.triples = triples;
+        this.loadingTimeMs = loadingTimeMs;
+        this.throughputTriplesPerSec = throughputTriplesPerSec;
+        this.memoryBeforeMb = memoryBeforeMb;
+        this.memoryAfterMb = memoryAfterMb;
+        this.memoryDeltaMb = memoryDeltaMb;
+        this.cpuPercent = cpuPercent;
+        this.repetitionsMs = repetitionsMs != null ? repetitionsMs.clone() : new long[0];
+        this.timeSeries = timeSeries != null ? List.copyOf(timeSeries) : List.of();
+        this.diskFootprintBytes = diskFootprintBytes;
+        // Old JSON reports have no status; their recorded entries were successes.
+        this.status = status != null ? status : FileStatus.SUCCESS;
+        this.errorMessage = this.status == FileStatus.SUCCESS ? null : errorMessage;
+    }
+
+    /** Keeps the previous canonical constructor source-compatible. */
+    public FileResult(
+        String engine, String dataset, String file, long triples,
+        long loadingTimeMs, double throughputTriplesPerSec,
+        double memoryBeforeMb, double memoryAfterMb, double memoryDeltaMb,
+        double cpuPercent, long[] repetitionsMs,
+        List<TelemetryPoint> timeSeries, Long diskFootprintBytes
+    ) {
+        this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent,
+                repetitionsMs, timeSeries, diskFootprintBytes, FileStatus.SUCCESS, null);
+    }
+
+    /** Unavailable measurements are -1, never fabricated zero measurements. */
+    public static FileResult failure(
+        String engine, String dataset, String file,
+        FileStatus status, String errorMessage
+    ) {
+        if (status == null || status == FileStatus.SUCCESS) {
+            throw new IllegalArgumentException("Expected a failure status");
+        }
+        return new FileResult(engine, dataset, file,
+                -1L, -1L, -1.0, -1.0, -1.0, -1.0, -1.0,
+                new long[0], List.of(), null, status, errorMessage);
+    }
+
+    public FileResult(
+        String engine,
+        String dataset,
+        String file,
+        long triples,
+        long loadingTimeMs,
+        double throughputTriplesPerSec,
+        double memoryBeforeMb,
+        double memoryAfterMb,
+        double memoryDeltaMb,
+        double cpuPercent,
+        long[] repetitionsMs,
+        List<TelemetryPoint> timeSeries
+    ) {
+        this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, timeSeries, null);
+    }
+
     public FileResult(
         String engine,
         String dataset,
@@ -61,7 +148,7 @@ public record FileResult(
         long[] repetitionsMs
     ) {
         this(engine, dataset, file, triples, loadingTimeMs, throughputTriplesPerSec,
-                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, List.of());
+                memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, repetitionsMs, List.of(), null);
     }
 
     @Override
@@ -78,6 +165,9 @@ public record FileResult(
                 Objects.equals(engine, other.engine) &&
                 Objects.equals(dataset, other.dataset) &&
                 Objects.equals(file, other.file) &&
+                Objects.equals(diskFootprintBytes, other.diskFootprintBytes) &&
+                status == other.status &&
+                Objects.equals(errorMessage, other.errorMessage) &&
                 Arrays.equals(repetitionsMs, other.repetitionsMs) &&
                 Objects.equals(timeSeries, other.timeSeries);
     }
@@ -85,7 +175,7 @@ public record FileResult(
     @Override
     public int hashCode() {
         int result = Objects.hash(engine, dataset, file, triples, loadingTimeMs,
-                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries);
+                throughputTriplesPerSec, memoryBeforeMb, memoryAfterMb, memoryDeltaMb, cpuPercent, timeSeries, diskFootprintBytes, status, errorMessage);
         result = 31 * result + Arrays.hashCode(repetitionsMs);
         return result;
     }
@@ -96,12 +186,15 @@ public record FileResult(
                 "engine=" + engine + ", " +
                 "dataset=" + dataset + ", " +
                 "file=" + file + ", " +
+                "status=" + status + ", " +
+                "errorMessage=" + errorMessage + ", " +
                 "triples=" + triples + ", " +
                 "loadingTimeMs=" + loadingTimeMs + ", " +
                 "throughputTriplesPerSec=" + throughputTriplesPerSec + ", " +
                 "memoryBeforeMb=" + memoryBeforeMb + ", " +
                 "memoryAfterMb=" + memoryAfterMb + ", " +
                 "memoryDeltaMb=" + memoryDeltaMb + ", " +
+                "diskFootprintBytes=" + diskFootprintBytes + ", " +
                 "cpuPercent=" + cpuPercent + ", " +
                 "repetitionsMs=" + Arrays.toString(repetitionsMs) + ", " +
                 "timeSeries=" + (timeSeries != null ? timeSeries.size() + " points" : "none") + ']';

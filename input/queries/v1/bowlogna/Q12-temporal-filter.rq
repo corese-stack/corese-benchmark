@@ -1,0 +1,18 @@
+# Q12: Bowlogna typed temporal and string filters
+# Primary feature: FILTER_FUNCTIONS
+PREFIX bow: <http://www.owl-ontologies.com/Ontology1324312315.owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?student ?firstName ?enrolledAt
+WHERE {
+    ?student bow:hasFirstName ?firstName ;
+        bow:enrolledForBachelorStudiesOn ?enrolledOn .
+    BIND (xsd:dateTime(CONCAT(STR(?enrolledOn), "T00:00:00Z")) AS ?enrolledAt)
+    FILTER (
+        ?enrolledAt >= "2003-01-01T00:00:00Z"^^xsd:dateTime
+        && ?enrolledAt < "2006-01-01T00:00:00Z"^^xsd:dateTime
+        && YEAR(?enrolledAt) >= 2003
+        && MONTH(?enrolledAt) = 10
+        && CONTAINS(LCASE(STR(?firstName)), "studentfirstname")
+    )
+}

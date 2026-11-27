@@ -1,5 +1,6 @@
 package fr.inria.corese.benchmark.metrics;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -10,6 +11,27 @@ import java.util.regex.Pattern;
  * {@code SUBQUERY > GROUP_BY > TEMPORAL > GRAPH_PATTERN}.</p>
  */
 public final class SparqlAnalyser {
+
+    /** The nine benchmark capabilities, independent of the legacy dashboard categories. */
+    public enum SparqlFeature {
+        BGP_JOIN, PROPERTY_PATH, OPTIONAL_LEFT_JOIN, NEGATION,
+        AGGREGATION_ANALYTICS, SUBQUERY, FILTER_FUNCTIONS, NAMED_GRAPH, SOLUTION_MODIFIERS
+    }
+
+    /**
+     * Parses SPARQL 1.1 and chooses a primary capability. Explicit catalogue metadata
+     * takes precedence; automatic priority is SUBQUERY, NAMED_GRAPH, NEGATION,
+     * PROPERTY_PATH, OPTIONAL_LEFT_JOIN, AGGREGATION_ANALYTICS,
+     * SOLUTION_MODIFIERS, FILTER_FUNCTIONS, then BGP_JOIN.
+     * Invalid or empty input is rejected when automatic classification is needed.
+     */
+    public static SparqlFeature classifyFeature(String sparql, SparqlFeature metadata) {
+        return metadata != null ? metadata : SparqlFeatureDetector.classify(sparql);
+    }
+
+    public static SparqlFeature classifyFeature(String sparql) {
+        return classifyFeature(sparql, null);
+    }
 
     public enum QueryCategory {
         /** Basic graph pattern joins — no aggregation, no temporal functions, no subqueries. */
@@ -51,7 +73,7 @@ public final class SparqlAnalyser {
                                 P_IRI.matcher(sparql).replaceAll("<>")
                             ).replaceAll("")
                          ).replaceAll("\"\"");
-        String upper   = cleaned.toUpperCase();
+        String upper   = cleaned.toUpperCase(Locale.ROOT);
 
         if (P_SUBQUERY.matcher(upper).find()) return QueryCategory.SUBQUERY;
         if (P_GROUP_BY.matcher(upper).find()) return QueryCategory.GROUP_BY;

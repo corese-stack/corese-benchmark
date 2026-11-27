@@ -1,343 +1,117 @@
 # corese-benchmark
 
-Benchmark framework for comparing RDF triple stores: **Corese**, **Apache Jena**, and **Eclipse RDF4J**.
+Benchmark suite comparing **Corese**, **Apache Jena**, and **Eclipse RDF4J** on RDF ingestion and SPARQL 1.1 query execution.
 
-## Description
+## Architecture & Principles
 
-This repository benchmarks Java-based RDF triple stores on loading and SPARQL query performance. Goals:
-
-- Compare **Corese** against Apache Jena and RDF4J
-- Detect **regressions** between `corese.local` (current branch) and `corese.4.x.x` (stable)
-- Compare **different versions** of Corese (including `corese-next`)
-- Produce JSON + CSV reports consumed by an interactive web dashboard
-
-**Principles:**
-
-- Java 21 harness with a rigorous measurement protocol (warmup + 3 repetitions + median)
-- Memory measured as delta before/after loading with forced GC
-- SPARQL query benchmark with per-query timeout and warmup
-- Automatic JSON + CSV output
-- Python orchestration for dataset download, build, and deployment
-
----
+- **Java 25 harness** running each engine in an isolated child JVM (`-Xms4g -Xmx8g`) to eliminate JIT and GC cross-contamination.
+- **Loading protocol**: 1 warmup load (discarded) followed by 3 measured repetitions; reports median latency, throughput, retained heap delta (`System.gc()` before/after), disk footprint, and JVM heap telemetry.
+- **SPARQL protocol**: curated v1 catalogue ([catalogue.json](input/queries/v1/catalogue.json)) across 5 datasets, 1 warmup + 3 timed repetitions per query, deferred semantic result hashing (`PASS`, `MISMATCH`, `INCONCLUSIVE` on blank nodes, `TIMEOUT`, `ERROR`).
+- **Modular Python orchestrator** (`workflow_cli.py`, `workflow_runner.py`, `workflow_reports.py`, `baseline.py`) handling dataset generation, filtered W3C format conversion, multi-version Gradle batching, and frozen immutable baseline reuse.
 
 ## Dashboard
 
-The interactive benchmark dashboard is published at:
-**[https://corese-stack.github.io/corese-benchmark/](https://corese-stack.github.io/corese-benchmark/)**
-
-To view it locally:
+Published at **[corese-stack.github.io/corese-benchmark](https://corese-stack.github.io/corese-benchmark/)**. To preview locally:
 
 ```bash
-make site   # serves at http://localhost:8080
+make site   # http://localhost:8080
 ```
 
-**Dashboard features:**
+- **RDF Loading** (`#loading`, default dataset `bowlogna`): throughput, retained heap, on-disk footprint, ingestion heap telemetry, and full observation table with status badges (`OOM`, `TIMEOUT`, `ERROR`, `MISSING`).
+- **SPARQL Features** (`#sparql`): 9 SPARQL feature axes, cross-engine validation statuses, sortable query details, inline query source viewer, and protocol reproducibility cards.
+- **Shareable URLs**: `?dataset=bsbm&engines=corese.next,corese.4.6.5,jena.6.2.0,rdf4j.6.1.0#loading` or `#sparql`.
 
-- **Scalability charts** — when a single dataset is selected, Performance charts switch to line charts (X = graph size in triples) showing how each engine scales
-- **W3C Conformance** — live pass/fail results fetched from [corese-stack.github.io/corese-w3c](https://corese-stack.github.io/corese-w3c/data/w3c-report.json) (All mode only)
-- **Shareable URLs** — state (dataset, engine filter, reference engine) is encoded in the URL (`?ds=dbpedia&engines=corese.4.6.5,jena.6.2.0&ref=corese.4.6.5`)
-- **Export CSV** — exports the currently filtered results directly from the browser (Full results section)
-- **Engine filter** — click engine cards to filter charts; click × on pills to remove from comparison
-- **SPARQL section** — per-engine latency cards, median per query, color-coded comparison table
-
----
-
-## How to Run
+## Quick Start
 
 ### Prerequisites
 
-- Java 21+
-- Conda (for Python orchestration)
+- **Java 25+**
+- **Conda** (`python-utils/environment.yml`)
+- **Node.js 20+** (only for dashboard unit/browser tests)
 
 ```bash
 conda env create -f python-utils/environment.yml
 conda activate benchmarkenv
 ```
 
----
-
-### A) Detect a Corese regression (corese.local)
-
-Main use case: compare your local branch against the stable release.
-
-#### 1. Build corese-core locally
-
-Inside the `corese-core` repository:
+### Common Runs
 
 ```bash
-./gradlew shadowJar
+# Compare local corese-core build against stable references (auto-detects ../corese-core/)
+python3 python-utils/workflow.py --engines corese.local,corese.4.6.5,jena.6.2.0,rdf4j.6.1.0 --datasets bowlogna
+
+# Fast single-format iteration during development (skips baseline reuse & site/data export)
+python3 python-utils/workflow.py --engines corese.local --datasets lubm --formats nt --mode load --quick
+make dev ENGINES=corese.local DATASETS=lubm FORMATS=nt MODE=load
+
+# Multiple versions of the same engine family (automatically split into minimal Gradle batches)
+python3 python-utils/workflow.py --engines corese.next,corese.4.6.5,corese.4.6.4,jena.6.2.0 --datasets dbpedia
+
+# Re-evaluate every engine without baseline reuse
+python3 python-utils/workflow.py --engines corese.4.6.5,jena.6.2.0,rdf4j.6.1.0 --datasets bowlogna,bsbm --reuse none
 ```
 
-#### 2. Run the benchmark
-
-If `corese-core` is in the sibling directory (`../corese-core/`), the JAR is detected automatically:
-
-```bash
-conda activate benchmarkenv
-cd corese-benchmark
-python python-utils/workflow.py --engines corese.local,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
-```
-
-If `corese-core` is elsewhere, use `--coreseLocalPath`:
-
-```bash
-python python-utils/workflow.py \
-  --engines corese.local,corese.4.6.5 \
-  --coreseLocalPath C:\path\to\corese-core
-```
-
-#### 3. Read the result
-
-Open `site/index.html`. The `corese.local` card shows:
-
-- `+X% improvement` (green)
-- `−X% regression` (red)
-
-relative to `corese.4.6.5` as the fixed reference (100/100).
-
----
-
-### B) Compare multiple engines
-
-```bash
-python python-utils/workflow.py --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
-```
-
-Default dataset: `dbpedia`. To change:
-
-```bash
-python python-utils/workflow.py --engines corese.4.6.5,jena.6.2.0 --dataset bowlogna
-```
-
----
-
-### C) Compare Corese versions
-
-One build per Corese version:
-
-```bash
-python python-utils/workflow.py --coreseVersions 4.6.5,4.6.3
-```
-
----
-
-### D) Compare Corese commits
-
-Clones, checks out, and compiles each commit from GitHub:
-
-```bash
-python python-utils/workflow.py --coreseCommits a17f3d6,b089a03
-```
-
----
-
-### E) Benchmark with SPARQL queries
-
-For datasets that have associated queries (Bowlogna, BSBM):
-
-```bash
-python python-utils/workflow.py --engines corese.local,corese.4.6.5 --dataset bowlogna
-```
-
-The **SPARQL Queries** section appears in the dashboard with:
-
-- Per-engine latency cards: avg, p50, p95, p99
-- Median time per query and per engine
-- Color-coded comparison table (green = best, orange = ×5–19, red = ×20+)
-- `—` indicates timeout or error
-
----
-
-### F) Resume mode
-
-Resume mode runs one engine × one dataset at a time and skips combinations whose output already contains a valid JSON report. Useful for long runs that may be interrupted:
-
-```bash
-python python-utils/workflow.py \
-  --engines corese.local,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
-  --datasets dbpedia,bowlogna,bsbm,lubm \
-  --resume
-```
-
-Partial or empty JSON files are automatically re-run (not skipped).
-
-### G) Baseline reference mode (< 5-min CI runs)
-
-To eliminate redundant re-computation of immutable Maven releases (Corese 4.6.5, Apache Jena 6.2.0, Eclipse RDF4J 5.3.2), benchmark measurements are frozen in `site/data/baseline.json`.
-
-During development, `workflow.py` automatically detects baseline-eligible engines and reuses their frozen scores, evaluating only the dynamic in-development engine (`corese.next` or `corese.local`):
-
-```bash
-# Evaluates ONLY corese.next, merging baseline engines in < 5 minutes
-python python-utils/workflow.py \
-  --engines corese.next,corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
-  --datasets dbpedia,bowlogna,lubm,bsbm
-
-# Force full re-run of all engines from scratch (bypassing baseline)
-python python-utils/workflow.py \
-  --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
-  --datasets dbpedia,bowlogna,lubm,bsbm \
-  --force-all-engines
-
-# Re-evaluate immutable engines and update site/data/baseline.json
-python python-utils/workflow.py \
-  --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2 \
-  --datasets dbpedia,bowlogna,lubm,bsbm \
-  --update-baseline
-```
-
-### Workflow options
+### Workflow Options
 
 | Option | Default | Description |
-| -------- | --------- | ------------- |
-| `--engines` | — | Comma-separated engine list (e.g. `corese.4.6.5,jena.6.2.0`) |
-| `--dataset` | `dbpedia` | Single dataset: `dbpedia`, `bowlogna`, `bsbm`, `lubm` |
-| `--datasets` | — | Multiple datasets in one run (e.g. `dbpedia,bowlogna`) |
-| `--scales` | `small,medium,large` | Scale tiers for synthetic datasets |
-| `--baseline` | `site/data/baseline.json` | Path to frozen reference baseline JSON |
-| `--force-all-engines` | off | Bypass baseline and force fresh execution of all engines |
-| `--update-baseline` | off | Update baseline.json with newly measured engine scores |
-| `--resume` | off | Skip already-completed engine × dataset pairs |
-| `--quick` | off | 1 repetition instead of 3 (faster, less accurate) |
-| `--query-timeout` | `30` | Per-query SPARQL timeout in seconds |
-| `--inference` | off | Enable RDFS inference for Corese engines |
-| `--coreseLocalPath` | auto | Path to corese-core project or JAR |
-| `--dataDir` | `./input` | Custom data directory |
+| --- | --- | --- |
+| `--engines` | required | Comma-separated engine IDs (supports multiple versions per family) |
+| `--datasets` | `dbpedia` | CSV subset of `dbpedia`, `bsbm`, `lubm`, `bowlogna`, `named-graphs` |
+| `--formats` | all canonical | CSV subset of `nt`, `nq`, `ttl`, `trig`, `rdf`, `jsonld` (aliases accepted) |
+| `--mode` | `all` | `all` (load + query), `load`, or `query` |
+| `--quick` | off | 1 repetition without warmup |
+| `--inference` | off | Enable OWL-RL inference for Corese drivers |
+| `--baseline` | `site/data/baseline.json` | Path to frozen immutable baseline JSON |
+| `--reuse` | `baseline` | `baseline` or `none` |
+| `--update-baseline` | off | Refresh immutable runs in baseline (requires full formats, `--mode all`, export enabled, no `--quick` / `--inference`) |
+| `--no-export` | off | Do not overwrite `site/data/` |
+| `--data-dir` | auto | Custom root directory containing `input/` and `out/` |
+| `--corese-local-path` | auto | Path to `corese-core` checkout or JAR for `corese.local` / `corese.next` |
 
----
+Run `make help` for predefined targets (`regression`, `compare`, `next`, `versions`, `corese-all`, `bowlogna`, `lubm`, `bsbm`, `all`, `dev`, `site`). `FORMATS` is unset by default (all canonical formats).
 
-### Run the Java harness directly
+### Direct Java Harness
 
 ```bash
-# Build
-./gradlew clean build -PcoreseVersion=4.6.5 -PjenaVersion=6.2.0 -Prdf4jVersion=5.3.2
+# Build for specific versions
+./gradlew clean build -PcoreseVersion=4.6.5 -PjenaVersion=6.2.0 -Prdf4jVersion=6.1.0
 
-# Run (without queries)
-./gradlew runBenchmark --args="input/dbpedia/unzip out/json/report.json corese.4.6.5,jena.6.2.0 dbpedia"
+# Run with optional --formats and --mode
+./gradlew runBenchmark --args="input/lubm/view_canonical out/json/report.json corese.4.6.5,jena.6.2.0 lubm input/queries/v1/catalogue.json --formats nt,ttl --mode load"
 
-# Run (with queries)
-./gradlew runBenchmark --args="input/dbpedia/unzip out/json/report.json corese.4.6.5 dbpedia queries.txt"
-
-# Run with custom query timeout (60s)
-./gradlew runBenchmark --args="input/dbpedia/unzip out/json/report.json corese.4.6.5 dbpedia queries.txt --query-timeout 60"
+# Convert N-Triples selectively
+./gradlew convertDatasets --args="input/lubm/view_canonical --formats=ttl,jsonld"
 ```
-
----
 
 ## Outputs
 
-Each run automatically generates:
-
 | File | Description |
-| ------ | ------------- |
-| `out/json/<timestamp>_<engines>.json` | Full report (loaded by the dashboard) |
-| `out/csv/<timestamp>_<engines>.csv` | Same data in CSV format (Excel, etc.) |
-| `site/data/benchmark-report.json` | Copy of the latest report (current dashboard) |
-| `site/data/benchmark-report.csv` | Copy of the latest CSV (download button) |
+| --- | --- |
+| `out/json/<timestamp>_report.json` | Combined run report |
+| `out/logs/<timestamp>.log` | Execution log |
+| `site/data/benchmark-report.json` | Exported dashboard report (unless `--no-export` or partial `--formats`) |
+| `site/data/benchmark-report.csv` | Exported CSV table matching `benchmark-report.json` |
 
----
+## Datasets & Engines
 
-## Measurement Protocol
+| Dataset | Content | Prepared inputs |
+| --- | --- | --- |
+| `bowlogna` | BowlognaBench department dump | `Department0.nt` |
+| `bsbm` | Berlin SPARQL Benchmark e-commerce synthetic graphs | medium (5k products) for loading; small (1k) for queries |
+| `dbpedia` | English DBpedia 3.5.1 persondata | `persondata_en.nt` |
+| `lubm` | Lehigh University Benchmark generated with UBA 1.7 | medium (10 universities) for loading; small (1) for queries |
+| `named-graphs` | 2-graph N-Quads partition derived from `lubm_small` | derived from `lubm` `small` |
 
-### Load benchmark
+| Engine | Default / Baseline Versions | Variants |
+| --- | --- | --- |
+| Corese | `4.6.5`, `4.6.4`, `corese.local`, `corese.next` | in-memory (`corese.next` requires JAR in `libs/`) |
+| Apache Jena | `6.2.0`, `6.1.0` | in-memory, `.tdb2` |
+| Eclipse RDF4J | `6.1.0`, `5.3.2` | in-memory, `.native`, `.lmdb` |
 
-For each file and each engine:
-
-1. **Warmup** — load → clear → GC (result discarded)
-2. **3 repetitions**:
-   - Forced GC + memory snapshot before
-   - Load file
-   - Forced GC + memory snapshot after
-   - Record time and memory delta
-3. **Keep the median** of the 3 repetitions
-
-### SPARQL benchmark
-
-For each query and each engine:
-
-1. **Warmup** — one execution discarded (primes JIT); logs result count with `WARN` if 0 results
-2. **3 repetitions** with per-execution timeout (default 30s, configurable via `--query-timeout`)
-3. Each rep runs in a **daemon thread** via `ExecutorService` — a stuck query is abandoned without blocking subsequent queries
-4. **Keep the median** of the 3 repetitions (`—` if all reps timed out)
-
-This protocol ensures reproducible results by eliminating JIT compilation bias and GC timing noise.
-
-**Note on `clear()`:** RDF4J performs a full repository reinitialisation between repetitions (rather than just `conn.clear()`) to release internal SAIL memory structures and avoid negative memory delta artefacts caused by delayed GC.
-
----
-
-## Metrics
-
-| Metric | Description |
-| -------- | ------------- |
-| `loadingTimeMs` | Median loading time over 3 repetitions (ms) |
-| `throughputTriplesPerSec` | Triples loaded per second |
-| `memoryDeltaMb` | Memory consumed by loading (after − before GC, MB) |
-| `cpuPercent` | JVM CPU usage during loading (via `OperatingSystemMXBean`) |
-| `repetitionsMs` | Raw values of the 3 repetitions (for transparency) |
-
----
-
-## Datasets
-
-### DBpedia sample
-
-5 files sampled from the [DBpedia 3.5.1 dump](https://downloads.dbpedia.org/3.5.1/en/):
-
-- `category_labels_en.nt`
-- `disambiguations_en.nt`
-- `homepages_en.nt`
-- `persondata_en.nt`
-- `specific_mappingbased_properties_en.nt`
+## Verification
 
 ```bash
-python python-utils/workflow.py --dataset dbpedia --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
+./gradlew test
+python3 -m unittest discover -s python-utils/tests -p "test_*.py" -v
+node --test site/tests/*.test.mjs
 ```
-
-### Bowlogna
-
-Synthetic dataset describing student/university relations. Includes associated **SPARQL queries** for latency benchmarking. Source: [DICE Research / HOBBIT](https://files.dice-research.org/projects/HOBBIT/benchmarks-data/datasets-dumps/bowlogna-dump.zip)
-
-Dashboard note: Bowlogna shows only the **SPARQL** section (no Performance/Load charts — the dataset is optimised for query benchmarking).
-
-| Scale | Departments | Triples (approx.) |
-| ------- | ------------- | ------------------- |
-| `small` | 1 | ~1.2 M |
-| `medium` | 5 | ~6 M |
-| `large` | 10 | ~12 M |
-
-```bash
-python python-utils/workflow.py --dataset bowlogna --scales small --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
-```
-
-```bash
-python python-utils/workflow.py --dataset bsbm --scales small,medium --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
-```
-
-### LUBM
-
-Lehigh University Benchmark — university domain with RDFS reasoning potential. Generated with [UBA 1.7](https://swat.cse.lehigh.edu/projects/lubm/).
-
-| Scale | Universities | Triples (approx.) |
-| ------- | ----------- | ------------------- |
-| `small` | 1 | ~100 K |
-| `medium` | 10 | ~1 M |
-| `large` | 100 | ~10 M |
-
-```bash
-python python-utils/workflow.py --dataset lubm --scales small --engines corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
-```
-
----
-
-## Engines
-
-| Engine | Default version | Notes |
-| -------- | ---------------- | ------- |
-| Corese | 4.6.5 | Use `corese.local` to benchmark a local branch |
-| Corese 5 (next) | local JAR | `corese.next` — uses the new `Repositories`/`RepositoryConnection` API. Requires a Corese 5 JAR in `libs/` and `--coreseLocalPath` or sibling `corese-core/`. |
-| Apache Jena | 6.2.0 | |
-| Eclipse RDF4J | 5.3.2 | Malformed IRIs are skipped with a WARN log (DBpedia `homepages_en.nt` contains ~300 invalid IPv4 URIs) |
-
----

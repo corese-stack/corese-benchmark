@@ -1,0 +1,13 @@
+# Q04: LUBM student-to-university chain
+# Primary feature: BGP_JOIN
+PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?student ?course ?teacher ?department ?university
+WHERE {
+    ?student rdf:type ub:GraduateStudent ;
+        ub:takesCourse ?course .
+    ?teacher ub:teacherOf ?course ;
+        ub:worksFor ?department .
+    ?department ub:subOrganizationOf ?university .
+}

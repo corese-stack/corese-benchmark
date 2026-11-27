@@ -1,0 +1,223 @@
+/* ==========================================================================
+   Top Bar Institutionnelle : 56px (confort et aération)
+   ========================================================================== */
+
+.topbar {
+	height: var(--topbar-h);
+	background: var(--bg);
+	border-bottom: 1px solid var(--border);
+	position: sticky;
+	top: 0;
+	z-index: 100;
+}
+
+.topbar__inner {
+	height: 100%;
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 0 28px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.brand {
+	display: flex;
+	align-items: center;
+	height: 36px;
+	gap: 6px;
+}
+
+.brand__logo {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	margin-right: 4px;
+	border-radius: 6px;
+	text-decoration: none;
+	transition: opacity 0.15s ease;
+}
+
+.brand__logo:hover {
+	opacity: 0.8;
+}
+
+.brand__logo-img {
+	width: 26px;
+	height: 26px;
+	display: block;
+}
+
+/* Racine Corese */
+.brand__root {
+	font-family: var(--font-brand);
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	color: var(--text);
+	text-decoration: none;
+	padding: 4px 6px;
+	line-height: 1;
+	border-radius: 4px;
+	transition: background-color 0.12s ease;
+}
+
+.brand__root:hover {
+	background: var(--bg-hover);
+}
+
+.brand__sep {
+	padding: 0 6px;
+	color: var(--text-muted);
+	font-size: 16px;
+	opacity: 0.4;
+	user-select: none;
+}
+
+/* ==========================================================================
+   Menu Déroulant Suite Corese sur l'outil actif (Benchmark ▾)
+   ========================================================================== */
+
+.menu {
+	position: relative;
+}
+
+.menu__trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 34px;
+	padding: 0 10px;
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	color: var(--text);
+	font-family: var(--font-sans);
+	cursor: pointer;
+	transition: background-color 0.12s ease;
+}
+
+.menu__trigger:hover {
+	background: var(--bg-hover);
+}
+
+.menu__label {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--text);
+	letter-spacing: -0.1px;
+}
+
+.menu__chevron {
+	color: var(--text-muted);
+	transition: transform 0.15s ease;
+}
+
+.menu__trigger[aria-expanded="true"] .menu__chevron {
+	transform: rotate(180deg);
+}
+
+.menu__list {
+	position: absolute;
+	top: calc(100% + 8px);
+	left: 0;
+	z-index: 10;
+	min-width: 200px;
+	margin: 0;
+	padding: 6px;
+	list-style: none;
+	background: var(--bg-menu);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: var(--shadow);
+}
+
+.menu__list[hidden] {
+	display: none;
+}
+
+.menu__item {
+	display: block;
+	height: 32px;
+	padding: 0 12px;
+	border-radius: 4px;
+	font-size: 13px;
+	line-height: 32px;
+	color: var(--text);
+	text-decoration: none;
+	transition: background-color 0.12s ease;
+}
+
+.menu__item:hover {
+	background: var(--bg-hover);
+}
+
+.menu__item.is-active {
+	font-weight: 600;
+	color: var(--accent);
+}
+
+.menu__divider {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--border);
+}
+
+/* ==========================================================================
+   Actions de la barre supérieure (GitHub, Thème)
+   ========================================================================== */
+
+.topbar__actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.topbar__action-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	background: none;
+	border: 0;
+	border-radius: 6px;
+	color: var(--text-muted);
+	cursor: pointer;
+	text-decoration: none;
+	transition:
+		background-color 0.12s ease,
+		color 0.12s ease;
+}
+
+.topbar__action-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+
+.theme-toggle__icon {
+	display: none;
+}
+
+.theme-toggle[data-theme-mode="system"] .theme-toggle__icon--system,
+.theme-toggle[data-theme-mode="light"] .theme-toggle__icon--light,
+.theme-toggle[data-theme-mode="dark"] .theme-toggle__icon--dark {
+	display: block;
+}
+
+:is(
+	.menu__trigger,
+	.menu__item,
+	.topbar__action-btn,
+	.brand__logo,
+	.engine-picker__btn,
+	.miller__confirm-btn,
+	.engine-chip__remove
+):focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 1px;
+}
+

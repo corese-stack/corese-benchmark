@@ -3,6 +3,8 @@ package fr.inria.corese.benchmark.telemetry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -12,12 +14,19 @@ class IngestionTelemetrySamplerTest {
     @Test
     void samplerRecordsInitialAndFinalPoints() throws Exception {
         AtomicLong triples = new AtomicLong(0);
-        try (IngestionTelemetrySampler sampler = new IngestionTelemetrySampler(20, triples::get)) {
+        CountDownLatch initialSamples = new CountDownLatch(4);
+        CountDownLatch updatedSamples = new CountDownLatch(3);
+        try (IngestionTelemetrySampler sampler = new IngestionTelemetrySampler(20, () -> {
+            long count = triples.get();
+            if (count == 0) initialSamples.countDown();
+            else updatedSamples.countDown();
+            return count;
+        })) {
             sampler.start();
 
-            Thread.sleep(60);
+            assertTrue(initialSamples.await(2, TimeUnit.SECONDS), "Initial samples were not recorded");
             triples.set(500);
-            Thread.sleep(60);
+            assertTrue(updatedSamples.await(2, TimeUnit.SECONDS), "Updated samples were not recorded");
 
             List<TelemetryPoint> points = sampler.stop(1000);
 
@@ -38,9 +47,13 @@ class IngestionTelemetrySamplerTest {
     @Test
     void samplerRecordsBufferedEnginesAccuratelyWithoutFabricatingData() throws Exception {
         // Simulates an engine that buffers everything until final commit (triples supplier returns 0 during load)
-        try (IngestionTelemetrySampler sampler = new IngestionTelemetrySampler(20, () -> 0L)) {
+        CountDownLatch samples = new CountDownLatch(3);
+        try (IngestionTelemetrySampler sampler = new IngestionTelemetrySampler(20, () -> {
+            samples.countDown();
+            return 0L;
+        })) {
             sampler.start();
-            Thread.sleep(80);
+            assertTrue(samples.await(2, TimeUnit.SECONDS), "Buffered samples were not recorded");
             List<TelemetryPoint> points = sampler.stop(10_000);
 
             assertTrue(points.size() >= 3);

@@ -1,0 +1,9 @@
+# Q07: BSBM bidirectional taxonomy reachability
+# Primary feature: PROPERTY_PATH
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?reachable
+WHERE {
+    <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/instances/ProductType1>
+        (rdfs:subClassOf | ^rdfs:subClassOf)+ ?reachable .
+}

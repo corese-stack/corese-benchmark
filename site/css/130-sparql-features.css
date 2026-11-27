@@ -1,0 +1,292 @@
+/* SPARQL features: inherits the scientific section and table system. */
+.sf-view { min-width: 0; }
+.sf-view h3 { margin: 0; font-size: 16px; }
+.sf-view .section-meta { line-height: 1.6; }
+.sf-chart { position: relative; height: 640px; min-width: 0; }
+.sf-scroll { overflow-x: auto; }
+.sf-view button { cursor: pointer; }
+.sf-view .data-table button {
+ font: inherit; color: inherit; border: 0; background: transparent; padding: 4px; text-align: left;
+}
+.sf-view .data-table th[aria-sort] button { text-decoration: underline; text-underline-offset: 4px; }
+.sf-view .data-table th[aria-sort="ascending"] button::after { content: " ↑"; }
+.sf-view .data-table th[aria-sort="descending"] button::after { content: " ↓"; }
+.sf-view .data-table th[scope="row"] { text-transform: none; }
+.sf-view tr[data-sf-query] { cursor: pointer; }
+.sf-view :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+ .sf-badge { display: inline-flex; align-items: center; border: 1px solid var(--status-muted-border); border-radius: 999px; padding: 3px 8px; font: 700 11px/1.25 var(--font-sans); white-space: nowrap; }
+.sf-badge--pass { color: var(--tag-active-text); background: var(--tag-active-bg); border-color: var(--tag-active-border); }
+.sf-badge--fail, .sf-badge--error { color: var(--status-fail-text); background: var(--status-fail-bg); border-color: var(--status-fail-border); }
+.sf-badge--timeout { color: var(--status-timeout-text); background: var(--status-timeout-bg); border-color: var(--status-timeout-border); }
+.sf-badge--other, .sf-badge--missing { color: var(--status-muted-text); background: var(--status-muted-bg); border-color: var(--status-muted-border); }
+.sf-badge--query { font-family: var(--font-mono); font-weight: 600; background: var(--bg-hover); color: var(--text); border-color: var(--border); }
+.sf-dialog-actions { display: flex; align-items: center; gap: 12px; }
+
+/* Action links inside source toolbars */
+.sf-action-link {
+ font-size: 0.8125rem;
+ font-weight: 500;
+ color: var(--focus);
+ text-decoration: underline;
+ text-underline-offset: 0.2em;
+ cursor: pointer;
+ border: none;
+ background: transparent;
+ padding: 0;
+ font-family: inherit;
+ transition: color 0.12s ease;
+}
+.sf-action-link:hover {
+ color: var(--accent);
+ text-decoration-thickness: 2px;
+}
+.sf-action-link:focus-visible {
+ outline: 2px solid var(--focus);
+ outline-offset: 2px;
+ border-radius: 2px;
+}
+
+/* Unified SPARQL source box component (used in modal and query catalog details) */
+.sf-source-box {
+ position: relative;
+ border: 1px solid var(--border);
+ border-radius: 6px;
+ overflow: hidden;
+ background: var(--bg-page);
+}
+.sf-source-toolbar {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ flex-wrap: wrap;
+ gap: 8px 16px;
+ padding: 8px 12px;
+ background: var(--bg-hover);
+ border-bottom: 1px solid var(--border);
+ font-size: 12px;
+}
+.sf-source-toolbar-meta {
+ display: flex;
+ align-items: center;
+ flex-wrap: wrap;
+ gap: 8px 12px;
+}
+.sf-source-box pre {
+ overflow: auto;
+ padding: 12px 14px;
+ background: var(--bg-page);
+ font: 12px/1.65 var(--font-mono);
+ tab-size: 2;
+ margin: 0;
+ max-height: 420px;
+}
+.sf-token-comment { color: var(--text-muted); font-style: italic; }
+.sf-token-keyword { color: var(--accent); font-weight: 700; }
+.sf-token-variable { color: var(--text); font-weight: 600; }
+.sf-token-string { color: var(--tag-active-text); }
+.sf-token-iri { color: var(--accent); }
+
+.sf-view p { margin-block: 0 12px; line-height: 1.6; }
+.sf-view p:last-child { margin-bottom: 0; }
+.sf-view .sf-protocol { background: var(--bg); border-color: var(--border); color: var(--text); }
+.sf-protocol .protocol-title { color: var(--text); }
+.sf-protocol .protocol-body { background: var(--bg); border-color: var(--border); }
+.sf-view .section-header { flex-wrap: wrap; gap: 8px 20px; }
+.sf-view .section-header > * { min-width: 0; }
+.sf-view .data-table .engine-glyph { margin-right: 6px; }
+
+/* Responsive dataset grid: uniform cards in clean responsive grid */
+.sf-dataset-grid {
+ display: grid;
+ grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+ gap: 16px;
+ margin-top: 10px;
+}
+.sf-dataset-card {
+ border: 1px solid var(--border);
+ border-radius: 6px;
+ padding: 14px 16px;
+ background: var(--bg-page);
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+ min-width: 0;
+ box-sizing: border-box;
+ scroll-margin-top: 80px;
+ --jump-ring: transparent;
+ --jump-glow: transparent;
+ box-shadow: 0 0 0 2px var(--jump-ring), 0 0 14px 3px var(--jump-glow);
+ transition: box-shadow 0.6s ease-out, border-color 0.2s ease;
+}
+.sf-dataset-card:focus-visible {
+ outline: 2px solid var(--focus);
+ outline-offset: 2px;
+}
+.sf-dataset-card-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: flex-start;
+ gap: 8px;
+}
+.sf-dataset-card-title {
+ font-size: 13px;
+ font-weight: 650;
+ color: var(--text);
+ margin: 0;
+}
+.sf-dataset-card-facts {
+ display: grid;
+ grid-template-columns: minmax(75px, auto) minmax(0, 1fr);
+ gap: 4px 10px;
+ margin: 0;
+ font-size: 12px;
+}
+.sf-dataset-card-facts dt {
+ color: var(--text-muted);
+ font-weight: 500;
+ white-space: nowrap;
+}
+.sf-dataset-card-facts dd {
+ margin: 0;
+ overflow-wrap: anywhere;
+ color: var(--text);
+ min-width: 0;
+}
+.sf-dataset-card-footer {
+ display: flex;
+ flex-wrap: wrap;
+ align-items: center;
+ justify-content: flex-end;
+ gap: 8px;
+ margin-top: auto;
+ padding-top: 8px;
+ border-top: 1px dashed var(--border);
+ font-size: 12px;
+}
+.sf-dataset-links {
+ display: inline-flex;
+ align-items: center;
+ gap: 10px;
+}
+
+/* 15 Catalogue queries catalog list */
+.sf-queries-catalog {
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+ margin-top: 10px;
+}
+.sf-query-item {
+ border: 1px solid var(--border);
+ border-radius: 6px;
+ background: var(--bg-page);
+ overflow: hidden;
+ scroll-margin-top: 80px;
+ --jump-ring: transparent;
+ --jump-glow: transparent;
+ box-shadow: 0 0 0 2px var(--jump-ring), 0 0 14px 3px var(--jump-glow);
+ transition: box-shadow 0.6s ease-out, border-color 0.2s ease;
+}
+
+/* Jump selection highlight: smooth fade-in and gentle fade-out glow */
+.sf-query-item.is-jump-highlighted,
+.sf-dataset-card.is-jump-highlighted,
+tr[data-sf-query].is-jump-highlighted {
+ --jump-ring: var(--focus, var(--accent));
+ --jump-glow: color-mix(in srgb, var(--focus, var(--accent)) 25%, transparent);
+ border-color: var(--focus, var(--accent));
+ transition-duration: 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+ .sf-query-item,
+ .sf-dataset-card,
+ tr[data-sf-query] {
+  transition: none;
+ }
+}
+.sf-query-summary {
+ display: flex;
+ align-items: center;
+ flex-wrap: wrap;
+ gap: 6px 12px;
+ padding: 10px 14px;
+ cursor: pointer;
+ list-style: none;
+ user-select: none;
+ font-size: 13px;
+ background: var(--bg-page);
+}
+.sf-query-summary::-webkit-details-marker { display: none; }
+.sf-query-summary::marker { content: ""; }
+.sf-query-summary:hover {
+ background: var(--bg-hover);
+}
+.sf-query-summary:focus-visible {
+ outline: 2px solid var(--focus);
+ outline-offset: -2px;
+}
+.sf-query-summary-header {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+}
+.sf-query-desc {
+ flex: 1 1 280px;
+ min-width: 0;
+ color: var(--text-muted);
+ font-size: 0.8125rem;
+ overflow-wrap: anywhere;
+}
+.sf-query-body {
+ padding: 12px 14px;
+ border-top: 1px solid var(--border);
+ background: var(--bg);
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+}
+.sf-query-facts {
+ display: flex;
+ flex-wrap: wrap;
+ align-items: center;
+ gap: 10px 16px;
+ font-size: 12px;
+}
+.sf-jump-dataset-btn {
+ display: inline-flex;
+ align-items: center;
+ gap: 4px;
+ padding: 2px 7px;
+ border-radius: 4px;
+ border: 1px solid var(--border);
+ background: var(--bg-card);
+ color: var(--text);
+ font-size: 11px;
+ font-family: inherit;
+ cursor: pointer;
+ text-decoration: none;
+ transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.sf-jump-dataset-btn:hover {
+ background: var(--bg-hover);
+ border-color: var(--focus, var(--accent));
+ color: var(--focus, var(--accent));
+}
+.sf-jump-dataset-btn:focus-visible {
+ outline: 2px solid var(--focus);
+ outline-offset: 1px;
+}
+
+@media (max-width: 600px) {
+ .sf-view .section-body { padding: 16px; }
+ .sf-chart { height: 720px; }
+ .sf-dataset-card { flex: 1 1 100%; }
+ .sf-dataset-card-facts { grid-template-columns: 65px 1fr; }
+}
+
+.sf-view .data-table .table-pin {
+ padding: 0;
+ text-align: right;
+ font-variant-numeric: tabular-nums;
+}

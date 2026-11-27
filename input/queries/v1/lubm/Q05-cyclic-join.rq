@@ -1,0 +1,12 @@
+# Q05: LUBM student-advisor-course triangle
+# Primary feature: BGP_JOIN
+PREFIX ub: <http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?student ?advisor ?course
+WHERE {
+    ?student rdf:type ub:GraduateStudent ;
+        ub:advisor ?advisor ;
+        ub:takesCourse ?course .
+    ?advisor ub:teacherOf ?course .
+}

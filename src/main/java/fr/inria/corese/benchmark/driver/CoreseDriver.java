@@ -1,6 +1,7 @@
 package fr.inria.corese.benchmark.driver;
 
 import fr.inria.corese.benchmark.metrics.MetricsCollector;
+import fr.inria.corese.benchmark.validation.BindingTerm;
 import fr.inria.corese.benchmark.validation.SparqlResultHasher;
 import fr.inria.corese.core.Graph;
 import fr.inria.corese.core.kgram.api.core.Node;
@@ -10,9 +11,12 @@ import fr.inria.corese.core.load.Load;
 import fr.inria.corese.core.api.Loader;
 import fr.inria.corese.core.query.QueryProcess;
 import fr.inria.corese.core.rule.RuleEngine;
+import fr.inria.corese.core.sparql.api.IDatatype;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * {@link TripleStoreDriver} implementation for Corese 4.x using the classic
@@ -59,6 +63,9 @@ public class CoreseDriver implements TripleStoreDriver {
             case NQUADS   -> Loader.format.NQUADS_FORMAT;
             case TURTLE   -> Loader.format.TURTLE_FORMAT;
             case TRIG     -> Loader.format.TRIG_FORMAT;
+            case RDFXML   -> Loader.format.RDFXML_FORMAT;
+            case JSONLD   -> Loader.format.JSONLD_FORMAT;
+            case RDFA     -> Loader.format.RDFA_FORMAT;
         };
         Load loader = Load.create(graph);
         loader.parse(filePath, coreseFormat);
@@ -75,55 +82,106 @@ public class CoreseDriver implements TripleStoreDriver {
     @Override
     public long query(String sparql) throws Exception {
         QueryProcess exec = QueryProcess.create(graph);
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
         exec.query(sparql);
-        return System.currentTimeMillis() - start;
+        return (System.nanoTime() - start) / 1_000_000L;
     }
 
     /**
      * Executes a SPARQL query and returns metrics.
      * Corese 4.x {@code QueryProcess.query()} materialises all results eagerly,
      * so TTFR equals total execution time.
+     * Validation hash computation is performed separately in {@link #computeResultHash(String)}
+     * to eliminate cryptographic hashing distortion from latency measurements.
      */
     @Override
     public QueryMetrics queryWithMetrics(String sparql) throws Exception {
         long heapBefore = MetricsCollector.usedHeapBytes();
         QueryProcess exec = QueryProcess.create(graph);
-        long start = System.currentTimeMillis();
-        var res = exec.query(sparql);
-        long total = System.currentTimeMillis() - start;
+        long startNs = System.nanoTime();
+        Mappings maps = exec.query(sparql);
+        long totalNs = System.nanoTime() - startNs;
         long count = -1L;
-        String hash = "";
 
-        if (res instanceof Mappings maps) {
-            count = maps.size();
-            SparqlResultHasher hasher = new SparqlResultHasher();
-            List<String> varNames = new ArrayList<>();
-            for (Node varNode : maps.getSelect()) {
-                varNames.add(varNode.getLabel());
-            }
-            java.util.Collections.sort(varNames);
-            for (Mapping m : maps) {
-                List<String> row = new ArrayList<>(varNames.size());
-                for (String var : varNames) {
-                    Node val = m.getNode(var);
-                    row.add(val != null ? val.getLabel() : null);
-                }
-                hasher.addRow(row);
-            }
-            hash = hasher.computeHash();
+        if (maps != null) {
+            count = maps.getGraph() != null ? maps.getGraph().size() : maps.size();
         }
-        return new QueryMetrics(total, total, count, MetricsCollector.usedHeapBytes() - heapBefore, hash);
+
+        double totalMs = totalNs / 1_000_000.0;
+        return new QueryMetrics(totalMs, totalMs, count, MetricsCollector.usedHeapBytes() - heapBefore);
+    }
+
+    @Override
+    public ValidationResult validateResult(String sparql) throws Exception {
+        QueryProcess exec = QueryProcess.create(graph);
+        Object queryResult = exec.query(sparql);
+        if (queryResult instanceof Mappings maps) {
+            List<String> sortedVarNames = maps.getSelect().stream()
+                    .map(Node::getLabel)
+                    .map(CoreseDriver::stripVariablePrefix)
+                    .sorted()
+                    .toList();
+            SparqlResultHasher hasher = new SparqlResultHasher(sortedVarNames, SparqlResultHasher.ResultOrder.MULTISET);
+            for (Mapping m : maps) {
+                Map<String, BindingTerm> row = new HashMap<>();
+                for (Node varNode : maps.getSelect()) {
+                    String rawName = varNode.getLabel();
+                    String cleanName = stripVariablePrefix(rawName);
+                    Node val = m.getNode(rawName);
+                    row.put(cleanName, extractCoreseBinding(val));
+                }
+                hasher.addTypedRow(row);
+            }
+            return new ValidationResult(hasher.computeHash(), hasher.hasBlankNodes());
+        }
+        return ValidationResult.EMPTY;
+    }
+
+    private static String stripVariablePrefix(String name) {
+        if (name == null) return null;
+        if (name.startsWith("?") || name.startsWith("$")) {
+            return name.substring(1);
+        }
+        return name;
+    }
+
+    private static BindingTerm extractCoreseBinding(Node val) {
+        if (val == null) {
+            return BindingTerm.Unbound.INSTANCE;
+        }
+        if (val.isBlank()) {
+            return BindingTerm.fromBlank(val.getLabel());
+        }
+        IDatatype dtVal = val.getDatatypeValue();
+        if (dtVal != null) {
+            if (dtVal.isURI()) {
+                return BindingTerm.fromIri(dtVal.getLabel());
+            }
+            if (dtVal.isBlank()) {
+                return BindingTerm.fromBlank(dtVal.getLabel());
+            }
+            if (dtVal.isLiteral()) {
+                String lang = dtVal.getLang();
+                String dt = dtVal.getDatatypeURI();
+                return BindingTerm.fromLiteral(dtVal.getLabel(), lang, dt);
+            }
+        }
+        return BindingTerm.fromLiteral(val.getLabel(), null, null);
+    }
+
+    @Override
+    public String computeResultHash(String sparql) throws Exception {
+        return validateResult(sparql).hash();
     }
 
     /** Executes a SPARQL query and returns {@code [timeMs, resultCount]}. */
     @Override
     public long[] queryWithCount(String sparql) throws Exception {
         QueryProcess exec = QueryProcess.create(graph);
-        long start = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         var maps = exec.query(sparql);
-        long elapsed = System.currentTimeMillis() - start;
-        return new long[]{ elapsed, maps != null ? maps.size() : -1L };
+        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000L;
+        return new long[]{ elapsedMs, maps instanceof Mappings m ? m.size() : -1L };
     }
 
     /** @return number of triples in the graph */
@@ -151,7 +209,7 @@ public class CoreseDriver implements TripleStoreDriver {
     }
 
 
-    private void applyInference() throws Exception {
+    private void applyInference() throws fr.inria.corese.core.sparql.exceptions.EngineException {
         if (inference) {
             RuleEngine re = RuleEngine.create(graph);
             re.setProfile(RuleEngine.OWL_RL);

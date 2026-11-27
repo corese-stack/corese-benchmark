@@ -1,0 +1,273 @@
+/* ==========================================================================
+   Unified Focus & Dimming Subsystem (Single Source of Truth FocusStore)
+   ========================================================================== */
+
+/* Base transition for table rows: snappy 100ms fade */
+tbody tr[data-engine-key] {
+	transition:
+		opacity 100ms ease-out,
+		background-color 100ms ease-out;
+}
+
+/* Unhighlighted chips when an engine focus is active */
+html[data-highlighted-engine] .engine-chip {
+	opacity: 0.45;
+	transition:
+		opacity 100ms ease-out,
+		border-color 100ms ease-out,
+		box-shadow 100ms ease-out;
+}
+
+/* Active highlighted chip (matches effective focus) */
+html[data-highlighted-engine] .engine-chip.is-highlighted {
+	opacity: 1;
+	border-color: var(--focus);
+	background: var(--bg);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+	transition:
+		opacity 100ms ease-out,
+		border-color 100ms ease-out,
+		box-shadow 100ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	tbody tr[data-engine-key],
+	html[data-highlighted-engine] .engine-chip,
+	.engine-chip {
+		transition: none;
+	}
+}
+
+/* Chip in pinned state */
+.engine-chip.is-pinned,
+html[data-highlighted-engine] .engine-chip.is-pinned {
+	border-color: var(--focus);
+	background: var(--bg);
+	box-shadow: 0 0 0 1px var(--focus);
+}
+
+/* Dimming on table rows when ANY focus is active (engine OR measure) */
+tbody.has-focus tr[data-engine-key] {
+	opacity: 0.35;
+}
+
+/* Highlighted rows that match the effective focus */
+tbody.has-focus tr[data-engine-key].is-row-highlighted {
+	opacity: 1;
+}
+
+/* Accent border on pinned row */
+tbody.has-focus tr[data-engine-key].is-row-pinned td:first-child,
+tbody.has-focus tr[data-sf-query].is-row-pinned th:first-child {
+	border-left: 3px solid var(--focus);
+}
+
+/* Table row and cell states across focus modes */
+tbody.has-focus tr[data-sf-query] {
+	opacity: 0.45;
+	transition: opacity 120ms ease;
+}
+
+tbody.has-focus tr[data-sf-query].is-row-highlighted {
+	opacity: 1;
+	background-color: var(--bg-hover);
+}
+
+tbody.has-focus tr[data-sf-query].is-row-related {
+	opacity: 0.9;
+	background-color: rgba(0, 102, 204, 0.04);
+}
+
+tbody tr[data-sf-query] {
+	cursor: pointer;
+	transition: background-color 100ms ease;
+}
+
+tbody tr[data-sf-query]:hover {
+	background-color: var(--bg-hover);
+}
+
+/* Individual latency result cells */
+td[data-engine-key] {
+	cursor: pointer;
+	transition: background-color 100ms ease, box-shadow 100ms ease, opacity 100ms ease;
+}
+
+tbody.has-focus tr[data-sf-query] td[data-engine-key].is-cell-selected,
+td[data-engine-key].is-cell-selected {
+	background-color: var(--bg-hover);
+	outline: 2px solid var(--focus);
+	outline-offset: -2px;
+}
+
+td[data-engine-key].is-cell-related {
+	background-color: rgba(0, 102, 204, 0.06);
+}
+
+.sf-query-link-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin-left: 6px;
+	padding: 1px 6px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--focus);
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+	text-decoration: none;
+}
+
+.sf-query-link-btn:hover {
+	background-color: var(--focus);
+	border-color: var(--focus);
+	color: #ffffff;
+}
+
+.sf-query-link-btn:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 1px;
+}
+
+tr[data-measure-key] {
+	cursor: pointer;
+	scroll-margin-top: 80px;
+}
+
+tr.group-separator td {
+	border-top: 2px solid var(--border);
+}
+
+.engine-chip:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.engine-chip:hover {
+	border-color: var(--text-muted);
+}
+
+.engine-chip__glyph {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+}
+
+.engine-glyph {
+	display: block;
+}
+
+.engine-chip__name {
+	font-weight: 600;
+}
+
+.engine-chip__version {
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+}
+
+.engine-chip__storage {
+	font-size: 10px;
+	font-weight: 600;
+	font-family: var(--font-mono);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 1px 4px;
+	border-radius: 3px;
+	line-height: 1.2;
+}
+
+.engine-chip__storage--mem {
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	color: var(--text-muted);
+}
+
+.engine-chip__storage--disk {
+	background: var(--bg-hover);
+	border: 1px solid var(--border);
+	color: var(--text);
+	font-weight: 700;
+}
+
+.engine-chip__remove {
+	background: none;
+	border: 0;
+	padding: 0;
+	margin-left: 2px;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: 11px;
+	line-height: 1;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	transition:
+		color 0.12s ease,
+		background-color 0.12s ease;
+}
+
+.engine-chip__remove:hover {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+.engine-chip__remove[disabled],
+.engine-chip__remove[aria-disabled="true"] {
+	opacity: 0.35;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+.miller__glyph {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+}
+
+/* Bouton [+] Add Engine */
+.engine-picker {
+	position: relative;
+	flex-shrink: 0;
+	pointer-events: auto;
+}
+
+.engine-picker__btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 10px;
+	border-radius: 6px;
+	border: 1px dashed var(--border);
+	background: transparent;
+	color: var(--text-muted);
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background-color 0.12s ease,
+		border-color 0.12s ease,
+		color 0.12s ease;
+}
+
+.engine-picker__btn:hover {
+	border-style: solid;
+	border-color: var(--focus);
+	color: var(--focus);
+	background: var(--bg-hover);
+}
+

@@ -6,42 +6,44 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 0' # Weekly, Sunday 02:00 UTC
+    - cron: '0 2 * * 6' # Weekly, Saturday 02:00 UTC
   repository_dispatch:
-    # client_payload: { corese_commit, release_tag, datasets, scales }
+    # client_payload: { corese_commit, release_tag, datasets }
     types: [corese-release, benchmark-trigger]
   workflow_dispatch:
     inputs:
       datasets:
-        description: 'Datasets (comma-separated: dbpedia,bowlogna,bsbm,lubm)'
+        description: 'Datasets (comma-separated: dbpedia,bowlogna,bsbm,lubm,named-graphs)'
         required: false
-        default: 'dbpedia,bowlogna,lubm'
+        default: 'dbpedia,bowlogna,lubm,bsbm,named-graphs'
       engines:
-        description: 'Comma-separated engines (e.g. corese.4.6.5,jena.6.2.0)'
+        description: 'Comma-separated engines (e.g. corese.next,corese.4.6.5,jena.6.2.0)'
         required: false
-        default: 'corese.4.6.5,jena.6.2.0,rdf4j.5.3.2'
-      scales:
-        description: 'Dataset scales (comma-separated)'
-        required: false
-        default: 'small,medium,large'
+        default: 'corese.next,corese.4.6.5,corese.4.6.4,jena.6.2.0,jena.6.2.0.tdb2,jena.6.1.0,jena.6.1.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb,rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb'
       corese_commit:
-        description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = ignore.'
+        description: 'Corese commit to benchmark (e.g. b8dbc158). Empty = feature/corese-next HEAD.'
         required: false
         default: ''
+        type: string
       inference:
-        description: 'Enable RDFS inference (Corese only)'
+        description: 'Enable OWL-RL inference (Corese only)'
         required: false
         default: false
         type: boolean
-      cached_engines:
-        description: 'Engines whose results are read from cache (e.g. jena.6.2.0,rdf4j.5.3.2). Empty = re-run all.'
-        required: false
+      mode:
+        description: 'Benchmark mode'
+        type: choice
+        options: [all, load, query]
+        default: all
+      formats:
+        description: 'Formats CSV; empty means all'
+        type: string
         default: ''
-      force_all_engines:
-        description: 'Ignore baseline and force fresh execution of all engines'
-        required: false
-        default: false
-        type: boolean
+      reuse:
+        description: 'Reuse baseline measurements'
+        type: choice
+        options: [baseline, none]
+        default: baseline
       update_baseline:
         description: 'Update site/data/baseline.json with newly measured immutable engine runs'
         required: false
@@ -52,23 +54,19 @@ on:
         required: false
         default: false
         type: boolean
-      query_timeout:
-        description: 'Per-query SPARQL timeout in seconds (empty = harness default)'
-        required: false
-        default: ''
 
 permissions:
   contents: read
 
 # Distinct namespace prevents PR branches (e.g. named 'main' in a fork) from colliding with production
 concurrency:
-  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'production' }}
+  group: benchmark-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'self-hosted' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  DEFAULT_CORESE_NEXT_COMMIT: 1215ab78adbfad7f0edc20e212446780a23182c1
-  BASE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.5.3.2
-  ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm
+  BASE_ENGINES: corese.next,corese.4.6.5,corese.4.6.4,jena.6.2.0,jena.6.2.0.tdb2,jena.6.1.0,jena.6.1.0.tdb2,rdf4j.6.1.0,rdf4j.6.1.0.native,rdf4j.6.1.0.lmdb,rdf4j.5.3.2,rdf4j.5.3.2.native,rdf4j.5.3.2.lmdb
+  SMOKE_ENGINES: corese.4.6.5,jena.6.2.0,rdf4j.6.1.0
+  ALL_DATASETS: dbpedia,bowlogna,lubm,bsbm,named-graphs
 
 jobs:
 
@@ -82,11 +80,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 21
+      - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
+          cache: 'gradle'
 
       - name: Set up conda
         uses: conda-incubator/setup-miniconda@v3
@@ -98,15 +97,18 @@ jobs:
       - name: Run Python unit tests
         shell: bash -l {0}
         run: |
-          python -m unittest discover -s python-utils -p "test_*.py" -v
+          python -m unittest discover -s python-utils/tests -p "test_*.py" -v
 
-      - name: Run smoke test (dbpedia small only)
+      - name: Run SPARQL feature tests
+        run: node --test site/tests/*.test.mjs
+
+      - name: Run smoke test (dbpedia canonical)
         shell: bash -l {0}
         run: |
           python python-utils/workflow.py \
-            --engines="$BASE_ENGINES" \
+            --engines="$SMOKE_ENGINES" \
             --datasets="dbpedia" \
-            --scales="small" \
+            --reuse=none \
             --quick
 
       - name: Check site/data output
@@ -120,14 +122,20 @@ jobs:
     outputs:
       engines: ${{ steps.params.outputs.engines }}
       datasets: ${{ steps.params.outputs.datasets }}
-      scales: ${{ steps.params.outputs.scales }}
       trigger: ${{ steps.params.outputs.trigger }}
+      publishable: ${{ steps.params.outputs.publishable }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           clean: false
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
 
       # Event-controlled values go through env and are strictly validated
       - name: Resolve parameters
@@ -137,54 +145,51 @@ jobs:
           DISPATCH_ACTION: ${{ github.event.action }}
           IN_DATASETS: ${{ github.event.inputs.datasets }}
           IN_ENGINES: ${{ github.event.inputs.engines }}
-          IN_SCALES: ${{ github.event.inputs.scales }}
           IN_COMMIT: ${{ github.event.inputs.corese_commit }}
           IN_INFERENCE: ${{ github.event.inputs.inference }}
-          IN_CACHED: ${{ github.event.inputs.cached_engines }}
-          IN_FORCE: ${{ github.event.inputs.force_all_engines }}
+          IN_MODE: ${{ github.event.inputs.mode }}
+          IN_FORMATS: ${{ github.event.inputs.formats }}
+          IN_REUSE: ${{ github.event.inputs.reuse }}
           IN_UPDATE_BASELINE: ${{ github.event.inputs.update_baseline }}
           IN_QUICK: ${{ github.event.inputs.quick }}
-          IN_TIMEOUT: ${{ github.event.inputs.query_timeout }}
           PL_COMMIT: ${{ github.event.client_payload.corese_commit }}
           PL_TAG: ${{ github.event.client_payload.release_tag }}
           PL_DATASETS: ${{ github.event.client_payload.datasets }}
-          PL_SCALES: ${{ github.event.client_payload.scales }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
           check_list()   { [[ "$2" =~ ^[A-Za-z0-9._,-]*$ ]] || fail "Invalid $1: '$2'"; }
           check_commit() { [[ -z "$1" || "$1" =~ ^[0-9a-fA-F]{7,40}$ ]] || fail "Invalid corese_commit: '$1'"; }
 
-          ENGINES="corese.next,$BASE_ENGINES"
+          ENGINES="$BASE_ENGINES"
           DATASETS="$ALL_DATASETS"
-          SCALES="small"
-          COMMIT=""; INFERENCE=false; CACHED=""; FORCE=false
-          UPDATE_BASELINE=false; QUICK=false; TIMEOUT=""
+          COMMIT=""; INFERENCE=false; MODE=all; FORMATS=""; REUSE=baseline
+          UPDATE_BASELINE=false; QUICK=false
           TRIGGER="$EVENT"
 
           case "$EVENT" in
             push)
               ;;
             schedule)
-              SCALES="small,medium,large"
               ;;
             repository_dispatch)
               TRIGGER="repository_dispatch:$DISPATCH_ACTION"
               [ -n "$PL_DATASETS" ] && DATASETS="$PL_DATASETS"
-              [ -n "$PL_SCALES" ] && SCALES="$PL_SCALES"
               COMMIT="$PL_COMMIT"
               if [ -n "$PL_TAG" ]; then
                 [[ "$PL_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.]+)?$ ]] \
                   || fail "Invalid release_tag: '$PL_TAG'"
-                ENGINES="corese.next,corese.${PL_TAG#v},jena.6.2.0,rdf4j.5.3.2"
+                if ! [[ ",$BASE_ENGINES," == *,corese.${PL_TAG#v},* ]]; then
+                  ENGINES="$BASE_ENGINES,corese.${PL_TAG#v}"
+                fi
                 TRIGGER="$TRIGGER ($PL_TAG)"
               fi
               ;;
             workflow_dispatch)
-              DATASETS="$IN_DATASETS"; ENGINES="$IN_ENGINES"; SCALES="$IN_SCALES"
-              COMMIT="$IN_COMMIT"; INFERENCE="$IN_INFERENCE"; CACHED="$IN_CACHED"
-              FORCE="$IN_FORCE"; UPDATE_BASELINE="$IN_UPDATE_BASELINE"
-              QUICK="$IN_QUICK"; TIMEOUT="$IN_TIMEOUT"
+              DATASETS="$IN_DATASETS"; ENGINES="$IN_ENGINES"
+              COMMIT="$IN_COMMIT"; INFERENCE="$IN_INFERENCE"; FORMATS="$IN_FORMATS"
+              MODE="$IN_MODE"; REUSE="$IN_REUSE"; UPDATE_BASELINE="$IN_UPDATE_BASELINE"
+              QUICK="$IN_QUICK"
               ;;
             *)
               fail "Unsupported event $EVENT"
@@ -193,26 +198,40 @@ jobs:
 
           check_list datasets "$DATASETS"
           check_list engines "$ENGINES"
-          check_list scales "$SCALES"
-          check_list cached_engines "$CACHED"
+          [[ "$FORMATS" =~ ^[A-Za-z0-9.,/-]*$ ]] || fail "Invalid formats"
+          [[ "$MODE" =~ ^(all|load|query)$ ]] || fail "Invalid mode"
+          [[ "$REUSE" =~ ^(baseline|none)$ ]] || fail "Invalid reuse"
           check_commit "$COMMIT"
-          [[ -z "$TIMEOUT" || "$TIMEOUT" =~ ^[0-9]+$ ]] || fail "Invalid query_timeout: '$TIMEOUT'"
-          [ -n "$DATASETS" ] && [ -n "$ENGINES" ] && [ -n "$SCALES" ] \
-            || fail "datasets, engines and scales must not be empty"
+          [ -n "$DATASETS" ] && [ -n "$ENGINES" ] \
+            || fail "datasets and engines must not be empty"
 
-          EXTRA=()
-          [ -n "$COMMIT" ]                 && EXTRA+=("--coreseCommits=$COMMIT")
+          PUBLISHABLE=false
+          if [[ "$MODE" == all && "$QUICK" == false && "$INFERENCE" == false && -z "$FORMATS" ]]; then
+            PUBLISHABLE=true
+            IFS=',' read -ra REQUIRED_DATASETS <<< "$ALL_DATASETS"
+            for dataset in "${REQUIRED_DATASETS[@]}"; do
+              [[ ",$DATASETS," == *,$dataset,* ]] || PUBLISHABLE=false
+            done
+            IFS=',' read -ra REQUIRED_ENGINES <<< "$BASE_ENGINES"
+            for engine in "${REQUIRED_ENGINES[@]}"; do
+              [[ ",$ENGINES," == *,$engine,* ]] || PUBLISHABLE=false
+            done
+          fi
+
+          EXTRA=("--mode=$MODE" "--reuse=$REUSE")
+          [ -z "$FORMATS" ] || EXTRA+=("--formats=$FORMATS")
+          if [ -n "$COMMIT" ] && ! [[ ",$ENGINES," == *,corese.next,* ]]; then
+            fail "corese_commit requires corese.next in engines"
+          fi
           [ "$INFERENCE" = "true" ]        && EXTRA+=("--inference")
-          [ -n "$CACHED" ]                 && EXTRA+=("--cached-engines=$CACHED")
-          [ "$FORCE" = "true" ]            && EXTRA+=("--force-all-engines")
           [ "$UPDATE_BASELINE" = "true" ]  && EXTRA+=("--update-baseline")
           [ "$QUICK" = "true" ]            && EXTRA+=("--quick")
-          [ -n "$TIMEOUT" ]                && EXTRA+=("--query-timeout=$TIMEOUT")
 
           {
+            echo "publishable=$PUBLISHABLE"
             echo "engines=$ENGINES"
             echo "datasets=$DATASETS"
-            echo "scales=$SCALES"
+            echo "commit=$COMMIT"
             echo "trigger=$TRIGGER"
             echo "extra_args=${EXTRA[*]:-}"
           } >> "$GITHUB_OUTPUT"
@@ -222,7 +241,6 @@ jobs:
             echo "- **Trigger:** $TRIGGER"
             echo "- **Engines:** $ENGINES"
             echo "- **Datasets:** $DATASETS"
-            echo "- **Scales:** $SCALES"
             echo "- **Extra args:** ${EXTRA[*]:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -230,7 +248,7 @@ jobs:
         run: |
           find out/ -name "*.json" -mtime +30 -delete 2>/dev/null || true
           rm -rf build/
-          rm -f libs/corese-core-local.jar
+          rm -f libs/*.jar
 
       - name: Locate conda
         run: |
@@ -246,22 +264,30 @@ jobs:
       - name: Build corese.next JAR
         if: contains(steps.params.outputs.engines, 'corese.next')
         env:
-          CORESE_COMMIT: ${{ env.DEFAULT_CORESE_NEXT_COMMIT }}
+          CORESE_COMMIT: ${{ steps.params.outputs.commit }}
         run: |
-          CORESE_DIR="$HOME/corese-next-build"
+          CORESE_DIR="$RUNNER_TEMP/corese-next-build"
           if [ ! -d "$CORESE_DIR/.git" ]; then
             git clone https://github.com/corese-stack/corese-core.git "$CORESE_DIR"
           fi
           cd "$CORESE_DIR"
-          git fetch origin feature/corese-next
-          git checkout "$CORESE_COMMIT"
+          if [ -z "$CORESE_COMMIT" ]; then
+            git fetch origin feature/corese-next
+            git checkout -B feature/corese-next FETCH_HEAD
+          else
+            git fetch origin "$CORESE_COMMIT" || git fetch --all --tags
+            git checkout --detach "$CORESE_COMMIT"
+          fi
+          RESOLVED_SHA=$(git rev-parse HEAD)
+          echo "corese.next resolved SHA: $RESOLVED_SHA"
+          echo "- **corese.next SHA:** $RESOLVED_SHA" >> "$GITHUB_STEP_SUMMARY"
           chmod +x gradlew
           ./gradlew clean shadowJar --no-daemon -q
           JAR=$(find build/libs -name "*-jar-with-dependencies.jar" | head -1)
           [ -f "$JAR" ] || { echo "::error::corese-core shadowJar not found"; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/libs"
           cp "$JAR" "$GITHUB_WORKSPACE/libs/corese-core-local.jar"
-          echo "corese.next JAR built from $CORESE_COMMIT → libs/corese-core-local.jar"
+          echo "corese.next JAR built from $RESOLVED_SHA → libs/corese-core-local.jar"
 
       - name: Check for new library releases on Maven Central
         if: github.event_name == 'schedule'
@@ -274,24 +300,40 @@ jobs:
         env:
           ENGINES: ${{ steps.params.outputs.engines }}
           DATASETS: ${{ steps.params.outputs.datasets }}
-          SCALES: ${{ steps.params.outputs.scales }}
           EXTRA_ARGS: ${{ steps.params.outputs.extra_args }}
         run: |
           source "$CONDA_SH"
           conda activate benchmarkenv
+          CORESE_ARGS=()
+          if [[ ",$ENGINES," == *,corese.next,* ]]; then
+            CORESE_ARGS+=("--corese-local-path=$GITHUB_WORKSPACE/libs/corese-core-local.jar")
+          fi
           # EXTRA_ARGS contains validated safe flags; word splitting intended
           # shellcheck disable=SC2086
           python python-utils/workflow.py \
             --engines="$ENGINES" \
             --datasets="$DATASETS" \
-            --scales="$SCALES" \
             --baseline="site/data/baseline.json" \
+            "${CORESE_ARGS[@]}" \
             $EXTRA_ARGS
 
       - name: Check site/data output
-        run: ls -la ./site/data/
+        if: always()
+        run: ls -la ./site/data/ || true
+
+      - name: Upload benchmark report data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-data
+          path: |
+            ./site/data/
+            ./out/json/
+            ./out/logs/
+          retention-days: 30
 
       - name: Upload Pages artifact
+        if: steps.params.outputs.publishable == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
@@ -299,7 +341,7 @@ jobs:
   # ─── Deploy to GitHub Pages (main branch only) ───────────────────────────
   deploy-pages:
     needs: benchmark-run
-    if: ${{ needs.benchmark-run.result == 'success' && github.ref == 'refs/heads/main' }}
+    if: ${{ needs.benchmark-run.result == 'success' && github.ref == 'refs/heads/main' && needs.benchmark-run.outputs.publishable == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -345,4 +387,7 @@ jobs:
             return 1
           }
           check "$BASE/"
-          check "$BASE/data/baseline.json"
+          for report in baseline benchmark-report; do
+            check "$BASE/data/$report.json"
+            curl -fsSL --max-time 20 "$BASE/data/$report.json" | python3 -m json.tool > /dev/null
+          done

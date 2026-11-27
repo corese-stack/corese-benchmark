@@ -1,0 +1,16 @@
+# Q13: BSBM offer price ordered page
+# Primary feature: SOLUTION_MODIFIERS
+PREFIX bsbm: <http://www4.wiwiss.fu-berlin.de/bizer/bsbm/v01/vocabulary/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?offer ?product ?price
+WHERE {
+    ?offer rdf:type bsbm:Offer ;
+        bsbm:product ?product ;
+        bsbm:price ?rawPrice .
+    BIND (xsd:decimal(STR(?rawPrice)) AS ?price)
+}
+ORDER BY ASC(?price) ASC(?offer) ASC(?product)
+LIMIT 20
+OFFSET 20

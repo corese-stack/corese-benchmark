@@ -1,0 +1,305 @@
+/* ==========================================================================
+   RDF Loading Tab Enhanced Components (Multi-select pills, Protocol tile, Table header)
+   ========================================================================== */
+
+/* Segmented Control Standard (Single-choice tabs) */
+.segmented-control {
+	display: inline-flex;
+	flex-wrap: wrap;
+	max-width: 100%;
+	align-items: center;
+	background: var(--bg-hover);
+	padding: 2px;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	gap: 2px;
+}
+
+.segmented-control__btn {
+	padding: 4px 12px;
+	font-size: 12px;
+	font-weight: 600;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	background: transparent;
+	color: var(--text-muted);
+	transition: background-color 0.12s ease, color 0.12s ease;
+	line-height: 1.4;
+}
+
+.segmented-control__btn:hover {
+	color: var(--text);
+}
+
+.segmented-control__btn.is-active {
+	background: var(--bg);
+	color: var(--text);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.segmented-control__btn:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 1px;
+}
+
+/* Multi-select Format Toggle Buttons */
+.fmt-pills {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.fmt-pill {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4px 10px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--bg);
+	color: var(--text-muted);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 11.5px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: border-color 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+	user-select: none;
+	line-height: 1.4;
+}
+
+.fmt-pill:hover {
+	background: var(--bg-hover);
+	color: var(--text);
+	border-color: var(--border-hover, var(--text-muted));
+}
+
+.fmt-pill:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+.fmt-pill[aria-pressed="true"] {
+	border-color: var(--focus);
+	background: color-mix(in srgb, var(--focus) 12%, var(--bg));
+	color: var(--focus, var(--text));
+	font-weight: 700;
+}
+
+.fmt-pill[aria-disabled="true"] {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.fmt-pill.is-denied,
+.fmt-pill[aria-pressed="true"].is-denied {
+	animation: pill-shake 0.3s ease;
+	border-color: #cf222e;
+}
+
+@keyframes pill-shake {
+	20% { transform: translateX(-3px); }
+	40% { transform: translateX(3px); }
+	60% { transform: translateX(-2px); }
+	80% { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fmt-pill.is-denied,
+	.fmt-pill[aria-pressed="true"].is-denied {
+		animation: none;
+	}
+}
+
+/* Reproducibility Protocol Tile */
+.protocol-tile {
+	margin-block: 0 1.5rem;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: var(--bg-surface);
+	color: var(--text-main);
+	font-size: 0.875rem;
+	line-height: 1.6;
+	overflow: hidden;
+	transition: border-color 0.15s ease;
+}
+
+.protocol-tile summary {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.35rem 1rem;
+	padding: 0.875rem 1rem;
+	cursor: pointer;
+	list-style: none;
+	user-select: none;
+}
+
+.protocol-tile summary::-webkit-details-marker {
+	display: none;
+}
+
+.protocol-tile summary::marker {
+	content: "";
+}
+
+.protocol-tile summary:hover {
+	background: var(--bg-surface-hover);
+}
+
+.protocol-tile summary:focus-visible {
+	outline: 2px solid var(--text-main);
+	outline-offset: -2px;
+}
+
+.protocol-title {
+	font-weight: 650;
+	color: var(--text-main);
+}
+
+.protocol-summary-meta {
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: 0.8125rem;
+	overflow-wrap: anywhere;
+	margin-inline-start: auto;
+	text-align: right;
+}
+
+.protocol-chevron {
+	flex: none;
+	font-size: 1rem;
+	color: var(--text-muted);
+	line-height: 1;
+	transition: transform 0.25s ease;
+}
+
+.protocol-tile[open] > summary .protocol-chevron,
+.sf-query-item[open] > summary .protocol-chevron {
+	transform: rotate(180deg);
+}
+
+.protocol-body {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 1.25rem 1.5rem;
+	border-block-start: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+
+.protocol-section-title {
+	margin: 0 0 0.625rem;
+	font-size: 0.875rem;
+	font-weight: 650;
+	line-height: 1.4;
+	color: var(--text-main);
+}
+
+.dataset-card__note {
+	margin: 0 0 0.5rem;
+	color: var(--text-muted);
+	font-size: 0.8125rem;
+	line-height: 1.5;
+}
+
+.protocol-facts {
+	display: grid;
+	grid-template-columns: minmax(7.5rem, auto) minmax(0, 1fr);
+	gap: 0.5rem 1.25rem;
+	margin: 0;
+}
+
+.protocol-facts dt {
+	color: var(--text-muted);
+	font-size: 0.8125rem;
+	font-weight: 500;
+}
+
+.protocol-facts dd {
+	min-width: 0;
+	margin: 0;
+	overflow-wrap: anywhere;
+	font-size: 0.8125rem;
+}
+
+.protocol-facts code {
+	font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+	font-size: 0.75rem;
+	padding: 2px 5px;
+	border-radius: 3px;
+	background: var(--bg-page);
+	border: 1px solid var(--border-color);
+	word-break: break-all;
+}
+
+.protocol-cmd-box {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	padding: 0.5rem 0.75rem;
+	background: var(--bg-page);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+}
+
+.protocol-cmd-box code {
+	font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+	font-size: 0.8125rem;
+	color: var(--text-main);
+	word-break: break-all;
+}
+
+.btn-copy-cmd {
+	flex: none;
+	padding: 0.35rem 0.75rem;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--bg-surface);
+	color: var(--text-main);
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-copy-cmd:hover {
+	background: var(--bg-surface-hover);
+	border-color: var(--focus);
+}
+
+.protocol-link {
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--focus);
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+	transition: color 0.12s ease;
+}
+
+.protocol-link:hover {
+	color: var(--accent);
+	text-decoration-thickness: 2px;
+}
+
+/* Shared semantic pills: labels and symbols convey meaning without color. */
+.status-badge, .sf-badge {
+ display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+ padding: 3px 8px; border: 1px solid var(--status-muted-border); border-radius: 999px;
+ background: var(--status-muted-bg); color: var(--status-muted-text);
+ font: 700 11px/1.25 var(--font-sans); vertical-align: middle;
+}
+.status-badge--oom, .status-badge--error, .status-badge--mismatch, .status-badge--duplicate {
+ background: var(--status-fail-bg); color: var(--status-fail-text); border-color: var(--status-fail-border);
+}
+.status-badge--timeout { background: var(--status-timeout-bg); color: var(--status-timeout-text); border-color: var(--status-timeout-border); }
+.status-badge--pass { background: var(--tag-active-bg); color: var(--tag-active-text); border-color: var(--tag-active-border); }
+.status-badge--missing, .status-badge--not_tested { background: var(--status-muted-bg); color: var(--status-muted-text); border-color: var(--status-muted-border); }
+.telemetry-status-strip { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.telemetry-status-strip button { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-surface); color: var(--text); cursor: pointer; font: 12px var(--font-sans); }
+.telemetry-status-strip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.telemetry-status-strip button.is-dimmed { opacity: 0.22; }
+.telemetry-status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.status-chart-caption { margin: 0; padding: 0 20px 14px; font-size: 12px; line-height: 1.6; color: var(--text-muted); }

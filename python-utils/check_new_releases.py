@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Check Maven Central for new stable releases of Jena and RDF4J."""
+from __future__ import annotations
+
 import argparse
 import http.client
 import json
@@ -16,6 +18,7 @@ DEFAULT_BASELINE = str(
     Path(__file__).resolve().parent.parent / "site" / "data" / "baseline.json"
 )
 ARTIFACTS = {
+    "corese": ("fr.inria.corese", "corese-core"),
     "jena": ("org.apache.jena", "jena-arq"),
     "rdf4j": ("org.eclipse.rdf4j", "rdf4j-storage"),
 }
@@ -125,7 +128,11 @@ def baseline_versions(engines):
 def load_baseline(path):
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
-    return baseline_versions(data.get("metadata", {}).get("engines", {}))
+    engines = data.get("metadata", {}).get("engines")
+    if engines is None:
+        engines = sorted({row["engine"] for key in ("loadingRuns", "queryRuns")
+                          for row in data.get(key, []) if row.get("engine")})
+    return baseline_versions(engines)
 
 
 def compare(baseline, fetcher=fetch_versions, verbose=False):
